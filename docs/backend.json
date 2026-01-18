@@ -1,0 +1,682 @@
+{
+  "entities": {
+    "Library": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Library",
+      "type": "object",
+      "description": "Represents a library in the CampusHub system. This is the root level entity for multi-tenancy.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Library entity."
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the library."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp indicating when the library was created.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp indicating when the library was last updated.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "description": "Represents a user in the CampusHub system. Could be either an admin or a student.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the User entity."
+        },
+        "libraryId": {
+          "type": "string",
+          "description": "Reference to Library. (Relationship: Library 1:N User). Identifies the library to which the user belongs."
+        },
+        "email": {
+          "type": "string",
+          "description": "Email address of the user.",
+          "format": "email"
+        },
+        "role": {
+          "type": "string",
+          "description": "Role of the user (e.g., 'admin', 'student')."
+        },
+        "profile": {
+          "type": "string",
+          "description": "User profile information (e.g., name, phone number).",
+          "format": "uri"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp indicating when the user was created.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp indicating when the user was last updated.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "libraryId",
+        "email",
+        "role",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Student": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Student",
+      "type": "object",
+      "description": "Represents a student in the CampusHub system.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Student entity."
+        },
+        "libraryId": {
+          "type": "string",
+          "description": "Reference to Library. (Relationship: Library 1:N Student). Identifies the library to which the student belongs."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to User. (Relationship: User 1:1 Student).  Links to the user account for the student."
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the student."
+        },
+        "major": {
+          "type": "string",
+          "description": "Major of the student."
+        },
+        "paymentDue": {
+          "type": "number",
+          "description": "Amount the student still needs to pay."
+        },
+        "fibonacciStreak": {
+          "type": "number",
+          "description": "Fibonacci streak for payment."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp indicating when the student was created.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp indicating when the student was last updated.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "libraryId",
+        "userId",
+        "name",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Payment": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Payment",
+      "type": "object",
+      "description": "Represents a payment made by a student.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Payment entity."
+        },
+        "libraryId": {
+          "type": "string",
+          "description": "Reference to Library. (Relationship: Library 1:N Payment). Identifies the library to which the payment belongs."
+        },
+        "studentId": {
+          "type": "string",
+          "description": "Reference to Student. (Relationship: Student 1:N Payment). Identifies the student who made the payment."
+        },
+        "amount": {
+          "type": "number",
+          "description": "Amount of the payment."
+        },
+        "date": {
+          "type": "string",
+          "description": "Date of the payment.",
+          "format": "date-time"
+        },
+        "method": {
+          "type": "string",
+          "description": "Method of payment (e.g., 'credit card', 'cash')."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp indicating when the payment was created.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp indicating when the payment was last updated.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "libraryId",
+        "studentId",
+        "amount",
+        "date",
+        "method",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Expense": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Expense",
+      "type": "object",
+      "description": "Represents an expense incurred by the library.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Expense entity."
+        },
+        "libraryId": {
+          "type": "string",
+          "description": "Reference to Library. (Relationship: Library 1:N Expense). Identifies the library to which the expense belongs."
+        },
+        "category": {
+          "type": "string",
+          "description": "Category of the expense (e.g., 'rent', 'utilities', 'supplies')."
+        },
+        "amount": {
+          "type": "number",
+          "description": "Amount of the expense."
+        },
+        "date": {
+          "type": "string",
+          "description": "Date of the expense.",
+          "format": "date-time"
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of the expense."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp indicating when the expense was created.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp indicating when the expense was last updated.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "libraryId",
+        "category",
+        "amount",
+        "date",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Room": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Room",
+      "type": "object",
+      "description": "Represents a room within the library.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Room entity."
+        },
+        "libraryId": {
+          "type": "string",
+          "description": "Reference to Library. (Relationship: Library 1:N Room). Identifies the library to which the room belongs."
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the room."
+        },
+        "capacity": {
+          "type": "number",
+          "description": "Maximum capacity of the room."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp indicating when the room was created.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp indicating when the room was last updated.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "libraryId",
+        "name",
+        "capacity",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Seat": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Seat",
+      "type": "object",
+      "description": "Represents a seat within a room.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Seat entity."
+        },
+        "libraryId": {
+          "type": "string",
+          "description": "Reference to Library. Identifies the library to which the seat belongs."
+        },
+        "roomId": {
+          "type": "string",
+          "description": "Reference to Room. (Relationship: Room 1:N Seat). Identifies the room to which the seat belongs."
+        },
+        "tier": {
+          "type": "string",
+          "description": "Tier of the seat (e.g., 'premium', 'standard')."
+        },
+        "studentId": {
+          "type": "string",
+          "description": "Reference to Student. (Optional, Relationship: Student 1:1 Seat).  Identifies the student currently assigned to the seat."
+        },
+        "timeSlot": {
+          "type": "string",
+          "description": "Time slot for which the seat is reserved."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp indicating when the seat was created.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp indicating when the seat was last updated.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "libraryId",
+        "roomId",
+        "tier",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Announcement": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Announcement",
+      "type": "object",
+      "description": "Represents an announcement made by the library.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Announcement entity."
+        },
+        "libraryId": {
+          "type": "string",
+          "description": "Reference to Library. (Relationship: Library 1:N Announcement). Identifies the library to which the announcement belongs."
+        },
+        "title": {
+          "type": "string",
+          "description": "Title of the announcement."
+        },
+        "content": {
+          "type": "string",
+          "description": "Content of the announcement."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp indicating when the announcement was created.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp indicating when the announcement was last updated.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "libraryId",
+        "title",
+        "content",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Suggestion": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Suggestion",
+      "type": "object",
+      "description": "Represents a suggestion submitted by a student.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Suggestion entity."
+        },
+        "libraryId": {
+          "type": "string",
+          "description": "Reference to Library. (Relationship: Library 1:N Suggestion). Identifies the library to which the suggestion belongs."
+        },
+        "studentId": {
+          "type": "string",
+          "description": "Reference to Student. (Relationship: Student 1:N Suggestion). Identifies the student who submitted the suggestion."
+        },
+        "content": {
+          "type": "string",
+          "description": "Content of the suggestion."
+        },
+        "status": {
+          "type": "string",
+          "description": "Status of the suggestion (e.g., 'new', 'in progress', 'completed')."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp indicating when the suggestion was created.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp indicating when the suggestion was last updated.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "libraryId",
+        "studentId",
+        "content",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "ActivityLog": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "ActivityLog",
+      "type": "object",
+      "description": "Represents an activity log entry.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the ActivityLog entity."
+        },
+        "libraryId": {
+          "type": "string",
+          "description": "Reference to Library. (Relationship: Library 1:N ActivityLog). Identifies the library to which the activity log belongs."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to User.  Identifies the user who performed the activity."
+        },
+        "activityType": {
+          "type": "string",
+          "description": "Type of activity (e.g., 'login', 'payment', 'seat assignment')."
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of the activity."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp indicating when the activity log was created.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp indicating when the activity log was last updated.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "libraryId",
+        "userId",
+        "activityType",
+        "description",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "libraries/{libraryId}",
+        "definition": {
+          "entityName": "Library",
+          "schema": {
+            "$ref": "#/backend/entities/Library"
+          },
+          "description": "Represents a library. This is the root collection for all library-specific data.",
+          "params": [
+            {
+              "name": "libraryId",
+              "description": "Unique identifier for the library."
+            }
+          ]
+        }
+      },
+      {
+        "path": "libraries/{libraryId}/users/{userId}",
+        "definition": {
+          "entityName": "User",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Stores user accounts for the library. Includes the 'libraryId' for authorization independence.",
+          "params": [
+            {
+              "name": "libraryId",
+              "description": "Unique identifier for the library."
+            },
+            {
+              "name": "userId",
+              "description": "Unique identifier for the user."
+            }
+          ]
+        }
+      },
+      {
+        "path": "libraries/{libraryId}/students/{studentId}",
+        "definition": {
+          "entityName": "Student",
+          "schema": {
+            "$ref": "#/backend/entities/Student"
+          },
+          "description": "Stores student data. Includes the 'libraryId' for authorization independence.",
+          "params": [
+            {
+              "name": "libraryId",
+              "description": "Unique identifier for the library."
+            },
+            {
+              "name": "studentId",
+              "description": "Unique identifier for the student."
+            }
+          ]
+        }
+      },
+      {
+        "path": "libraries/{libraryId}/payments/{paymentId}",
+        "definition": {
+          "entityName": "Payment",
+          "schema": {
+            "$ref": "#/backend/entities/Payment"
+          },
+          "description": "Stores payment information. Includes the 'libraryId' for authorization independence.",
+          "params": [
+            {
+              "name": "libraryId",
+              "description": "Unique identifier for the library."
+            },
+            {
+              "name": "paymentId",
+              "description": "Unique identifier for the payment."
+            }
+          ]
+        }
+      },
+      {
+        "path": "libraries/{libraryId}/expenses/{expenseId}",
+        "definition": {
+          "entityName": "Expense",
+          "schema": {
+            "$ref": "#/backend/entities/Expense"
+          },
+          "description": "Stores expense records. Includes the 'libraryId' for authorization independence.",
+          "params": [
+            {
+              "name": "libraryId",
+              "description": "Unique identifier for the library."
+            },
+            {
+              "name": "expenseId",
+              "description": "Unique identifier for the expense."
+            }
+          ]
+        }
+      },
+      {
+        "path": "libraries/{libraryId}/rooms/{roomId}",
+        "definition": {
+          "entityName": "Room",
+          "schema": {
+            "$ref": "#/backend/entities/Room"
+          },
+          "description": "Stores room information. Includes the 'libraryId' for authorization independence.",
+          "params": [
+            {
+              "name": "libraryId",
+              "description": "Unique identifier for the library."
+            },
+            {
+              "name": "roomId",
+              "description": "Unique identifier for the room."
+            }
+          ]
+        }
+      },
+      {
+        "path": "libraries/{libraryId}/rooms/{roomId}/seats/{seatId}",
+        "definition": {
+          "entityName": "Seat",
+          "schema": {
+            "$ref": "#/backend/entities/Seat"
+          },
+          "description": "Stores seat information within a room. Includes the 'libraryId' for authorization independence.",
+          "params": [
+            {
+              "name": "libraryId",
+              "description": "Unique identifier for the library."
+            },
+            {
+              "name": "roomId",
+              "description": "Unique identifier for the room."
+            },
+            {
+              "name": "seatId",
+              "description": "Unique identifier for the seat."
+            }
+          ]
+        }
+      },
+      {
+        "path": "libraries/{libraryId}/announcements/{announcementId}",
+        "definition": {
+          "entityName": "Announcement",
+          "schema": {
+            "$ref": "#/backend/entities/Announcement"
+          },
+          "description": "Stores announcements for the library. Includes the 'libraryId' for authorization independence.",
+          "params": [
+            {
+              "name": "libraryId",
+              "description": "Unique identifier for the library."
+            },
+            {
+              "name": "announcementId",
+              "description": "Unique identifier for the announcement."
+            }
+          ]
+        }
+      },
+      {
+        "path": "libraries/{libraryId}/suggestions/{suggestionId}",
+        "definition": {
+          "entityName": "Suggestion",
+          "schema": {
+            "$ref": "#/backend/entities/Suggestion"
+          },
+          "description": "Stores student suggestions. Includes the 'libraryId' for authorization independence.",
+          "params": [
+            {
+              "name": "libraryId",
+              "description": "Unique identifier for the library."
+            },
+            {
+              "name": "suggestionId",
+              "description": "Unique identifier for the suggestion."
+            }
+          ]
+        }
+      },
+      {
+        "path": "libraries/{libraryId}/activityLogs/{logId}",
+        "definition": {
+          "entityName": "ActivityLog",
+          "schema": {
+            "$ref": "#/backend/entities/ActivityLog"
+          },
+          "description": "Stores activity logs. Includes the 'libraryId' for authorization independence.",
+          "params": [
+            {
+              "name": "libraryId",
+              "description": "Unique identifier for the library."
+            },
+            {
+              "name": "logId",
+              "description": "Unique identifier for the activity log."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore structure is designed for a multi-tenant library system, prioritizing strict library isolation and role-based access control. The core principle is Authorization Independence achieved through the denormalization of the `libraryId` in every document. This eliminates the need for `get()` calls in security rules, simplifying the rules and ensuring atomic operations. The structure uses structural segregation by storing data with different access requirements in separate collections, which also helps with list operation QAPs. Access is modeled based on path-based ownership for user-specific data and a global role-based access control (DBAC) with dedicated collections for admin users. The explicit state modeling utilizes the status filed (e.g., for suggestions)."
+  }
+}
