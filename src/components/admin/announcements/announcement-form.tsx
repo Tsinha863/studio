@@ -19,6 +19,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { announcementFormSchema, type AnnouncementFormValues } from '@/lib/schemas';
 import { addAnnouncement } from '@/lib/actions/announcements';
+import { Spinner } from '@/components/spinner';
 
 interface AnnouncementFormProps {
   libraryId: string;
@@ -27,9 +28,9 @@ interface AnnouncementFormProps {
 }
 
 export function AnnouncementForm({ libraryId, onSuccess, onCancel }: AnnouncementFormProps) {
-  const { firestore, user } = useFirebase();
+  const { firestore, user, isUserLoading } = useFirebase();
   const { toast } = useToast();
-  const [isLoading, setIsLoading] = React.useState(false);
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   const form = useForm<AnnouncementFormValues>({
     resolver: zodResolver(announcementFormSchema),
@@ -40,21 +41,21 @@ export function AnnouncementForm({ libraryId, onSuccess, onCancel }: Announcemen
   });
 
   const onSubmit = async (data: AnnouncementFormValues) => {
-    setIsLoading(true);
+    setIsSubmitting(true);
     if (!firestore || !user) {
       toast({
         variant: 'destructive',
         title: 'Error',
         description: 'Could not connect to the database. Please try again.',
       });
-      setIsLoading(false);
+      setIsSubmitting(false);
       return;
     }
 
     const actor = { id: user.uid, name: user.displayName || 'Admin' };
     const result = await addAnnouncement(firestore, libraryId, data, actor);
 
-    setIsLoading(false);
+    setIsSubmitting(false);
 
     if (result.success) {
       onSuccess();
@@ -67,6 +68,8 @@ export function AnnouncementForm({ libraryId, onSuccess, onCancel }: Announcemen
     }
   };
 
+  const isFormDisabled = isSubmitting || isUserLoading;
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -77,7 +80,7 @@ export function AnnouncementForm({ libraryId, onSuccess, onCancel }: Announcemen
             <FormItem>
               <FormLabel>Title</FormLabel>
               <FormControl>
-                <Input placeholder="e.g., Library Closure Notice" {...field} disabled={isLoading} />
+                <Input placeholder="e.g., Library Closure Notice" {...field} disabled={isFormDisabled} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -94,7 +97,7 @@ export function AnnouncementForm({ libraryId, onSuccess, onCancel }: Announcemen
                   placeholder="The library will be closed on..."
                   className="min-h-[120px]"
                   {...field}
-                  disabled={isLoading}
+                  disabled={isFormDisabled}
                 />
               </FormControl>
               <FormMessage />
@@ -102,11 +105,16 @@ export function AnnouncementForm({ libraryId, onSuccess, onCancel }: Announcemen
           )}
         />
         <div className="flex justify-end gap-2 pt-4">
-          <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading}>
+          <Button type="button" variant="outline" onClick={onCancel} disabled={isFormDisabled}>
             Cancel
           </Button>
-          <Button type="submit" disabled={isLoading}>
-            {isLoading ? 'Creating...' : 'Create Announcement'}
+          <Button type="submit" disabled={isFormDisabled}>
+            {isSubmitting ? (
+              <>
+                <Spinner className="mr-2 h-4 w-4" />
+                Creating...
+              </>
+            ) : 'Create Announcement'}
           </Button>
         </div>
       </form>

@@ -31,6 +31,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { Expense, ExpenseCategory } from '@/lib/types';
 import { expenseFormSchema, type ExpenseFormValues } from '@/lib/schemas';
 import { addExpense, updateExpense } from '@/lib/actions/expenses';
+import { Spinner } from '@/components/spinner';
 
 interface ExpenseFormProps {
   expense?: Expense;
@@ -42,9 +43,9 @@ interface ExpenseFormProps {
 const categories: ExpenseCategory[] = ['rent', 'utilities', 'supplies', 'salaries', 'other'];
 
 export function ExpenseForm({ expense, libraryId, onSuccess, onCancel }: ExpenseFormProps) {
-  const { firestore, user } = useFirebase();
+  const { firestore, user, isUserLoading } = useFirebase();
   const { toast } = useToast();
-  const [isLoading, setIsLoading] = React.useState(false);
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   const form = useForm<ExpenseFormValues>({
     resolver: zodResolver(expenseFormSchema),
@@ -57,14 +58,14 @@ export function ExpenseForm({ expense, libraryId, onSuccess, onCancel }: Expense
   });
 
   const onSubmit = async (data: ExpenseFormValues) => {
-    setIsLoading(true);
+    setIsSubmitting(true);
     if (!firestore || !user) {
       toast({
         variant: 'destructive',
         title: 'Error',
         description: 'Could not connect to the database. Please try again.',
       });
-      setIsLoading(false);
+      setIsSubmitting(false);
       return;
     }
 
@@ -77,7 +78,7 @@ export function ExpenseForm({ expense, libraryId, onSuccess, onCancel }: Expense
       result = await addExpense(firestore, libraryId, data, actor);
     }
 
-    setIsLoading(false);
+    setIsSubmitting(false);
 
     if (result.success) {
       onSuccess();
@@ -90,6 +91,8 @@ export function ExpenseForm({ expense, libraryId, onSuccess, onCancel }: Expense
     }
   };
 
+  const isFormDisabled = isSubmitting || isUserLoading;
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -100,7 +103,7 @@ export function ExpenseForm({ expense, libraryId, onSuccess, onCancel }: Expense
             <FormItem>
               <FormLabel>Description</FormLabel>
               <FormControl>
-                <Input placeholder="e.g., Office Supplies" {...field} disabled={isLoading} />
+                <Input placeholder="e.g., Office Supplies" {...field} disabled={isFormDisabled} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -117,7 +120,7 @@ export function ExpenseForm({ expense, libraryId, onSuccess, onCancel }: Expense
                   type="number"
                   placeholder="100.00"
                   {...field}
-                  disabled={isLoading}
+                  disabled={isFormDisabled}
                 />
               </FormControl>
               <FormMessage />
@@ -130,7 +133,7 @@ export function ExpenseForm({ expense, libraryId, onSuccess, onCancel }: Expense
           render={({ field }) => (
             <FormItem>
               <FormLabel>Category</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isLoading}>
+              <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isFormDisabled}>
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder="Select a category" />
@@ -161,7 +164,7 @@ export function ExpenseForm({ expense, libraryId, onSuccess, onCancel }: Expense
                         "w-full pl-3 text-left font-normal",
                         !field.value && "text-muted-foreground"
                       )}
-                      disabled={isLoading}
+                      disabled={isFormDisabled}
                     >
                       {field.value ? (
                         format(field.value, "PPP")
@@ -189,11 +192,16 @@ export function ExpenseForm({ expense, libraryId, onSuccess, onCancel }: Expense
           )}
         />
         <div className="flex justify-end gap-2 pt-4">
-          <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading}>
+          <Button type="button" variant="outline" onClick={onCancel} disabled={isFormDisabled}>
             Cancel
           </Button>
-          <Button type="submit" disabled={isLoading}>
-            {isLoading ? 'Saving...' : expense ? 'Save Changes' : 'Add Expense'}
+          <Button type="submit" disabled={isFormDisabled}>
+            {isSubmitting ? (
+              <>
+                <Spinner className="mr-2 h-4 w-4" />
+                Saving...
+              </>
+            ) : expense ? 'Save Changes' : 'Add Expense'}
           </Button>
         </div>
       </form>

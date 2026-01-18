@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { roomFormSchema, type RoomFormValues } from '@/lib/schemas';
 import { createRoomAndSeats } from '@/lib/actions/seating';
+import { Spinner } from '@/components/spinner';
 
 interface CreateRoomFormProps {
   libraryId: string;
@@ -26,9 +27,9 @@ interface CreateRoomFormProps {
 }
 
 export function CreateRoomForm({ libraryId, onSuccess, onCancel }: CreateRoomFormProps) {
-  const { firestore, user } = useFirebase();
+  const { firestore, user, isUserLoading } = useFirebase();
   const { toast } = useToast();
-  const [isLoading, setIsLoading] = React.useState(false);
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   const form = useForm<RoomFormValues>({
     resolver: zodResolver(roomFormSchema),
@@ -39,21 +40,21 @@ export function CreateRoomForm({ libraryId, onSuccess, onCancel }: CreateRoomFor
   });
 
   const onSubmit = async (data: RoomFormValues) => {
-    setIsLoading(true);
+    setIsSubmitting(true);
     if (!firestore || !user) {
       toast({
         variant: 'destructive',
         title: 'Error',
         description: 'Could not connect to the database. Please try again.',
       });
-      setIsLoading(false);
+      setIsSubmitting(false);
       return;
     }
 
     const actor = { id: user.uid, name: user.displayName || 'Admin' };
     const result = await createRoomAndSeats(firestore, libraryId, data, actor);
 
-    setIsLoading(false);
+    setIsSubmitting(false);
 
     if (result.success) {
       onSuccess();
@@ -66,6 +67,8 @@ export function CreateRoomForm({ libraryId, onSuccess, onCancel }: CreateRoomFor
     }
   };
 
+  const isFormDisabled = isSubmitting || isUserLoading;
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -76,7 +79,7 @@ export function CreateRoomForm({ libraryId, onSuccess, onCancel }: CreateRoomFor
             <FormItem>
               <FormLabel>Room Name</FormLabel>
               <FormControl>
-                <Input placeholder="e.g., Main Hall" {...field} disabled={isLoading} />
+                <Input placeholder="e.g., Main Hall" {...field} disabled={isFormDisabled} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -89,18 +92,23 @@ export function CreateRoomForm({ libraryId, onSuccess, onCancel }: CreateRoomFor
             <FormItem>
               <FormLabel>Seat Capacity</FormLabel>
               <FormControl>
-                <Input type="number" placeholder="20" {...field} disabled={isLoading} />
+                <Input type="number" placeholder="20" {...field} disabled={isFormDisabled} />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
         <div className="flex justify-end gap-2 pt-4">
-          <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading}>
+          <Button type="button" variant="outline" onClick={onCancel} disabled={isFormDisabled}>
             Cancel
           </Button>
-          <Button type="submit" disabled={isLoading}>
-            {isLoading ? 'Creating...' : 'Create Room'}
+          <Button type="submit" disabled={isFormDisabled}>
+            {isSubmitting ? (
+              <>
+                <Spinner className="mr-2 h-4 w-4" />
+                Creating...
+              </>
+            ) : 'Create Room'}
           </Button>
         </div>
       </form>

@@ -40,10 +40,10 @@ export function AssignSeatDialog({
   libraryId,
   onSuccess,
 }: AssignSeatDialogProps) {
-  const { firestore, user } = useFirebase();
+  const { firestore, user, isUserLoading } = useFirebase();
   const { toast } = useToast();
   const [selectedStudentId, setSelectedStudentId] = React.useState<string | undefined>();
-  const [isLoading, setIsLoading] = React.useState(false);
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   const availableStudents = React.useMemo(() => {
     // Show students who are not assigned a seat
@@ -52,12 +52,12 @@ export function AssignSeatDialog({
 
   const handleAssign = async () => {
     if (!firestore || !user || !selectedStudentId) return;
-    setIsLoading(true);
+    setIsSubmitting(true);
 
     const actor = { id: user.uid, name: user.displayName || 'Admin' };
     const result = await assignSeat(firestore, libraryId, seat.roomId, seat.id, selectedStudentId, actor);
     
-    setIsLoading(false);
+    setIsSubmitting(false);
     if (result.success) {
       toast({ title: 'Seat Assigned', description: `Seat ${seat.seatNumber} has been assigned.` });
       onSuccess();
@@ -68,12 +68,12 @@ export function AssignSeatDialog({
 
   const handleUnassign = async () => {
     if (!firestore || !user) return;
-    setIsLoading(true);
+    setIsSubmitting(true);
     
     const actor = { id: user.uid, name: user.displayName || 'Admin' };
     const result = await unassignSeat(firestore, libraryId, seat.roomId, seat.id, actor);
 
-    setIsLoading(false);
+    setIsSubmitting(false);
     if (result.success) {
       toast({ title: 'Seat Unassigned', description: `Seat ${seat.seatNumber} is now available.` });
       onSuccess();
@@ -85,8 +85,11 @@ export function AssignSeatDialog({
   React.useEffect(() => {
     if (!isOpen) {
         setSelectedStudentId(undefined);
+        setIsSubmitting(false);
     }
   }, [isOpen]);
+
+  const isActionDisabled = isSubmitting || isUserLoading;
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -106,7 +109,7 @@ export function AssignSeatDialog({
           </div>
         ) : (
           <div className="py-4">
-            <Select onValueChange={setSelectedStudentId} value={selectedStudentId}>
+            <Select onValueChange={setSelectedStudentId} value={selectedStudentId} disabled={isActionDisabled}>
               <SelectTrigger>
                 <SelectValue placeholder="Select a student to assign" />
               </SelectTrigger>
@@ -127,14 +130,14 @@ export function AssignSeatDialog({
 
         <DialogFooter>
           {seat.studentId ? (
-            <Button variant="destructive" onClick={handleUnassign} disabled={isLoading}>
-              {isLoading && <Spinner className="mr-2" />}
-              Unassign Seat
+            <Button variant="destructive" onClick={handleUnassign} disabled={isActionDisabled}>
+              {isSubmitting && <Spinner className="mr-2" />}
+              {isSubmitting ? 'Unassigning...' : 'Unassign Seat'}
             </Button>
           ) : (
-            <Button onClick={handleAssign} disabled={isLoading || !selectedStudentId}>
-              {isLoading && <Spinner className="mr-2" />}
-              Assign Seat
+            <Button onClick={handleAssign} disabled={isActionDisabled || !selectedStudentId}>
+              {isSubmitting && <Spinner className="mr-2" />}
+              {isSubmitting ? 'Assigning...' : 'Assign Seat'}
             </Button>
           )}
         </DialogFooter>

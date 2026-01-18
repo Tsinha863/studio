@@ -27,6 +27,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { Student } from '@/lib/types';
 import { studentFormSchema, type StudentFormValues } from '@/lib/schemas';
 import { addStudent, updateStudent } from '@/lib/actions/students';
+import { Spinner } from '@/components/spinner';
 
 interface StudentFormProps {
   student?: Student;
@@ -36,9 +37,9 @@ interface StudentFormProps {
 }
 
 export function StudentForm({ student, libraryId, onSuccess, onCancel }: StudentFormProps) {
-  const { firestore, user } = useFirebase();
+  const { firestore, user, isUserLoading } = useFirebase();
   const { toast } = useToast();
-  const [isLoading, setIsLoading] = React.useState(false);
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   const form = useForm<StudentFormValues>({
     resolver: zodResolver(studentFormSchema),
@@ -52,14 +53,14 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
   });
 
   const onSubmit = async (data: StudentFormValues) => {
-    setIsLoading(true);
+    setIsSubmitting(true);
     if (!firestore || !user) {
       toast({
         variant: 'destructive',
         title: 'Error',
         description: 'Could not connect to the database. Please try again.',
       });
-      setIsLoading(false);
+      setIsSubmitting(false);
       return;
     }
 
@@ -74,7 +75,7 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
       result = await addStudent(firestore, libraryId, data, actor);
     }
 
-    setIsLoading(false);
+    setIsSubmitting(false);
 
     if (result.success) {
       onSuccess();
@@ -87,6 +88,8 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
     }
   };
 
+  const isFormDisabled = isSubmitting || isUserLoading;
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -98,7 +101,7 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
               <FormItem>
                 <FormLabel>Student ID</FormLabel>
                 <FormControl>
-                  <Input placeholder="e.g., S12345" {...field} disabled={isLoading} />
+                  <Input placeholder="e.g., S12345" {...field} disabled={isFormDisabled} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -112,7 +115,7 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
             <FormItem>
               <FormLabel>Full Name</FormLabel>
               <FormControl>
-                <Input placeholder="John Doe" {...field} disabled={isLoading} />
+                <Input placeholder="John Doe" {...field} disabled={isFormDisabled} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -129,7 +132,7 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
                   type="email"
                   placeholder="name@example.com"
                   {...field}
-                  disabled={isLoading}
+                  disabled={isFormDisabled}
                 />
               </FormControl>
               <FormMessage />
@@ -142,7 +145,7 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
           render={({ field }) => (
             <FormItem>
               <FormLabel>Payment Status</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isLoading}>
+              <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isFormDisabled}>
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder="Select payment status" />
@@ -165,18 +168,23 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
             <FormItem>
               <FormLabel>Assigned Seat ID (Optional)</FormLabel>
               <FormControl>
-                <Input placeholder="e.g., A12" {...field} disabled={isLoading} />
+                <Input placeholder="e.g., A12" {...field} disabled={isFormDisabled} />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
         <div className="flex justify-end gap-2 pt-4">
-          <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading}>
+          <Button type="button" variant="outline" onClick={onCancel} disabled={isFormDisabled}>
             Cancel
           </Button>
-          <Button type="submit" disabled={isLoading}>
-            {isLoading ? 'Saving...' : student ? 'Save Changes' : 'Add Student'}
+          <Button type="submit" disabled={isFormDisabled}>
+            {isSubmitting ? (
+              <>
+                <Spinner className="mr-2 h-4 w-4" />
+                Saving...
+              </>
+            ) : student ? 'Save Changes' : 'Add Student'}
           </Button>
         </div>
       </form>
