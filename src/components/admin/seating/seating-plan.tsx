@@ -22,7 +22,7 @@ interface SeatingPlanProps {
 type SeatWithStudent = Seat & { student?: Student };
 
 export function SeatingPlan({ libraryId, roomId }: SeatingPlanProps) {
-  const { firestore } = useFirebase();
+  const { firestore, user } = useFirebase();
 
   // Dialog state
   const [selectedSeat, setSelectedSeat] = React.useState<Seat | null>(null);
@@ -30,20 +30,20 @@ export function SeatingPlan({ libraryId, roomId }: SeatingPlanProps) {
 
   // Fetch seats for the current room
   const seatsQuery = useMemoFirebase(() => {
-    if (!firestore || !roomId) return null;
+    if (!firestore || !user || !roomId) return null;
     return query(
       collection(firestore, `libraries/${libraryId}/rooms/${roomId}/seats`),
       orderBy('createdAt', 'asc') // Sort by creation time to keep order stable
     );
-  }, [firestore, libraryId, roomId]);
+  }, [firestore, user, libraryId, roomId]);
 
   const { data: seats, isLoading: isLoadingSeats } = useCollection<Omit<Seat, 'docId'>>(seatsQuery);
 
   // Fetch all students to populate the assignment dropdown
   const studentsQuery = useMemoFirebase(() => {
-    if (!firestore) return null;
+    if (!firestore || !user) return null;
     return collection(firestore, `libraries/${libraryId}/students`);
-  }, [firestore, libraryId]);
+  }, [firestore, user, libraryId]);
 
   const { data: students, isLoading: isLoadingStudents } = useCollection<Omit<Student, 'docId'>>(studentsQuery);
   

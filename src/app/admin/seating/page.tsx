@@ -37,17 +37,17 @@ const SeatingPlan = dynamic(() => import('@/components/admin/seating/seating-pla
 const HARDCODED_LIBRARY_ID = 'library1';
 
 export default function SeatingPage() {
-  const { firestore } = useFirebase();
+  const { firestore, user } = useFirebase();
   const { toast } = useToast();
   const [isModalOpen, setIsModalOpen] = React.useState(false);
 
   const roomsQuery = useMemoFirebase(() => {
-    if (!firestore) return null;
+    if (!firestore || !user) return null;
     return query(
       collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/rooms`),
       orderBy('createdAt', 'desc')
     );
-  }, [firestore]);
+  }, [firestore, user]);
 
   const { data: rooms, isLoading: isLoadingRooms } = useCollection<Omit<Room, 'docId'>>(roomsQuery);
 

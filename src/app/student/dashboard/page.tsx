@@ -22,32 +22,32 @@ const HARDCODED_LIBRARY_ID = 'library1';
 const HARDCODED_STUDENT_EMAIL = 'student@campushub.com'; 
 
 export default function StudentDashboardPage() {
-  const { firestore } = useFirebase();
+  const { firestore, user } = useFirebase();
 
   // --- Data Fetching ---
   
   // 1. Get current student's data
   const studentQuery = useMemoFirebase(() => {
-    if (!firestore) return null;
+    if (!firestore || !user) return null;
     return query(
       collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students`),
       where('email', '==', HARDCODED_STUDENT_EMAIL),
       limit(1)
     );
-  }, [firestore]);
+  }, [firestore, user]);
 
   const { data: studentData, isLoading: isLoadingStudent } = useCollection<Omit<Student, 'docId'>>(studentQuery);
   const student = React.useMemo(() => (studentData && studentData[0]) ? { ...studentData[0], docId: studentData[0].id } : null, [studentData]);
 
   // 2. Get student's payments
   const paymentsQuery = useMemoFirebase(() => {
-    if (!firestore || !student) return null;
+    if (!firestore || !user || !student) return null;
     return query(
       collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/payments`),
       where('studentId', '==', student.id),
       orderBy('dueDate', 'desc')
     );
-  }, [firestore, student]);
+  }, [firestore, user, student]);
 
   const { data: payments, isLoading: isLoadingPayments } = useCollection<Omit<Payment, 'docId'>>(paymentsQuery);
 

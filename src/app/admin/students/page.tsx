@@ -70,11 +70,11 @@ export default function StudentsPage() {
   const [alertState, setAlertState] = React.useState<AlertState>({ isOpen: false });
 
   const studentsQuery = useMemoFirebase(() => {
-    if (!firestore) return null;
+    if (!firestore || !user) return null;
     return query(
       collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students`)
     );
-  }, [firestore]);
+  }, [firestore, user]);
 
   const { data: students, isLoading } = useCollection<Omit<Student, 'docId'>>(studentsQuery);
   

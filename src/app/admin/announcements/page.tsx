@@ -56,12 +56,12 @@ export default function AnnouncementsPage() {
   const [alertState, setAlertState] = React.useState<AlertState>({ isOpen: false });
 
   const announcementsQuery = useMemoFirebase(() => {
-    if (!firestore) return null;
+    if (!firestore || !user) return null;
     return query(
       collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/announcements`),
       orderBy('createdAt', 'desc')
     );
-  }, [firestore]);
+  }, [firestore, user]);
 
   const { data: announcements, isLoading } = useCollection<Omit<Announcement, 'id'>>(announcementsQuery);
 

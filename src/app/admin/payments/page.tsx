@@ -45,18 +45,18 @@ export default function PaymentsPage() {
   const [receiptState, setReceiptState] = React.useState<ReceiptState>({ isOpen: false });
 
   const paymentsQuery = useMemoFirebase(() => {
-    if (!firestore) return null;
+    if (!firestore || !user) return null;
     return query(
       collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/payments`),
       orderBy('dueDate', 'desc')
     );
-  }, [firestore]);
+  }, [firestore, user]);
 
   // We also need student data to get the fibonacci streak for receipt generation
   const studentsQuery = useMemoFirebase(() => {
-    if (!firestore) return null;
+    if (!firestore || !user) return null;
     return collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students`);
-  }, [firestore]);
+  }, [firestore, user]);
 
   const { data: payments, isLoading: isLoadingPayments } = useCollection<Omit<Payment, 'id'>>(paymentsQuery);
   const { data: students, isLoading: isLoadingStudents } = useCollection<Omit<Student, 'docId'>>(studentsQuery);

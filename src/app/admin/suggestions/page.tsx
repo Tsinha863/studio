@@ -43,17 +43,17 @@ export default function SuggestionsPage() {
 
   // --- Data Fetching ---
   const suggestionsQuery = useMemoFirebase(() => {
-    if (!firestore) return null;
+    if (!firestore || !user) return null;
     return query(
       collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/suggestions`),
       orderBy('createdAt', 'desc')
     );
-  }, [firestore]);
+  }, [firestore, user]);
 
   const studentsQuery = useMemoFirebase(() => {
-    if (!firestore) return null;
+    if (!firestore || !user) return null;
     return collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students`);
-  }, [firestore]);
+  }, [firestore, user]);
 
   const { data: suggestions, isLoading: isLoadingSuggestions } = useCollection<Omit<Suggestion, 'id'>>(suggestionsQuery);
   const { data: students, isLoading: isLoadingStudents } = useCollection<Omit<Student, 'id'>>(studentsQuery);

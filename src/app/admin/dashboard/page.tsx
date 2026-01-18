@@ -45,46 +45,46 @@ const ExpenseBreakdownChart = dynamic(() => import('@/components/admin/dashboard
 const HARDCODED_LIBRARY_ID = 'library1';
 
 export default function DashboardPage() {
-  const { firestore } = useFirebase();
+  const { firestore, user } = useFirebase();
 
   // --- Data Fetching ---
   const studentsQuery = useMemoFirebase(() => {
-    if (!firestore) return null;
+    if (!firestore || !user) return null;
     return query(
       collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students`),
       orderBy('createdAt', 'desc'),
       limit(5)
     );
-  }, [firestore]);
+  }, [firestore, user]);
 
   const activityQuery = useMemoFirebase(() => {
-    if (!firestore) return null;
+    if (!firestore || !user) return null;
     return query(
       collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/activityLogs`),
       orderBy('timestamp', 'desc'),
       limit(5)
     );
-  }, [firestore]);
+  }, [firestore, user]);
   
   const sixMonthsAgo = new Date();
   sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
   const sixMonthsAgoTimestamp = Timestamp.fromDate(sixMonthsAgo);
 
   const paymentsQuery = useMemoFirebase(() => {
-    if (!firestore) return null;
+    if (!firestore || !user) return null;
     return query(
         collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/payments`),
         where('createdAt', '>=', sixMonthsAgoTimestamp)
     );
-  }, [firestore]);
+  }, [firestore, user]);
 
   const expensesQuery = useMemoFirebase(() => {
-      if (!firestore) return null;
+      if (!firestore || !user) return null;
       return query(
           collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/expenses`),
           where('createdAt', '>=', sixMonthsAgoTimestamp)
       );
-  }, [firestore]);
+  }, [firestore, user]);
 
 
   const { data: recentStudents } = useCollection<Omit<Student, 'docId'>>(studentsQuery);

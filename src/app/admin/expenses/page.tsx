@@ -64,12 +64,12 @@ export default function ExpensesPage() {
   const [alertState, setAlertState] = React.useState<AlertState>({ isOpen: false });
 
   const expensesQuery = useMemoFirebase(() => {
-    if (!firestore) return null;
+    if (!firestore || !user) return null;
     return query(
       collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/expenses`),
       orderBy('expenseDate', 'desc')
     );
-  }, [firestore]);
+  }, [firestore, user]);
 
   const { data: expenses, isLoading } = useCollection<Omit<Expense, 'id'>>(expensesQuery);
   
