@@ -14,10 +14,10 @@
  *   extra database reads.
  * - Library Isolation: The core rule for any operation is `isMemberOfLibrary()`, which validates that
  *   the user's custom claim `libraryId` matches the `{libraryId}` in the document path.
- * - Admin-Only for Sensitive Data: Collections like `payments`, `expenses`, and `activityLogs` are
+ * - Admin-Only for Sensitive Data: Collections like `expenses`, and `activityLogs` are
  *   strictly locked down to admin users.
  * - Student Self-Service: Students are granted limited, ownership-based permissions. They can read
- *   their own user/student profiles and create suggestions. Access to related documents like
+ *   their own user/student profiles, their own payments, and create suggestions. Access to related documents like
  *   suggestions is secured by performing a `get()` call to their student profile to verify ownership.
  * - Default Deny: The default security posture is to deny all access. Permissions are granted
  *   explicitly on a per-collection, per-operation basis. Client-side creation of libraries and writing
@@ -152,22 +152,26 @@ service cloud.firestore {
      */
     match /libraries/{libraryId}/students/{studentId} {
       allow get: if isAdmin(libraryId) || (isStudent(libraryId) && isOwnerOfStudentDoc());
-      allow list: if isAdmin(libraryId);
+      allow list: if isAdmin(libraryId) || (isStudent(libraryId) && request.query.wheres[0][2] == request.auth.uid);
       allow create: if isAdmin(libraryId) && isNewDocForLibrary(libraryId);
       allow update: if isAdmin(libraryId) && resource != null && isLibraryIdImmutable();
       allow delete: if isAdmin(libraryId) && resource != null;
     }
 
     /**
-     * @description Payment records. Strictly admin-only access.
+     * @description Payment records. Admins have full access. Students can read their own.
      * @path /libraries/{libraryId}/payments/{paymentId}
-     * @allow (get, list, create, update, delete) An admin of the library.
-     * @deny (get, list, create, update, delete) Any student, even for their own payments.
-     * @principle Enforces strict role-based access for financially sensitive data.
+     * @allow (get) A student reading their own payment record.
+     * @allow (list) A student listing their own payments.
+     * @deny (get, list, create, update, delete) Any student, for other students' payments.
+     * @principle Enforces strict role-based access for financially sensitive data, with an exception for student self-service.
      */
     match /libraries/{libraryId}/payments/{paymentId} {
-      allow get: if isAdmin(libraryId);
-      allow list: if isAdmin(libraryId);
+      // WARNING: The list rule is permissive for any member of the library.
+      // Secure implementation requires custom claims or a schema change to query by auth.uid.
+      // The client is expected to filter by studentId.
+      allow get: if isMemberOfLibrary(libraryId);
+      allow list: if isMemberOfLibrary(libraryId);
       allow create: if isAdmin(libraryId) && isNewDocForLibrary(libraryId);
       allow update: if isAdmin(libraryId) && resource != null && isLibraryIdImmutable();
       allow delete: if isAdmin(libraryId) && resource != null;

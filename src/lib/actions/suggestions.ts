@@ -19,8 +19,40 @@ type Actor = {
   name: string;
 };
 
+const suggestionsCol = (db: Firestore, libraryId: string) =>
+  collection(db, `libraries/${libraryId}/suggestions`);
 const activityLogsCol = (db: Firestore, libraryId: string) =>
   collection(db, `libraries/${libraryId}/activityLogs`);
+
+export async function addSuggestion(
+  db: Firestore,
+  libraryId: string,
+  studentId: string,
+  content: string
+): Promise<ActionResponse> {
+  if (!content || content.trim().length < 10) {
+    return { success: false, error: 'Suggestion is too short.' };
+  }
+
+  try {
+    const suggestionRef = doc(suggestionsCol(db, libraryId));
+    await writeBatch(db)
+      .set(suggestionRef, {
+        libraryId,
+        studentId,
+        content,
+        status: 'new',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      })
+      .commit();
+
+    return { success: true };
+  } catch (e: any) {
+    console.error('Error adding suggestion:', e);
+    return { success: false, error: e.message };
+  }
+}
 
 export async function updateSuggestionStatus(
   db: Firestore,

@@ -71,6 +71,12 @@ function LoginForm() {
           description: "Welcome back, Admin! Redirecting to your dashboard.",
         });
         router.push('/admin/dashboard');
+      } else if (data.email === 'student@campushub.com' && data.password === 'password123') {
+        toast({
+            title: 'Login Successful',
+            description: "Welcome back! Redirecting to your dashboard.",
+        });
+        router.push('/student/dashboard');
       } else {
         toast({
           variant: 'destructive',
@@ -82,11 +88,11 @@ function LoginForm() {
   };
   
   const handleDemo = () => {
-    form.setValue('email', 'admin@campushub.com');
+    form.setValue('email', 'student@campushub.com');
     form.setValue('password', 'password123');
     toast({
         title: 'Demo Mode',
-        description: 'Credentials filled. Click "Sign In" to continue.',
+        description: 'Student credentials filled. Click "Sign In" to continue.',
     });
   }
 
