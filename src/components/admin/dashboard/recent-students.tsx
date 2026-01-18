@@ -54,7 +54,7 @@ export function RecentStudents({ students }: RecentStudentsProps) {
                 </div>
               </TableCell>
               <TableCell>
-                <Badge variant={student.status === 'active' ? 'default' : 'secondary'} className='bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300 border-green-200 dark:border-green-700'>
+                <Badge variant={student.status === 'active' ? 'success' : 'secondary'}>
                   {student.status}
                 </Badge>
               </TableCell>
