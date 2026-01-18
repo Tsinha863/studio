@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import dynamic from 'next/dynamic';
 import { PlusCircle } from 'lucide-react';
 import {
   collection,
@@ -21,14 +22,16 @@ import {
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
 } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CreateRoomForm } from '@/components/admin/seating/create-room-form';
 import { useToast } from '@/hooks/use-toast';
-import { SeatingPlan } from '@/components/admin/seating/seating-plan';
+import { Skeleton } from '@/components/ui/skeleton';
+
+const SeatingPlan = dynamic(() => import('@/components/admin/seating/seating-plan').then(mod => mod.SeatingPlan), { 
+  ssr: false,
+  loading: () => <Skeleton className="h-48 w-full rounded-lg" />
+});
 
 // TODO: Replace with actual logged-in user's library
 const HARDCODED_LIBRARY_ID = 'library1';
@@ -73,7 +76,10 @@ export default function SeatingPage() {
       <Card>
         <CardContent className="p-4 md:p-6">
         {isLoadingRooms ? (
-            <p>Loading rooms...</p>
+            <div className="space-y-4">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-48 w-full" />
+            </div>
         ) : rooms && rooms.length > 0 ? (
           <Tabs defaultValue={rooms[0].id} className="w-full">
             <TabsList className="grid w-full grid-cols-2 md:grid-cols-3 lg:grid-cols-4">

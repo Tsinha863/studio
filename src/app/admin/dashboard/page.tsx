@@ -1,11 +1,11 @@
 'use client';
 import * as React from 'react';
+import dynamic from 'next/dynamic';
 import {
   Activity,
   IndianRupee,
   Users,
   CreditCard,
-  Plus,
 } from 'lucide-react';
 import {
   collection,
@@ -18,12 +18,6 @@ import {
 
 import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
 import { KpiCard } from '@/components/admin/dashboard/kpi-card';
-import { PaymentsChart } from '@/components/admin/dashboard/payments-chart';
-import { IncomeExpenseChart } from '@/components/admin/dashboard/income-expense-chart';
-import { RecentStudents } from '@/components/admin/dashboard/recent-students';
-import { ActivityFeed } from '@/components/admin/dashboard/activity-feed';
-import { ExpenseBreakdownChart } from '@/components/admin/dashboard/expense-breakdown-chart';
-import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,
@@ -33,6 +27,19 @@ import {
 } from '@/components/ui/card';
 import type { Payment, Student, Expense, ActivityLog } from '@/lib/types';
 import { kpiData as staticKpiData } from '@/lib/dummy-data';
+import { Skeleton } from '@/components/ui/skeleton';
+
+const IncomeExpenseChart = dynamic(() => import('@/components/admin/dashboard/income-expense-chart').then(mod => mod.IncomeExpenseChart), { 
+    ssr: false,
+    loading: () => <Skeleton className="h-[250px] w-full" /> 
+});
+const RecentStudents = dynamic(() => import('@/components/admin/dashboard/recent-students').then(mod => mod.RecentStudents), { ssr: false });
+const ActivityFeed = dynamic(() => import('@/components/admin/dashboard/activity-feed').then(mod => mod.ActivityFeed), { ssr: false });
+const ExpenseBreakdownChart = dynamic(() => import('@/components/admin/dashboard/expense-breakdown-chart').then(mod => mod.ExpenseBreakdownChart), { 
+    ssr: false,
+    loading: () => <Skeleton className="mx-auto aspect-square h-[250px] rounded-full" />
+});
+
 
 // TODO: Replace with actual logged-in user's library
 const HARDCODED_LIBRARY_ID = 'library1';
