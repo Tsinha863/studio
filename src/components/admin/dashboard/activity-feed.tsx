@@ -8,7 +8,7 @@ interface ActivityFeedProps {
 }
 
 function formatActivity(log: ActivityLog): string {
-    const userName = <span className="font-semibold">{log.user.name}</span>;
+    const userName = `<span class="font-semibold">${log.user.name}</span>`;
     switch (log.activityType) {
         case 'student_created':
             return `${userName} created student ${log.details.studentName}.`;
@@ -26,6 +26,12 @@ function formatActivity(log: ActivityLog): string {
             return `${userName} updated an expense record (ID: ${log.details.expenseId}).`;
         case 'expense_deleted':
             return `${userName} deleted an expense record (ID: ${log.details.expenseId}).`;
+        case 'room_created':
+            return `${userName} created room ${log.details.name} with capacity ${log.details.capacity}.`;
+        case 'seat_assigned':
+            return `${userName} assigned seat ${log.details.seatNumber} to ${log.details.studentName}.`;
+        case 'seat_unassigned':
+            return `${userName} unassigned seat ${log.details.seatNumber}.`;
         default:
             return `${userName} performed an action: ${log.activityType}.`;
     }

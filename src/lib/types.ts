@@ -22,7 +22,7 @@ export interface Student {
   email: string;
   status: 'active' | 'inactive' | 'graduated';
   paymentStatus: 'paid' | 'pending' | 'overdue';
-  assignedSeatId?: string;
+  assignedSeatId?: string | null;
   fibonacciStreak: number;
   paymentDue: number;
   createdAt: Timestamp;
@@ -58,19 +58,23 @@ export interface Expense {
 
 export interface Room {
   id: string;
+  docId?: string;
   libraryId: string;
   name: string;
+  capacity: number;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
 
 export interface Seat {
   id: string;
+  docId?: string;
   libraryId: string;
   roomId: string;
   seatNumber: string;
   tier: 'basic' | 'standard' | 'premium';
-  assignedStudentId?: string;
+  studentId?: string | null;
+  studentName?: string | null;
   timeSlot?: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;

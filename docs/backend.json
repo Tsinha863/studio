@@ -330,6 +330,10 @@
           "type": "string",
           "description": "Reference to Room. (Relationship: Room 1:N Seat). Identifies the room to which the seat belongs."
         },
+        "seatNumber": {
+          "type": "string",
+          "description": "The identifier for the seat within the room (e.g., 'A1', '12')."
+        },
         "tier": {
           "type": "string",
           "description": "Tier of the seat (e.g., 'premium', 'standard')."
@@ -337,6 +341,10 @@
         "studentId": {
           "type": "string",
           "description": "Reference to Student. (Optional, Relationship: Student 1:1 Seat).  Identifies the student currently assigned to the seat."
+        },
+        "studentName": {
+          "type": "string",
+          "description": "Denormalized name of the student assigned to the seat."
         },
         "timeSlot": {
           "type": "string",
@@ -357,6 +365,7 @@
         "id",
         "libraryId",
         "roomId",
+        "seatNumber",
         "tier",
         "createdAt",
         "updatedAt"
