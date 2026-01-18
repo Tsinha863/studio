@@ -25,8 +25,7 @@ export function AnnouncementForm({ libraryId, onSuccess, onCancel }: Announcemen
   const [content, setContent] = React.useState('');
   const [errors, setErrors] = React.useState<{ title?: string; content?: string }>({});
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async () => {
     setErrors({});
 
     const data: AnnouncementFormValues = { title, content };
@@ -53,23 +52,32 @@ export function AnnouncementForm({ libraryId, onSuccess, onCancel }: Announcemen
     }
 
     const actor = { id: user.uid, name: user.displayName || 'Admin' };
-    const result = await addAnnouncement(firestore, libraryId, validation.data, actor);
-
-    setIsSubmitting(false);
-
-    if (result.success) {
-      onSuccess();
-    } else {
-      toast({
-        variant: 'destructive',
-        title: 'An error occurred',
-        description: result.error || 'The operation failed. Please try again.',
-      });
+    
+    try {
+        const result = await addAnnouncement(firestore, libraryId, validation.data, actor);
+        if (result.success) {
+          onSuccess();
+        } else {
+          toast({
+            variant: 'destructive',
+            title: 'An error occurred',
+            description: result.error || 'The operation failed. Please try again.',
+          });
+        }
+    } catch (error) {
+        console.error("Announcement form submission error:", error);
+        toast({
+            variant: "destructive",
+            title: "An unexpected error occurred",
+            description: error instanceof Error ? error.message : "Please check the console for details."
+        });
+    } finally {
+        setIsSubmitting(false);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <div className="space-y-4">
       <div className="space-y-2">
         <Label htmlFor="title">Title</Label>
         <Input
@@ -99,7 +107,7 @@ export function AnnouncementForm({ libraryId, onSuccess, onCancel }: Announcemen
         <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
           Cancel
         </Button>
-        <Button type="submit" disabled={isSubmitting || !user}>
+        <Button type="button" onClick={handleSubmit} disabled={isSubmitting || !user}>
           {isSubmitting ? (
             <>
               <Spinner className="mr-2 h-4 w-4" />
@@ -110,6 +118,6 @@ export function AnnouncementForm({ libraryId, onSuccess, onCancel }: Announcemen
           )}
         </Button>
       </div>
-    </form>
+    </div>
   );
 }

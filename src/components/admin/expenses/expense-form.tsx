@@ -58,8 +58,7 @@ export function ExpenseForm({ expense, libraryId, onSuccess, onCancel }: Expense
     }
   }, [expense]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async () => {
     setErrors({});
 
     const data = {
@@ -94,27 +93,36 @@ export function ExpenseForm({ expense, libraryId, onSuccess, onCancel }: Expense
     const actor = { id: user.uid, name: user.displayName || 'Admin' };
     let result;
 
-    if (expense?.docId) {
-      result = await updateExpense(firestore, libraryId, expense.docId, validation.data, actor);
-    } else {
-      result = await addExpense(firestore, libraryId, validation.data, actor);
-    }
+    try {
+      if (expense?.docId) {
+        result = await updateExpense(firestore, libraryId, expense.docId, validation.data, actor);
+      } else {
+        result = await addExpense(firestore, libraryId, validation.data, actor);
+      }
 
-    setIsSubmitting(false);
-
-    if (result.success) {
-      onSuccess();
-    } else {
-      toast({
-        variant: 'destructive',
-        title: 'An error occurred',
-        description: result.error || 'The operation failed. Please try again.',
-      });
+      if (result.success) {
+        onSuccess();
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'An error occurred',
+          description: result.error || 'The operation failed. Please try again.',
+        });
+      }
+    } catch (error) {
+        console.error("Expense form submission error:", error);
+        toast({
+            variant: "destructive",
+            title: "An unexpected error occurred",
+            description: error instanceof Error ? error.message : "Please check the console for details."
+        });
+    } finally {
+        setIsSubmitting(false);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <div className="space-y-4">
       <div className="space-y-2">
         <Label htmlFor="description">Description</Label>
         <Input
@@ -189,7 +197,7 @@ export function ExpenseForm({ expense, libraryId, onSuccess, onCancel }: Expense
         <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
           Cancel
         </Button>
-        <Button type="submit" disabled={isSubmitting || !user}>
+        <Button type="button" onClick={handleSubmit} disabled={isSubmitting || !user}>
           {isSubmitting ? (
             <>
               <Spinner className="mr-2 h-4 w-4" />
@@ -198,6 +206,6 @@ export function ExpenseForm({ expense, libraryId, onSuccess, onCancel }: Expense
           ) : expense ? 'Save Changes' : 'Add Expense'}
         </Button>
       </div>
-    </form>
+    </div>
   );
 }

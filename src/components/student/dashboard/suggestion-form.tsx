@@ -43,8 +43,7 @@ export function SuggestionForm({ studentId, libraryId, isLoading: isLoadingStude
   const [content, setContent] = React.useState('');
   const [error, setError] = React.useState<string | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async () => {
     setError(null);
 
     const validation = formSchema.safeParse({ content });
@@ -63,21 +62,30 @@ export function SuggestionForm({ studentId, libraryId, isLoading: isLoadingStude
     }
     
     setIsSubmitting(true);
-    const result = await addSuggestion(firestore, libraryId, studentId, content);
-    setIsSubmitting(false);
-
-    if (result.success) {
-      toast({
-        title: 'Suggestion Submitted',
-        description: 'Thank you for your feedback!',
-      });
-      setContent('');
-    } else {
-      toast({
-        variant: 'destructive',
-        title: 'Submission Failed',
-        description: result.error || 'An unexpected error occurred.',
-      });
+    try {
+        const result = await addSuggestion(firestore, libraryId, studentId, content);
+        if (result.success) {
+          toast({
+            title: 'Suggestion Submitted',
+            description: 'Thank you for your feedback!',
+          });
+          setContent('');
+        } else {
+          toast({
+            variant: 'destructive',
+            title: 'Submission Failed',
+            description: result.error || 'An unexpected error occurred.',
+          });
+        }
+    } catch (error) {
+        console.error("Suggestion form submission error:", error);
+        toast({
+            variant: "destructive",
+            title: "An unexpected error occurred",
+            description: error instanceof Error ? error.message : "Please check the console for details."
+        });
+    } finally {
+        setIsSubmitting(false);
     }
   };
 
@@ -89,35 +97,33 @@ export function SuggestionForm({ studentId, libraryId, isLoading: isLoadingStude
         <CardTitle>Suggestion Box</CardTitle>
         <CardDescription>Have an idea? We&apos;d love to hear it.</CardDescription>
       </CardHeader>
-      <form onSubmit={handleSubmit}>
-        <CardContent>
-          {isLoadingStudent ? (
-              <div className="space-y-2">
-                  <Skeleton className="h-20 w-full" />
-                  <Skeleton className="h-10 w-24" />
-              </div>
-          ) : (
+      <CardContent>
+        {isLoadingStudent ? (
             <div className="space-y-2">
-              <Label htmlFor="suggestion" className="sr-only">Suggestion</Label>
-              <Textarea
-                  id="suggestion"
-                  placeholder="Tell us how we can improve..."
-                  className="resize-none"
-                  value={content}
-                  onChange={(e) => setContent(e.target.value)}
-                  disabled={isFormDisabled}
-              />
-              {error && <p className="text-sm font-medium text-destructive">{error}</p>}
+                <Skeleton className="h-20 w-full" />
+                <Skeleton className="h-10 w-24" />
             </div>
-          )}
-        </CardContent>
-        <CardFooter>
-          <Button type="submit" disabled={isFormDisabled}>
-            {isSubmitting && <Spinner className="mr-2 h-4 w-4" />}
-            Submit Suggestion
-          </Button>
-        </CardFooter>
-      </form>
+        ) : (
+          <div className="space-y-2">
+            <Label htmlFor="suggestion" className="sr-only">Suggestion</Label>
+            <Textarea
+                id="suggestion"
+                placeholder="Tell us how we can improve..."
+                className="resize-none"
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                disabled={isFormDisabled}
+            />
+            {error && <p className="text-sm font-medium text-destructive">{error}</p>}
+          </div>
+        )}
+      </CardContent>
+      <CardFooter>
+        <Button type="button" onClick={handleSubmit} disabled={isFormDisabled}>
+          {isSubmitting && <Spinner className="mr-2 h-4 w-4" />}
+          Submit Suggestion
+        </Button>
+      </CardFooter>
     </Card>
   );
 }
