@@ -1,7 +1,7 @@
+
 'use client';
 
 import * as React from 'react';
-import dynamic from 'next/dynamic';
 import { PlusCircle } from 'lucide-react';
 import {
   collection,
@@ -11,12 +11,18 @@ import {
   doc,
   serverTimestamp,
 } from 'firebase/firestore';
+import {
+  useReactTable,
+  getCoreRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  getFilteredRowModel,
+  type SortingState,
+  type ColumnFiltersState,
+} from '@tanstack/react-table';
 
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-} from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import {
   Dialog,
   DialogContent,
@@ -34,17 +40,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Input } from '@/components/ui/input';
+import { DataTable } from '@/components/ui/data-table';
+import { DataTablePagination } from '@/components/ui/data-table-pagination';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
 import type { Expense } from '@/lib/types';
 import { ExpenseForm } from '@/components/admin/expenses/expense-form';
 import { columns as expenseColumns } from '@/components/admin/expenses/columns';
 import { Spinner } from '@/components/spinner';
-
-const ExpensesDataTable = dynamic(
-  () => import('@/components/admin/expenses/data-table').then(mod => mod.ExpensesDataTable),
-  { ssr: false }
-);
 
 type ExpenseWithId = Expense & { id: string };
 
@@ -69,6 +73,9 @@ export default function ExpensesPage() {
   const [alertState, setAlertState] = React.useState<AlertState>({ isOpen: false });
   const [isDeleting, setIsDeleting] = React.useState(false);
 
+  const [sorting, setSorting] = React.useState<SortingState>([]);
+  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
+
   const expensesQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(
@@ -79,6 +86,23 @@ export default function ExpensesPage() {
 
   const { data: expenses, isLoading } = useCollection<Expense>(expensesQuery);
   
+  const memoizedColumns = React.useMemo(() => expenseColumns({ openModal, openDeleteAlert }), []);
+  
+  const table = useReactTable({
+    data: expenses || [],
+    columns: memoizedColumns,
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    onSortingChange: setSorting,
+    getSortedRowModel: getSortedRowModel(),
+    onColumnFiltersChange: setColumnFilters,
+    getFilteredRowModel: getFilteredRowModel(),
+    state: {
+      sorting,
+      columnFilters,
+    },
+  });
+
   const openModal = (expense?: ExpenseWithId) => setModalState({ isOpen: true, expense });
   const closeModal = () => setModalState({ isOpen: false, expense: undefined });
 
@@ -133,8 +157,6 @@ export default function ExpensesPage() {
     }
   };
 
-  const memoizedColumns = React.useMemo(() => expenseColumns({ openModal, openDeleteAlert }), []);
-
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -152,12 +174,27 @@ export default function ExpensesPage() {
         </Button>
       </div>
       <Card>
-        <CardContent className="p-0">
-          <ExpensesDataTable
-            columns={memoizedColumns}
-            data={expenses || []}
-            isLoading={isLoading}
-          />
+        <CardContent className="p-4 space-y-4">
+           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <Input
+              placeholder="Filter by description..."
+              value={(table.getColumn('description')?.getFilterValue() as string) ?? ''}
+              onChange={(event) =>
+                table.getColumn('description')?.setFilterValue(event.target.value)
+              }
+              className="w-full sm:max-w-sm"
+            />
+          </div>
+          <div className='rounded-md border'>
+            <DataTable
+              table={table}
+              columns={memoizedColumns}
+              data={expenses || []}
+              isLoading={isLoading}
+              noResultsMessage="No expenses found."
+            />
+          </div>
+          <DataTablePagination table={table} />
         </CardContent>
       </Card>
 

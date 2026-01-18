@@ -1,7 +1,7 @@
+
 'use client';
 
 import * as React from 'react';
-import dynamic from 'next/dynamic';
 import {
   collection,
   query,
@@ -10,11 +10,23 @@ import {
   doc,
   serverTimestamp,
 } from 'firebase/firestore';
+import {
+  useReactTable,
+  getCoreRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  getFilteredRowModel,
+  type SortingState,
+  type ColumnFiltersState,
+} from '@tanstack/react-table';
 
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
 import type { Suggestion, Student } from '@/lib/types';
+import { Input } from '@/components/ui/input';
+import { DataTable } from '@/components/ui/data-table';
+import { DataTablePagination } from '@/components/ui/data-table-pagination';
 import { columns as suggestionColumns } from '@/components/admin/suggestions/columns';
 import {
   AlertDialog,
@@ -28,24 +40,22 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Spinner } from '@/components/spinner';
 
-const SuggestionsDataTable = dynamic(
-  () => import('@/components/admin/suggestions/data-table').then(mod => mod.SuggestionsDataTable),
-  { ssr: false }
-);
-
-// TODO: Replace with actual logged-in user's library
-const HARDCODED_LIBRARY_ID = 'library1';
-
 type AlertState = {
   isOpen: boolean;
   suggestionId?: string;
 };
+
+// TODO: Replace with actual logged-in user's library
+const HARDCODED_LIBRARY_ID = 'library1';
 
 export default function SuggestionsPage() {
   const { toast } = useToast();
   const { firestore, user } = useFirebase();
   const [alertState, setAlertState] = React.useState<AlertState>({ isOpen: false });
   const [isDeleting, setIsDeleting] = React.useState(false);
+
+  const [sorting, setSorting] = React.useState<SortingState>([]);
+  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
 
   // --- Data Fetching ---
   const suggestionsQuery = useMemoFirebase(() => {
@@ -73,6 +83,26 @@ export default function SuggestionsPage() {
       studentName: studentMap.get(s.studentId) || 'Unknown Student',
     }));
   }, [suggestions, students]);
+
+  const memoizedColumns = React.useMemo(
+    () => suggestionColumns({ onStatusChange: handleStatusChange, onDelete: openDeleteAlert }),
+    []
+  );
+
+  const table = useReactTable({
+    data: suggestionsWithDetails,
+    columns: memoizedColumns,
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    onSortingChange: setSorting,
+    getSortedRowModel: getSortedRowModel(),
+    onColumnFiltersChange: setColumnFilters,
+    getFilteredRowModel: getFilteredRowModel(),
+    state: {
+      sorting,
+      columnFilters,
+    },
+  });
 
   // --- Handlers ---
   const handleStatusChange = async (suggestionId: string, status: Suggestion['status']) => {
@@ -161,11 +191,6 @@ export default function SuggestionsPage() {
     }
   };
 
-  const memoizedColumns = React.useMemo(
-    () => suggestionColumns({ onStatusChange: handleStatusChange, onDelete: openDeleteAlert }),
-    []
-  );
-
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
@@ -179,12 +204,27 @@ export default function SuggestionsPage() {
         </div>
       </div>
       <Card>
-        <CardContent className="p-0">
-          <SuggestionsDataTable
-            columns={memoizedColumns}
-            data={suggestionsWithDetails}
-            isLoading={isLoadingSuggestions || isLoadingStudents}
-          />
+        <CardContent className="p-4 space-y-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <Input
+              placeholder="Filter by content..."
+              value={(table.getColumn('content')?.getFilterValue() as string) ?? ''}
+              onChange={(event) =>
+                table.getColumn('content')?.setFilterValue(event.target.value)
+              }
+              className="w-full sm:max-w-sm"
+            />
+          </div>
+          <div className="rounded-md border">
+            <DataTable
+              table={table}
+              columns={memoizedColumns}
+              data={suggestionsWithDetails}
+              isLoading={isLoadingSuggestions || isLoadingStudents}
+              noResultsMessage="No suggestions found."
+            />
+          </div>
+          <DataTablePagination table={table} />
         </CardContent>
       </Card>
 

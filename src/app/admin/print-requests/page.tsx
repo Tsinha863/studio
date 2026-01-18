@@ -1,13 +1,25 @@
+
 'use client';
 
 import * as React from 'react';
-import dynamic from 'next/dynamic';
 import { collection, query, orderBy, writeBatch, doc, serverTimestamp } from 'firebase/firestore';
+import {
+  useReactTable,
+  getCoreRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  getFilteredRowModel,
+  type SortingState,
+  type ColumnFiltersState,
+} from '@tanstack/react-table';
 
 import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
 import type { PrintRequest } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
+import { DataTable } from '@/components/ui/data-table';
+import { DataTablePagination } from '@/components/ui/data-table-pagination';
 import { columns as printRequestColumns } from '@/components/admin/print-requests/columns';
 import {
   AlertDialog,
@@ -22,11 +34,6 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Spinner } from '@/components/spinner';
-
-const PrintRequestDataTable = dynamic(
-  () => import('@/components/admin/print-requests/data-table').then(mod => mod.PrintRequestDataTable),
-  { ssr: false }
-);
 
 // TODO: Replace with actual logged-in user's library
 const HARDCODED_LIBRARY_ID = 'library1';
@@ -44,6 +51,8 @@ export default function PrintRequestsPage() {
   const [rejectionReason, setRejectionReason] = React.useState('');
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
+  const [sorting, setSorting] = React.useState<SortingState>([]);
+  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
 
   const requestsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
@@ -54,6 +63,26 @@ export default function PrintRequestsPage() {
   }, [firestore, user]);
 
   const { data: requests, isLoading } = useCollection<PrintRequest>(requestsQuery);
+
+  const memoizedColumns = React.useMemo(
+    () => printRequestColumns({ onApprove: (id) => handleStatusUpdate(id, 'Approved'), onReject: openRejectionDialog, processingId }),
+    [processingId]
+  );
+  
+  const table = useReactTable({
+    data: requests || [],
+    columns: memoizedColumns,
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    onSortingChange: setSorting,
+    getSortedRowModel: getSortedRowModel(),
+    onColumnFiltersChange: setColumnFilters,
+    getFilteredRowModel: getFilteredRowModel(),
+    state: {
+      sorting,
+      columnFilters,
+    },
+  });
 
   const handleStatusUpdate = async (requestId: string, newStatus: 'Approved' | 'Rejected', reason?: string) => {
     if (!user || !firestore) {
@@ -120,11 +149,6 @@ export default function PrintRequestsPage() {
     }
   };
 
-  const memoizedColumns = React.useMemo(
-    () => printRequestColumns({ onApprove: (id) => handleStatusUpdate(id, 'Approved'), onReject: openRejectionDialog, processingId }),
-    [processingId]
-  );
-
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -136,12 +160,27 @@ export default function PrintRequestsPage() {
         </p>
       </div>
       <Card>
-        <CardContent className="p-0">
-          <PrintRequestDataTable
-            columns={memoizedColumns}
-            data={requests || []}
-            isLoading={isLoading}
-          />
+        <CardContent className="p-4 space-y-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <Input
+              placeholder="Filter by student name..."
+              value={(table.getColumn('studentName')?.getFilterValue() as string) ?? ''}
+              onChange={(event) =>
+                table.getColumn('studentName')?.setFilterValue(event.target.value)
+              }
+              className="w-full sm:max-w-sm"
+            />
+          </div>
+          <div className="rounded-md border">
+            <DataTable
+              table={table}
+              columns={memoizedColumns}
+              data={requests || []}
+              isLoading={isLoading}
+              noResultsMessage="No pending requests."
+            />
+          </div>
+          <DataTablePagination table={table} />
         </CardContent>
       </Card>
       <AlertDialog open={rejectionDialog.isOpen} onOpenChange={(open) => !open && setRejectionDialog({ isOpen: false })}>

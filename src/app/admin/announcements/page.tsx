@@ -1,8 +1,7 @@
+
 'use client';
 
 import * as React from 'react';
-import dynamic from 'next/dynamic';
-import { PlusCircle } from 'lucide-react';
 import {
   collection,
   query,
@@ -11,6 +10,16 @@ import {
   doc,
   serverTimestamp,
 } from 'firebase/firestore';
+import {
+  useReactTable,
+  getCoreRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  getFilteredRowModel,
+  type SortingState,
+  type ColumnFiltersState,
+} from '@tanstack/react-table';
+import { PlusCircle } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -31,17 +40,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Input } from '@/components/ui/input';
+import { DataTable } from '@/components/ui/data-table';
+import { DataTablePagination } from '@/components/ui/data-table-pagination';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
 import type { Announcement } from '@/lib/types';
 import { AnnouncementForm } from '@/components/admin/announcements/announcement-form';
 import { columns as announcementColumns } from '@/components/admin/announcements/columns';
 import { Spinner } from '@/components/spinner';
-
-const AnnouncementsDataTable = dynamic(
-  () => import('@/components/admin/announcements/data-table').then(mod => mod.AnnouncementsDataTable),
-  { ssr: false }
-);
 
 type AnnouncementWithId = Announcement & { id: string };
 
@@ -65,6 +72,9 @@ export default function AnnouncementsPage() {
   const [alertState, setAlertState] = React.useState<AlertState>({ isOpen: false });
   const [isDeleting, setIsDeleting] = React.useState(false);
 
+  const [sorting, setSorting] = React.useState<SortingState>([]);
+  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
+
   const announcementsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(
@@ -74,6 +84,26 @@ export default function AnnouncementsPage() {
   }, [firestore, user]);
 
   const { data: announcements, isLoading } = useCollection<Announcement>(announcementsQuery);
+
+  const memoizedColumns = React.useMemo(
+    () => announcementColumns({ openDeleteAlert }),
+    []
+  );
+
+  const table = useReactTable({
+    data: announcements || [],
+    columns: memoizedColumns,
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    onSortingChange: setSorting,
+    getSortedRowModel: getSortedRowModel(),
+    onColumnFiltersChange: setColumnFilters,
+    getFilteredRowModel: getFilteredRowModel(),
+    state: {
+      sorting,
+      columnFilters,
+    },
+  });
 
   const openModal = () => setModalState({ isOpen: true });
   const closeModal = () => setModalState({ isOpen: false });
@@ -130,11 +160,6 @@ export default function AnnouncementsPage() {
     }
   };
 
-  const memoizedColumns = React.useMemo(
-    () => announcementColumns({ openDeleteAlert }),
-    []
-  );
-
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -152,12 +177,26 @@ export default function AnnouncementsPage() {
         </Button>
       </div>
       <Card>
-        <CardContent className="p-0">
-          <AnnouncementsDataTable
-            columns={memoizedColumns}
-            data={announcements || []}
-            isLoading={isLoading}
-          />
+        <CardContent className="p-4 space-y-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <Input
+              placeholder="Filter by title..."
+              value={(table.getColumn('title')?.getFilterValue() as string) ?? ''}
+              onChange={(event) =>
+                table.getColumn('title')?.setFilterValue(event.target.value)
+              }
+              className="w-full sm:max-w-sm"
+            />
+          </div>
+          <div className="rounded-md border">
+            <DataTable
+              table={table}
+              columns={memoizedColumns}
+              isLoading={isLoading}
+              noResultsMessage="No announcements found."
+            />
+          </div>
+          <DataTablePagination table={table} />
         </CardContent>
       </Card>
 

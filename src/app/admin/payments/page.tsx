@@ -1,8 +1,9 @@
+
 'use client';
 
 import * as React from 'react';
-import dynamic from 'next/dynamic';
-import { PlusCircle } from 'lucide-react';
+import { PlusCircle, Calendar as CalendarIcon, X as ClearIcon } from 'lucide-react';
+import { format } from 'date-fns';
 import {
   collection,
   query,
@@ -16,22 +17,35 @@ import {
   runTransaction,
   increment,
 } from 'firebase/firestore';
+import {
+  useReactTable,
+  getCoreRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  getFilteredRowModel,
+  type SortingState,
+  type ColumnFiltersState,
+  type VisibilityState,
+} from '@tanstack/react-table';
 
+import { cn } from '@/lib/utils';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
 import type { Payment, Student } from '@/lib/types';
 import { generateSimulatedReceipt } from '@/ai/flows/generate-simulated-receipt';
 
+import { DataTable } from '@/components/ui/data-table';
+import { DataTablePagination } from '@/components/ui/data-table-pagination';
 import { columns as paymentColumns } from '@/components/admin/payments/columns';
 import { ReceiptDialog } from '@/components/receipt-dialog';
 import { Spinner } from '@/components/spinner';
-
-const PaymentsDataTable = dynamic(
-  () => import('@/components/admin/payments/data-table').then(mod => mod.PaymentsDataTable),
-  { ssr: false }
-);
 
 // TODO: Replace with actual logged-in user's library
 const HARDCODED_LIBRARY_ID = 'library1';
@@ -55,6 +69,11 @@ export default function PaymentsPage() {
   const [isCreating, setIsCreating] = React.useState(false);
   const [isPaying, setIsPaying] = React.useState<string | false>(false);
   const [receiptState, setReceiptState] = React.useState<ReceiptState>({ isOpen: false });
+
+  const [sorting, setSorting] = React.useState<SortingState>([]);
+  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
+  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
+  const isMobile = useIsMobile();
 
   const paymentsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
@@ -82,6 +101,29 @@ export default function PaymentsPage() {
         assignments: studentMap.get(p.studentId)?.assignments || [],
     }));
   }, [payments, students]);
+
+  const memoizedColumns = React.useMemo(() => paymentColumns({ handleMarkAsPaid, isPaying }), [isPaying]);
+  
+  const table = useReactTable({
+    data: paymentsWithDetails,
+    columns: memoizedColumns,
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    onSortingChange: setSorting,
+    getSortedRowModel: getSortedRowModel(),
+    onColumnFiltersChange: setColumnFilters,
+    getFilteredRowModel: getFilteredRowModel(),
+    onColumnVisibilityChange: setColumnVisibility,
+    state: {
+      sorting,
+      columnFilters,
+      columnVisibility,
+    },
+  });
+
+  React.useEffect(() => {
+    table.getColumn('assignments')?.toggleVisibility(!isMobile);
+  }, [isMobile, table]);
 
   const handleCreatePayments = async () => {
     if (!user || !firestore) return;
@@ -286,7 +328,7 @@ export default function PaymentsPage() {
   
   const closeReceiptDialog = () => setReceiptState({ isOpen: false });
 
-  const memoizedColumns = React.useMemo(() => paymentColumns({ handleMarkAsPaid, isPaying }), [isPaying]);
+  const isFiltered = table.getState().columnFilters.length > 0;
 
   return (
     <div className="flex flex-col gap-6">
@@ -305,12 +347,94 @@ export default function PaymentsPage() {
         </Button>
       </div>
       <Card>
-        <CardContent className="p-0">
-          <PaymentsDataTable
-            columns={memoizedColumns}
-            data={paymentsWithDetails}
-            isLoading={isLoadingPayments || isLoadingStudents}
-          />
+        <CardContent className="p-4 space-y-4">
+           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+            <Input
+              placeholder="Filter by student name..."
+              value={(table.getColumn('studentName')?.getFilterValue() as string) ?? ''}
+              onChange={(event) =>
+                table.getColumn('studentName')?.setFilterValue(event.target.value)
+              }
+              className="h-10 w-full sm:max-w-sm"
+            />
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant={"outline"}
+                  className={cn(
+                    "h-10 w-full justify-start text-left font-normal sm:w-[240px]",
+                    !table.getColumn('dueDate')?.getFilterValue() && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {table.getColumn('dueDate')?.getFilterValue() ? format(table.getColumn('dueDate')?.getFilterValue() as Date, "PPP") : <span>Filter by due date</span>}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={table.getColumn('dueDate')?.getFilterValue() as Date}
+                  onSelect={(date) => table.getColumn('dueDate')?.setFilterValue(date)}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant={"outline"}
+                  className={cn(
+                    "h-10 w-full justify-start text-left font-normal sm:w-[240px]",
+                    !table.getColumn('paymentDate')?.getFilterValue() && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {table.getColumn('paymentDate')?.getFilterValue() ? format(table.getColumn('paymentDate')?.getFilterValue() as Date, "PPP") : <span>Filter by payment date</span>}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={table.getColumn('paymentDate')?.getFilterValue() as Date}
+                  onSelect={(date) => table.getColumn('paymentDate')?.setFilterValue(date)}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+            <Select
+                value={(table.getColumn('status')?.getFilterValue() as string) ?? 'all'}
+                onValueChange={(value) => {
+                    const filterValue = value === 'all' ? null : [value];
+                    table.getColumn('status')?.setFilterValue(filterValue);
+                }}
+            >
+                <SelectTrigger className="h-10 w-full sm:w-[180px]">
+                    <SelectValue placeholder="Filter by status" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="all">All Statuses</SelectItem>
+                    <SelectItem value="paid">Paid</SelectItem>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="overdue">Overdue</SelectItem>
+                </SelectContent>
+            </Select>
+            {isFiltered && (
+              <Button variant="ghost" onClick={() => table.resetColumnFilters()} className="h-10 w-full sm:w-auto" type="button">
+                <ClearIcon className="mr-2 h-4 w-4" />
+                Reset
+              </Button>
+            )}
+          </div>
+          <div className="rounded-md border">
+            <DataTable
+              table={table}
+              columns={memoizedColumns}
+              isLoading={isLoadingPayments || isLoadingStudents}
+            />
+          </div>
+          <DataTablePagination table={table} />
         </CardContent>
       </Card>
       

@@ -1,7 +1,7 @@
+
 'use client';
 
 import * as React from 'react';
-import dynamic from 'next/dynamic';
 import { PlusCircle, Archive } from 'lucide-react';
 import {
   collection,
@@ -12,12 +12,19 @@ import {
   deleteField,
   where,
 } from 'firebase/firestore';
+import {
+  useReactTable,
+  getCoreRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  getFilteredRowModel,
+  type SortingState,
+  type ColumnFiltersState,
+  type VisibilityState,
+} from '@tanstack/react-table';
 
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-} from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import {
   Dialog,
   DialogContent,
@@ -35,19 +42,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { DataTable } from '@/components/ui/data-table';
+import { DataTablePagination } from '@/components/ui/data-table-pagination';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
 import type { Student } from '@/lib/types';
 import { StudentForm } from '@/components/admin/students/student-form';
 import { columns as studentColumns } from '@/components/admin/students/columns';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/spinner';
-
-const StudentDataTable = dynamic(
-  () => import('@/components/admin/students/data-table').then((mod) => mod.StudentDataTable),
-  { ssr: false }
-);
 
 type StudentWithId = Student & { id: string };
 
@@ -74,6 +79,10 @@ export default function StudentsPage() {
   const [showInactive, setShowInactive] = React.useState(false);
   const [isDeleting, setIsDeleting] = React.useState(false);
 
+  const [sorting, setSorting] = React.useState<SortingState>([]);
+  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
+  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
+
   const studentsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     const constraints = [];
@@ -87,6 +96,25 @@ export default function StudentsPage() {
   }, [firestore, user, showInactive]);
 
   const { data: students, isLoading } = useCollection<Student>(studentsQuery);
+
+  const memoizedColumns = React.useMemo(() => studentColumns({ openModal, openDeleteAlert }), []);
+
+  const table = useReactTable({
+    data: students || [],
+    columns: memoizedColumns,
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    onSortingChange: setSorting,
+    getSortedRowModel: getSortedRowModel(),
+    onColumnFiltersChange: setColumnFilters,
+    getFilteredRowModel: getFilteredRowModel(),
+    onColumnVisibilityChange: setColumnVisibility,
+    state: {
+      sorting,
+      columnFilters,
+      columnVisibility,
+    },
+  });
 
   const openModal = (student?: StudentWithId) => setModalState({ isOpen: true, student });
   const closeModal = () => setModalState({ isOpen: false, student: undefined });
@@ -163,8 +191,6 @@ export default function StudentsPage() {
     }
   };
 
-  const memoizedColumns = React.useMemo(() => studentColumns({ openModal, openDeleteAlert }), []);
-
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -182,23 +208,37 @@ export default function StudentsPage() {
         </Button>
       </div>
       <Card>
-        <CardContent className="p-0">
-          <StudentDataTable
-            columns={memoizedColumns}
-            data={students || []}
-            isLoading={isLoading}
-            toolbarContent={
-                <div className="flex items-center space-x-2">
-                    <Archive className="h-5 w-5 text-muted-foreground" />
-                    <Label htmlFor="show-inactive">Show Inactive Students</Label>
-                    <Switch
-                        id="show-inactive"
-                        checked={showInactive}
-                        onCheckedChange={setShowInactive}
-                    />
-                </div>
-            }
-          />
+        <CardContent className="p-4 space-y-4">
+          <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <Input
+              placeholder="Filter by name or email..."
+              value={(table.getColumn('name')?.getFilterValue() as string) ?? ''}
+              onChange={(event) =>
+                table.getColumn('name')?.setFilterValue(event.target.value)
+              }
+              className="w-full sm:max-w-sm"
+            />
+            <div className="flex items-center space-x-2">
+                <Archive className="h-5 w-5 text-muted-foreground" />
+                <Label htmlFor="show-inactive">Show Inactive Students</Label>
+                <Switch
+                    id="show-inactive"
+                    checked={showInactive}
+                    onCheckedChange={setShowInactive}
+                />
+            </div>
+          </div>
+
+          <div className="rounded-md border">
+            <DataTable
+              table={table}
+              columns={memoizedColumns}
+              isLoading={isLoading}
+              noResultsMessage="No students found."
+            />
+          </div>
+
+          <DataTablePagination table={table} />
         </CardContent>
       </Card>
 
