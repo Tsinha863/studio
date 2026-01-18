@@ -1,20 +1,8 @@
 'use client';
 
 import * as React from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { useFirebase } from '@/firebase';
-
 import { Button } from '@/components/ui/button';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -28,6 +16,7 @@ import type { Student } from '@/lib/types';
 import { studentFormSchema, type StudentFormValues } from '@/lib/schemas';
 import { addStudent, updateStudent } from '@/lib/actions/students';
 import { Spinner } from '@/components/spinner';
+import { Label } from '@/components/ui/label';
 
 interface StudentFormProps {
   student?: Student;
@@ -41,18 +30,54 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
-  const form = useForm<StudentFormValues>({
-    resolver: zodResolver(studentFormSchema),
-    defaultValues: {
-      id: student?.id || '',
-      name: student?.name || '',
-      email: student?.email || '',
-      paymentStatus: student?.paymentStatus || 'pending',
-      assignedSeatId: student?.assignedSeatId || '',
-    },
-  });
+  const [studentId, setStudentId] = React.useState('');
+  const [name, setName] = React.useState('');
+  const [email, setEmail] = React.useState('');
+  const [paymentStatus, setPaymentStatus] = React.useState<'paid' | 'pending' | 'overdue'>('pending');
+  const [assignedSeatId, setAssignedSeatId] = React.useState('');
+  const [errors, setErrors] = React.useState<Partial<Record<keyof StudentFormValues, string>>>({});
 
-  const onSubmit = async (data: StudentFormValues) => {
+  React.useEffect(() => {
+    if (student) {
+      setStudentId(student.id || '');
+      setName(student.name || '');
+      setEmail(student.email || '');
+      setPaymentStatus(student.paymentStatus || 'pending');
+      setAssignedSeatId(student.assignedSeatId || '');
+    } else {
+      setStudentId('');
+      setName('');
+      setEmail('');
+      setPaymentStatus('pending');
+      setAssignedSeatId('');
+    }
+  }, [student]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrors({});
+
+    const data = {
+      id: studentId,
+      name,
+      email,
+      paymentStatus,
+      assignedSeatId,
+    };
+
+    const schema = student ? studentFormSchema.omit({ id: true }) : studentFormSchema;
+    const validation = schema.safeParse(data);
+
+    if (!validation.success) {
+      const newErrors: Partial<Record<keyof StudentFormValues, string>> = {};
+      validation.error.errors.forEach((err) => {
+        const path = err.path[0] as keyof StudentFormValues;
+        newErrors[path] = err.message;
+      });
+      setErrors(newErrors);
+      return;
+    }
+
     setIsSubmitting(true);
     if (!firestore || !user) {
       toast({
@@ -68,11 +93,9 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
     let result;
 
     if (student?.docId) {
-      // Update existing student
-      result = await updateStudent(firestore, libraryId, student.docId, data, actor);
+      result = await updateStudent(firestore, libraryId, student.docId, validation.data, actor);
     } else {
-      // Add new student
-      result = await addStudent(firestore, libraryId, data, actor);
+      result = await addStudent(firestore, libraryId, validation.data as StudentFormValues, actor);
     }
 
     setIsSubmitting(false);
@@ -91,103 +114,85 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
   const isFormDisabled = isSubmitting || isUserLoading || !user;
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-        {!student && (
-          <FormField
-            control={form.control}
-            name="id"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Student ID</FormLabel>
-                <FormControl>
-                  <Input placeholder="e.g., S12345" {...field} disabled={isFormDisabled} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+    <form onSubmit={handleSubmit} className="space-y-4">
+      {!student && (
+        <div className="space-y-2">
+          <Label htmlFor="studentId">Student ID</Label>
+          <Input
+            id="studentId"
+            placeholder="e.g., S12345"
+            value={studentId}
+            onChange={(e) => setStudentId(e.target.value)}
+            disabled={isFormDisabled}
           />
-        )}
-        <FormField
-          control={form.control}
-          name="name"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Full Name</FormLabel>
-              <FormControl>
-                <Input placeholder="John Doe" {...field} disabled={isFormDisabled} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="email"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Email</FormLabel>
-              <FormControl>
-                <Input
-                  type="email"
-                  placeholder="name@example.com"
-                  {...field}
-                  disabled={isFormDisabled}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="paymentStatus"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Payment Status</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isFormDisabled}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select payment status" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  <SelectItem value="paid">Paid</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="overdue">Overdue</SelectItem>
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="assignedSeatId"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Assigned Seat ID (Optional)</FormLabel>
-              <FormControl>
-                <Input placeholder="e.g., A12" {...field} disabled={isFormDisabled} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <div className="flex justify-end gap-2 pt-4">
-          <Button type="button" variant="outline" onClick={onCancel} disabled={isFormDisabled}>
-            Cancel
-          </Button>
-          <Button type="submit" disabled={isFormDisabled}>
-            {isSubmitting ? (
-              <>
-                <Spinner className="mr-2 h-4 w-4" />
-                Saving...
-              </>
-            ) : student ? 'Save Changes' : 'Add Student'}
-          </Button>
+          {errors.id && <p className="text-sm font-medium text-destructive">{errors.id}</p>}
         </div>
-      </form>
-    </Form>
+      )}
+      <div className="space-y-2">
+        <Label htmlFor="name">Full Name</Label>
+        <Input
+          id="name"
+          placeholder="John Doe"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          disabled={isFormDisabled}
+        />
+        {errors.name && <p className="text-sm font-medium text-destructive">{errors.name}</p>}
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="email">Email</Label>
+        <Input
+          id="email"
+          type="email"
+          placeholder="name@example.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          disabled={isFormDisabled}
+        />
+        {errors.email && <p className="text-sm font-medium text-destructive">{errors.email}</p>}
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="paymentStatus">Payment Status</Label>
+        <Select
+          onValueChange={(value: 'paid' | 'pending' | 'overdue') => setPaymentStatus(value)}
+          value={paymentStatus}
+          disabled={isFormDisabled}
+        >
+          <SelectTrigger id="paymentStatus">
+            <SelectValue placeholder="Select payment status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="paid">Paid</SelectItem>
+            <SelectItem value="pending">Pending</SelectItem>
+            <SelectItem value="overdue">Overdue</SelectItem>
+          </SelectContent>
+        </Select>
+        {errors.paymentStatus && <p className="text-sm font-medium text-destructive">{errors.paymentStatus}</p>}
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="assignedSeatId">Assigned Seat ID (Optional)</Label>
+        <Input
+          id="assignedSeatId"
+          placeholder="e.g., A12"
+          value={assignedSeatId}
+          onChange={(e) => setAssignedSeatId(e.target.value)}
+          disabled={isFormDisabled}
+        />
+        {errors.assignedSeatId && <p className="text-sm font-medium text-destructive">{errors.assignedSeatId}</p>}
+      </div>
+      <div className="flex justify-end gap-2 pt-4">
+        <Button type="button" variant="outline" onClick={onCancel} disabled={isFormDisabled}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={isFormDisabled}>
+          {isSubmitting ? (
+            <>
+              <Spinner className="mr-2 h-4 w-4" />
+              Saving...
+            </>
+          ) : student ? 'Save Changes' : 'Add Student'}
+        </Button>
+      </div>
+    </form>
   );
 }

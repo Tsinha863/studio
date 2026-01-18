@@ -1,9 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { useFirebase } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
 
@@ -15,19 +13,12 @@ import {
   CardDescription,
   CardFooter,
 } from '@/components/ui/card';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/spinner';
 import { addSuggestion } from '@/lib/actions/suggestions';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Label } from '@/components/ui/label';
 
 interface SuggestionFormProps {
   studentId?: string;
@@ -46,29 +37,33 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>;
 
 export function SuggestionForm({ studentId, libraryId, isLoading: isLoadingStudent }: SuggestionFormProps) {
-  const { firestore } = useFirebase();
+  const { firestore, user, isUserLoading } = useFirebase();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [content, setContent] = React.useState('');
+  const [error, setError] = React.useState<string | null>(null);
 
-  const form = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      content: '',
-    },
-  });
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
 
-  const onSubmit = async (data: FormValues) => {
-    if (!firestore || !studentId) {
+    const validation = formSchema.safeParse({ content });
+    if (!validation.success) {
+      setError(validation.error.errors[0].message);
+      return;
+    }
+
+    if (!firestore || !studentId || !user) {
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: 'Cannot submit suggestion. Please try again later.',
+        description: 'Cannot submit suggestion. Please make sure you are logged in.',
       });
       return;
     }
     
     setIsSubmitting(true);
-    const result = await addSuggestion(firestore, libraryId, studentId, data.content);
+    const result = await addSuggestion(firestore, libraryId, studentId, content);
     setIsSubmitting(false);
 
     if (result.success) {
@@ -76,7 +71,7 @@ export function SuggestionForm({ studentId, libraryId, isLoading: isLoadingStude
         title: 'Suggestion Submitted',
         description: 'Thank you for your feedback!',
       });
-      form.reset();
+      setContent('');
     } else {
       toast({
         variant: 'destructive',
@@ -86,47 +81,43 @@ export function SuggestionForm({ studentId, libraryId, isLoading: isLoadingStude
     }
   };
 
+  const isFormDisabled = isSubmitting || isLoadingStudent || isUserLoading || !user;
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>Suggestion Box</CardTitle>
         <CardDescription>Have an idea? We&apos;d love to hear it.</CardDescription>
       </CardHeader>
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)}>
-          <CardContent>
-            {isLoadingStudent ? (
-                <div className="space-y-2">
-                    <Skeleton className="h-20 w-full" />
-                    <Skeleton className="h-10 w-24" />
-                </div>
-            ) : (
-                <FormField
-                    control={form.control}
-                    name="content"
-                    render={({ field }) => (
-                    <FormItem>
-                        <FormControl>
-                        <Textarea
-                            placeholder="Tell us how we can improve..."
-                            className="resize-none"
-                            {...field}
-                        />
-                        </FormControl>
-                        <FormMessage />
-                    </FormItem>
-                    )}
-                />
-            )}
-          </CardContent>
-          <CardFooter>
-            <Button type="submit" disabled={isSubmitting || isLoadingStudent}>
-              {isSubmitting && <Spinner className="mr-2 h-4 w-4" />}
-              Submit Suggestion
-            </Button>
-          </CardFooter>
-        </form>
-      </Form>
+      <form onSubmit={handleSubmit}>
+        <CardContent>
+          {isLoadingStudent ? (
+              <div className="space-y-2">
+                  <Skeleton className="h-20 w-full" />
+                  <Skeleton className="h-10 w-24" />
+              </div>
+          ) : (
+            <div className="space-y-2">
+              <Label htmlFor="suggestion" className="sr-only">Suggestion</Label>
+              <Textarea
+                  id="suggestion"
+                  placeholder="Tell us how we can improve..."
+                  className="resize-none"
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  disabled={isFormDisabled}
+              />
+              {error && <p className="text-sm font-medium text-destructive">{error}</p>}
+            </div>
+          )}
+        </CardContent>
+        <CardFooter>
+          <Button type="submit" disabled={isFormDisabled}>
+            {isSubmitting && <Spinner className="mr-2 h-4 w-4" />}
+            Submit Suggestion
+          </Button>
+        </CardFooter>
+      </form>
     </Card>
   );
 }

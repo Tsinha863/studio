@@ -1,25 +1,15 @@
 'use client';
 
 import * as React from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { useFirebase } from '@/firebase';
-
 import { Button } from '@/components/ui/button';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { announcementFormSchema, type AnnouncementFormValues } from '@/lib/schemas';
 import { addAnnouncement } from '@/lib/actions/announcements';
 import { Spinner } from '@/components/spinner';
+import { Label } from '@/components/ui/label';
 
 interface AnnouncementFormProps {
   libraryId: string;
@@ -31,16 +21,26 @@ export function AnnouncementForm({ libraryId, onSuccess, onCancel }: Announcemen
   const { firestore, user, isUserLoading } = useFirebase();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [title, setTitle] = React.useState('');
+  const [content, setContent] = React.useState('');
+  const [errors, setErrors] = React.useState<{ title?: string; content?: string }>({});
 
-  const form = useForm<AnnouncementFormValues>({
-    resolver: zodResolver(announcementFormSchema),
-    defaultValues: {
-      title: '',
-      content: '',
-    },
-  });
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrors({});
 
-  const onSubmit = async (data: AnnouncementFormValues) => {
+    const data: AnnouncementFormValues = { title, content };
+    const validation = announcementFormSchema.safeParse(data);
+    if (!validation.success) {
+      const newErrors: { title?: string; content?: string } = {};
+      validation.error.errors.forEach((err) => {
+        if (err.path[0] === 'title') newErrors.title = err.message;
+        if (err.path[0] === 'content') newErrors.content = err.message;
+      });
+      setErrors(newErrors);
+      return;
+    }
+
     setIsSubmitting(true);
     if (!firestore || !user) {
       toast({
@@ -53,7 +53,7 @@ export function AnnouncementForm({ libraryId, onSuccess, onCancel }: Announcemen
     }
 
     const actor = { id: user.uid, name: user.displayName || 'Admin' };
-    const result = await addAnnouncement(firestore, libraryId, data, actor);
+    const result = await addAnnouncement(firestore, libraryId, validation.data, actor);
 
     setIsSubmitting(false);
 
@@ -71,53 +71,47 @@ export function AnnouncementForm({ libraryId, onSuccess, onCancel }: Announcemen
   const isFormDisabled = isSubmitting || isUserLoading || !user;
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-        <FormField
-          control={form.control}
-          name="title"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Title</FormLabel>
-              <FormControl>
-                <Input placeholder="e.g., Library Closure Notice" {...field} disabled={isFormDisabled} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="title">Title</Label>
+        <Input
+          id="title"
+          placeholder="e.g., Library Closure Notice"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          disabled={isFormDisabled}
         />
-        <FormField
-          control={form.control}
-          name="content"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Content</FormLabel>
-              <FormControl>
-                <Textarea
-                  placeholder="The library will be closed on..."
-                  className="min-h-[120px]"
-                  {...field}
-                  disabled={isFormDisabled}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
+        {errors.title && <p className="text-sm font-medium text-destructive">{errors.title}</p>}
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="content">Content</Label>
+        <Textarea
+          id="content"
+          placeholder="The library will be closed on..."
+          className="min-h-[120px]"
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          disabled={isFormDisabled}
         />
-        <div className="flex justify-end gap-2 pt-4">
-          <Button type="button" variant="outline" onClick={onCancel} disabled={isFormDisabled}>
-            Cancel
-          </Button>
-          <Button type="submit" disabled={isFormDisabled}>
-            {isSubmitting ? (
-              <>
-                <Spinner className="mr-2 h-4 w-4" />
-                Creating...
-              </>
-            ) : 'Create Announcement'}
-          </Button>
-        </div>
-      </form>
-    </Form>
+        {errors.content && <p className="text-sm font-medium text-destructive">{errors.content}</p>}
+      </div>
+
+      <div className="flex justify-end gap-2 pt-4">
+        <Button type="button" variant="outline" onClick={onCancel} disabled={isFormDisabled}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={isFormDisabled}>
+          {isSubmitting ? (
+            <>
+              <Spinner className="mr-2 h-4 w-4" />
+              Creating...
+            </>
+          ) : (
+            'Create Announcement'
+          )}
+        </Button>
+      </div>
+    </form>
   );
 }

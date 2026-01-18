@@ -1,8 +1,6 @@
 'use client';
 
 import * as React from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { CalendarIcon } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -10,14 +8,6 @@ import { useFirebase } from '@/firebase';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
@@ -32,6 +22,7 @@ import type { Expense, ExpenseCategory } from '@/lib/types';
 import { expenseFormSchema, type ExpenseFormValues } from '@/lib/schemas';
 import { addExpense, updateExpense } from '@/lib/actions/expenses';
 import { Spinner } from '@/components/spinner';
+import { Label } from '@/components/ui/label';
 
 interface ExpenseFormProps {
   expense?: Expense;
@@ -47,17 +38,48 @@ export function ExpenseForm({ expense, libraryId, onSuccess, onCancel }: Expense
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
-  const form = useForm<ExpenseFormValues>({
-    resolver: zodResolver(expenseFormSchema),
-    defaultValues: {
-      description: expense?.description || '',
-      amount: expense?.amount || 0,
-      category: expense?.category || 'other',
-      expenseDate: expense?.expenseDate.toDate() || new Date(),
-    },
-  });
+  const [description, setDescription] = React.useState('');
+  const [amount, setAmount] = React.useState<number | string>('');
+  const [category, setCategory] = React.useState<ExpenseCategory>('other');
+  const [expenseDate, setExpenseDate] = React.useState<Date | undefined>(new Date());
+  const [errors, setErrors] = React.useState<Partial<Record<keyof ExpenseFormValues, string>>>({});
 
-  const onSubmit = async (data: ExpenseFormValues) => {
+  React.useEffect(() => {
+    if (expense) {
+      setDescription(expense.description || '');
+      setAmount(expense.amount || '');
+      setCategory(expense.category || 'other');
+      setExpenseDate(expense.expenseDate ? expense.expenseDate.toDate() : new Date());
+    } else {
+      setDescription('');
+      setAmount('');
+      setCategory('other');
+      setExpenseDate(new Date());
+    }
+  }, [expense]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrors({});
+
+    const data = {
+      description,
+      amount: Number(amount),
+      category,
+      expenseDate: expenseDate || new Date(),
+    };
+
+    const validation = expenseFormSchema.safeParse(data);
+    if (!validation.success) {
+      const newErrors: Partial<Record<keyof ExpenseFormValues, string>> = {};
+      validation.error.errors.forEach((err) => {
+        const path = err.path[0] as keyof ExpenseFormValues;
+        newErrors[path] = err.message;
+      });
+      setErrors(newErrors);
+      return;
+    }
+
     setIsSubmitting(true);
     if (!firestore || !user) {
       toast({
@@ -73,9 +95,9 @@ export function ExpenseForm({ expense, libraryId, onSuccess, onCancel }: Expense
     let result;
 
     if (expense?.docId) {
-      result = await updateExpense(firestore, libraryId, expense.docId, data, actor);
+      result = await updateExpense(firestore, libraryId, expense.docId, validation.data, actor);
     } else {
-      result = await addExpense(firestore, libraryId, data, actor);
+      result = await addExpense(firestore, libraryId, validation.data, actor);
     }
 
     setIsSubmitting(false);
@@ -94,117 +116,90 @@ export function ExpenseForm({ expense, libraryId, onSuccess, onCancel }: Expense
   const isFormDisabled = isSubmitting || isUserLoading || !user;
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-        <FormField
-          control={form.control}
-          name="description"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Description</FormLabel>
-              <FormControl>
-                <Input placeholder="e.g., Office Supplies" {...field} disabled={isFormDisabled} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="description">Description</Label>
+        <Input
+          id="description"
+          placeholder="e.g., Office Supplies"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          disabled={isFormDisabled}
         />
-        <FormField
-          control={form.control}
-          name="amount"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Amount (₹)</FormLabel>
-              <FormControl>
-                <Input
-                  type="number"
-                  placeholder="100.00"
-                  {...field}
-                  disabled={isFormDisabled}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
+        {errors.description && <p className="text-sm font-medium text-destructive">{errors.description}</p>}
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="amount">Amount (₹)</Label>
+        <Input
+          id="amount"
+          type="number"
+          placeholder="100.00"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value === '' ? '' : Number(e.target.value))}
+          disabled={isFormDisabled}
         />
-        <FormField
-          control={form.control}
-          name="category"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Category</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isFormDisabled}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a category" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {categories.map(cat => (
-                    <SelectItem key={cat} value={cat} className="capitalize">{cat}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="expenseDate"
-          render={({ field }) => (
-            <FormItem className="flex flex-col">
-              <FormLabel>Expense Date</FormLabel>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <FormControl>
-                    <Button
-                      variant={"outline"}
-                      className={cn(
-                        "w-full pl-3 text-left font-normal",
-                        !field.value && "text-muted-foreground"
-                      )}
-                      disabled={isFormDisabled}
-                    >
-                      {field.value ? (
-                        format(field.value, "PPP")
-                      ) : (
-                        <span>Pick a date</span>
-                      )}
-                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                    </Button>
-                  </FormControl>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={field.value}
-                    onSelect={field.onChange}
-                    disabled={(date) =>
-                      date > new Date() || date < new Date("1900-01-01")
-                    }
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <div className="flex justify-end gap-2 pt-4">
-          <Button type="button" variant="outline" onClick={onCancel} disabled={isFormDisabled}>
-            Cancel
-          </Button>
-          <Button type="submit" disabled={isFormDisabled}>
-            {isSubmitting ? (
-              <>
-                <Spinner className="mr-2 h-4 w-4" />
-                Saving...
-              </>
-            ) : expense ? 'Save Changes' : 'Add Expense'}
-          </Button>
-        </div>
-      </form>
-    </Form>
+        {errors.amount && <p className="text-sm font-medium text-destructive">{errors.amount}</p>}
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="category">Category</Label>
+        <Select
+          onValueChange={(value: ExpenseCategory) => setCategory(value)}
+          value={category}
+          disabled={isFormDisabled}
+        >
+          <SelectTrigger id="category">
+            <SelectValue placeholder="Select a category" />
+          </SelectTrigger>
+          <SelectContent>
+            {categories.map((cat) => (
+              <SelectItem key={cat} value={cat} className="capitalize">{cat}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {errors.category && <p className="text-sm font-medium text-destructive">{errors.category}</p>}
+      </div>
+
+      <div className="space-y-2">
+        <Label>Expense Date</Label>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant={"outline"}
+              className={cn("w-full justify-start text-left font-normal", !expenseDate && "text-muted-foreground")}
+              disabled={isFormDisabled}
+            >
+              <CalendarIcon className="mr-2 h-4 w-4" />
+              {expenseDate ? format(expenseDate, "PPP") : <span>Pick a date</span>}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="single"
+              selected={expenseDate}
+              onSelect={setExpenseDate}
+              disabled={(date) => date > new Date() || date < new Date("1900-01-01")}
+              initialFocus
+            />
+          </PopoverContent>
+        </Popover>
+        {errors.expenseDate && <p className="text-sm font-medium text-destructive">{errors.expenseDate}</p>}
+      </div>
+
+      <div className="flex justify-end gap-2 pt-4">
+        <Button type="button" variant="outline" onClick={onCancel} disabled={isFormDisabled}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={isFormDisabled}>
+          {isSubmitting ? (
+            <>
+              <Spinner className="mr-2 h-4 w-4" />
+              Saving...
+            </>
+          ) : expense ? 'Save Changes' : 'Add Expense'}
+        </Button>
+      </div>
+    </form>
   );
 }
