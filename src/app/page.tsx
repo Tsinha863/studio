@@ -14,6 +14,7 @@ import {
   CreditCard,
   Users,
 } from 'lucide-react';
+import { signInAnonymously } from 'firebase/auth';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -35,6 +36,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
+import { useFirebase } from '@/firebase';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Logo } from '@/components/logo';
 
@@ -51,6 +53,7 @@ function LoginForm() {
   const router = useRouter();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = React.useState(false);
+  const { auth } = useFirebase();
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -62,29 +65,50 @@ function LoginForm() {
 
   const onSubmit = (data: LoginFormValues) => {
     setIsLoading(true);
-    // Mock login logic
-    setTimeout(() => {
+
+    const successfulLogin =
+      (data.email === 'admin@campushub.com' && data.password === 'password123') ||
+      (data.email === 'student@campushub.com' && data.password === 'password123');
+
+    if (!successfulLogin) {
+      toast({
+        variant: 'destructive',
+        title: 'Login Failed',
+        description: 'Invalid email or password. Please try again.',
+      });
       setIsLoading(false);
-      if (data.email === 'admin@campushub.com' && data.password === 'password123') {
-        toast({
-          title: 'Login Successful',
-          description: "Welcome back, Admin! Redirecting to your dashboard.",
+      return;
+    }
+
+    const performLogin = () => {
+      const isAdmin = data.email === 'admin@campushub.com';
+      toast({
+        title: 'Login Successful',
+        description: `Welcome back, ${isAdmin ? 'Admin' : 'Student'}! Redirecting to your dashboard.`,
+      });
+      router.push(isAdmin ? '/admin/dashboard' : '/student/dashboard');
+    };
+
+    // This is a mock login flow. For the forms to be enabled on the next pages,
+    // we need a Firebase user. We'll sign in anonymously here to ensure
+    // that the `useFirebase` hook provides a user object.
+    if (auth.currentUser) {
+      performLogin();
+    } else {
+      signInAnonymously(auth)
+        .then(() => {
+          performLogin();
+        })
+        .catch((error) => {
+          console.error('Anonymous sign-in failed:', error);
+          toast({
+            variant: 'destructive',
+            title: 'Firebase Auth Error',
+            description: 'Could not sign in anonymously. ' + error.message,
+          });
+          setIsLoading(false);
         });
-        router.push('/admin/dashboard');
-      } else if (data.email === 'student@campushub.com' && data.password === 'password123') {
-        toast({
-            title: 'Login Successful',
-            description: "Welcome back! Redirecting to your dashboard.",
-        });
-        router.push('/student/dashboard');
-      } else {
-        toast({
-          variant: 'destructive',
-          title: 'Login Failed',
-          description: 'Invalid email or password. Please try again.',
-        });
-      }
-    }, 1500);
+    }
   };
   
   const handleDemo = () => {
