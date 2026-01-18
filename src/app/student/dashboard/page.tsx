@@ -12,10 +12,14 @@ import { AssignedSeatCard } from '@/components/student/dashboard/assigned-seat-c
 import { UpcomingPaymentCard } from '@/components/student/dashboard/upcoming-payment-card';
 import { FibonacciStreakCard } from '@/components/student/dashboard/fibonacci-streak-card';
 import { SuggestionForm } from '@/components/student/dashboard/suggestion-form';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const PaymentHistoryTable = dynamic(
   () => import('@/components/student/dashboard/payment-history-table').then(mod => mod.PaymentHistoryTable),
-  { ssr: false }
+  { 
+    ssr: false,
+    loading: () => <Skeleton className="h-[400px] w-full" /> 
+  }
 );
 
 // TODO: Replace with actual logged-in user's library
@@ -88,5 +92,3 @@ export default function StudentDashboardPage() {
     </div>
   );
 }
-
-    

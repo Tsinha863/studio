@@ -1,3 +1,4 @@
+
 'use client';
 import * as React from 'react';
 import dynamic from 'next/dynamic';
@@ -38,8 +39,14 @@ const IncomeExpenseChart = dynamic(() => import('@/components/admin/dashboard/in
     ssr: false,
     loading: () => <Skeleton className="h-[250px] w-full" /> 
 });
-const RecentStudents = dynamic(() => import('@/components/admin/dashboard/recent-students').then(mod => mod.RecentStudents), { ssr: false });
-const ActivityFeed = dynamic(() => import('@/components/admin/dashboard/activity-feed').then(mod => mod.ActivityFeed), { ssr: false });
+const RecentStudents = dynamic(() => import('@/components/admin/dashboard/recent-students').then(mod => mod.RecentStudents), { 
+    ssr: false,
+    loading: () => <Skeleton className="h-[300px] w-full" /> 
+});
+const ActivityFeed = dynamic(() => import('@/components/admin/dashboard/activity-feed').then(mod => mod.ActivityFeed), { 
+    ssr: false,
+    loading: () => <Skeleton className="h-[300px] w-full" /> 
+});
 const ExpenseBreakdownChart = dynamic(() => import('@/components/admin/dashboard/expense-breakdown-chart').then(mod => mod.ExpenseBreakdownChart), { 
     ssr: false,
     loading: () => <Skeleton className="mx-auto aspect-square h-[250px] rounded-full" />
@@ -102,8 +109,8 @@ export default function DashboardPage() {
   }, [firestore, user]);
 
   const { data: allStudents, isLoading: isLoadingAllStudents } = useCollection<Student>(allStudentsQuery);
-  const { data: recentStudents } = useCollection<Student>(recentStudentsQuery);
-  const { data: activityLogs } = useCollection<ActivityLog>(activityQuery);
+  const { data: recentStudents, isLoading: isLoadingRecentStudents } = useCollection<Student>(recentStudentsQuery);
+  const { data: activityLogs, isLoading: isLoadingActivityLogs } = useCollection<ActivityLog>(activityQuery);
   const { data: payments, isLoading: isLoadingPayments } = useCollection<Payment>(paymentsQuery);
   const { data: expenses, isLoading: isLoadingExpenses } = useCollection<Expense>(expensesQuery);
 
@@ -262,7 +269,7 @@ export default function DashboardPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <RecentStudents students={recentStudents || []} />
+            <RecentStudents students={recentStudents || []} isLoading={isLoadingRecentStudents} />
           </CardContent>
         </Card>
         <Card className="lg:col-span-2">
@@ -273,7 +280,7 @@ export default function DashboardPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <ActivityFeed logs={activityLogs || []} />
+            <ActivityFeed logs={activityLogs || []} isLoading={isLoadingActivityLogs} />
           </CardContent>
         </Card>
       </div>
