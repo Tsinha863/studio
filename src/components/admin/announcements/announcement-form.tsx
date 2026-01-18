@@ -40,20 +40,18 @@ export function AnnouncementForm({ libraryId, onSuccess, onCancel }: Announcemen
       return;
     }
 
-    setIsSubmitting(true);
     if (!firestore || !user) {
       toast({
         variant: 'destructive',
         title: 'Authentication Error',
         description: 'You must be logged in to create an announcement.',
       });
-      setIsSubmitting(false);
       return;
     }
 
-    const actor = { id: user.uid, name: user.displayName || 'Admin' };
-    
+    setIsSubmitting(true);
     try {
+        const actor = { id: user.uid, name: user.displayName || 'Admin' };
         const result = await addAnnouncement(firestore, libraryId, validation.data, actor);
         if (result.success) {
           onSuccess();

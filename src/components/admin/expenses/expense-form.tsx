@@ -79,21 +79,20 @@ export function ExpenseForm({ expense, libraryId, onSuccess, onCancel }: Expense
       return;
     }
 
-    setIsSubmitting(true);
     if (!firestore || !user) {
       toast({
         variant: 'destructive',
         title: 'Authentication Error',
         description: 'You must be logged in to manage expenses.',
       });
-      setIsSubmitting(false);
       return;
     }
 
-    const actor = { id: user.uid, name: user.displayName || 'Admin' };
-    let result;
-
+    setIsSubmitting(true);
     try {
+      const actor = { id: user.uid, name: user.displayName || 'Admin' };
+      let result;
+
       if (expense?.docId) {
         result = await updateExpense(firestore, libraryId, expense.docId, validation.data, actor);
       } else {

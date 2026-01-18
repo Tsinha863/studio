@@ -77,36 +77,44 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
       return;
     }
 
-    setIsSubmitting(true);
     if (!firestore || !user) {
       toast({
         variant: 'destructive',
         title: 'Authentication Error',
         description: 'You must be logged in to manage students.',
       });
-      setIsSubmitting(false);
       return;
     }
 
-    const actor = { id: user.uid, name: user.displayName || 'Admin' };
-    let result;
+    setIsSubmitting(true);
+    try {
+        const actor = { id: user.uid, name: user.displayName || 'Admin' };
+        let result;
 
-    if (student?.docId) {
-      result = await updateStudent(firestore, libraryId, student.docId, validation.data, actor);
-    } else {
-      result = await addStudent(firestore, libraryId, validation.data as StudentFormValues, actor);
-    }
+        if (student?.docId) {
+            result = await updateStudent(firestore, libraryId, student.docId, validation.data, actor);
+        } else {
+            result = await addStudent(firestore, libraryId, validation.data as StudentFormValues, actor);
+        }
 
-    setIsSubmitting(false);
-
-    if (result.success) {
-      onSuccess();
-    } else {
-      toast({
-        variant: 'destructive',
-        title: 'An error occurred',
-        description: result.error || 'The operation failed. Please try again.',
-      });
+        if (result.success) {
+            onSuccess();
+        } else {
+            toast({
+                variant: 'destructive',
+                title: 'An error occurred',
+                description: result.error || 'The operation failed. Please try again.',
+            });
+        }
+    } catch (error) {
+        console.error("Student form submission error:", error);
+        toast({
+            variant: "destructive",
+            title: "An unexpected error occurred",
+            description: error instanceof Error ? error.message : "Please check the console for details."
+        });
+    } finally {
+        setIsSubmitting(false);
     }
   };
 
