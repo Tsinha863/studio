@@ -22,7 +22,7 @@ interface CreateRoomFormProps {
 }
 
 export function CreateRoomForm({ libraryId, onSuccess, onCancel }: CreateRoomFormProps) {
-  const { firestore, user } = useFirebase();
+  const { firestore, user, isUserLoading } = useFirebase();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
@@ -31,8 +31,12 @@ export function CreateRoomForm({ libraryId, onSuccess, onCancel }: CreateRoomFor
   const [errors, setErrors] = React.useState<Partial<Record<keyof RoomFormValues, string>>>({});
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    console.log("CREATE ROOM CLICKED");
+    console.log("CREATE ROOM CLICKED"); // STEP 1: Confirm click fires
+    e.preventDefault(); // STEP 2: Prevent form auto-submit
+
+    // STEP 4: Verify auth & library at click time
+    console.log("USER:", user);
+    console.log("LIBRARY ID:", libraryId);
 
     if (!user || !firestore) {
       toast({
@@ -40,12 +44,10 @@ export function CreateRoomForm({ libraryId, onSuccess, onCancel }: CreateRoomFor
         title: 'Authentication Error',
         description: 'User not authenticated or library not ready. Please try again.',
       });
-      console.error("Auth check failed:", { user, firestore });
       return;
     }
 
     setErrors({});
-    setIsSubmitting(true);
 
     const data = {
       name,
@@ -60,10 +62,10 @@ export function CreateRoomForm({ libraryId, onSuccess, onCancel }: CreateRoomFor
         newErrors[path] = err.message;
       });
       setErrors(newErrors);
-      setIsSubmitting(false);
       return;
     }
     
+    setIsSubmitting(true);
     try {
       const actor = { id: user.uid, name: user.displayName || 'Admin' };
       const batch = writeBatch(firestore);
@@ -116,6 +118,7 @@ export function CreateRoomForm({ libraryId, onSuccess, onCancel }: CreateRoomFor
       onSuccess();
 
     } catch (error) {
+      // STEP 3: Log the real Firebase error
       console.error("CREATE ROOM ERROR:", error);
       toast({
         variant: 'destructive',
@@ -159,7 +162,7 @@ export function CreateRoomForm({ libraryId, onSuccess, onCancel }: CreateRoomFor
         <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
           Cancel
         </Button>
-        <Button type="submit" disabled={isSubmitting || !user}>
+        <Button type="submit" disabled={isSubmitting || isUserLoading || !user}>
           {isSubmitting ? (
             <>
               <Spinner className="mr-2 h-4 w-4" />

@@ -52,13 +52,16 @@ export function AssignSeatDialog({
 
   const handleAssign = async () => {
     console.log("ASSIGN SEAT CLICKED");
+    console.log("USER:", user);
+    console.log("LIBRARY ID:", libraryId);
+    console.log("SELECTED STUDENT ID:", selectedStudentId);
+
     if (!firestore || !user || !selectedStudentId) {
       toast({
         variant: 'destructive',
         title: 'Action Failed',
         description: 'User not authenticated or no student selected.',
       });
-      console.error("Assign seat pre-check failed", { firestore, user, selectedStudentId });
       return;
     }
     setIsSubmitting(true);
@@ -125,13 +128,15 @@ export function AssignSeatDialog({
 
   const handleUnassign = async () => {
     console.log("UNASSIGN SEAT CLICKED");
+    console.log("USER:", user);
+    console.log("LIBRARY ID:", libraryId);
+
     if (!firestore || !user) {
         toast({
             variant: 'destructive',
             title: 'Authentication Error',
             description: 'User is not authenticated. Please log in and try again.',
         });
-        console.error("Unassign seat pre-check failed", { firestore, user });
         return;
     }
     setIsSubmitting(true);
