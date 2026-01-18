@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import dynamic from 'next/dynamic';
 import { PlusCircle } from 'lucide-react';
 import { collection, query, orderBy } from 'firebase/firestore';
 
@@ -27,9 +28,13 @@ import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
 import type { Announcement } from '@/lib/types';
 import { AnnouncementForm } from '@/components/admin/announcements/announcement-form';
-import { AnnouncementsDataTable } from '@/components/admin/announcements/data-table';
 import { columns as announcementColumns } from '@/components/admin/announcements/columns';
 import { deleteAnnouncement } from '@/lib/actions/announcements';
+
+const AnnouncementsDataTable = dynamic(
+  () => import('@/components/admin/announcements/data-table').then(mod => mod.AnnouncementsDataTable),
+  { ssr: false }
+);
 
 type ModalState = {
   isOpen: boolean;

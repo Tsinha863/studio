@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import dynamic from 'next/dynamic';
 import { collection, query, where, orderBy, limit } from 'firebase/firestore';
 
 import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
@@ -9,8 +10,12 @@ import { WelcomeHeader } from '@/components/student/dashboard/welcome-header';
 import { AssignedSeatCard } from '@/components/student/dashboard/assigned-seat-card';
 import { UpcomingPaymentCard } from '@/components/student/dashboard/upcoming-payment-card';
 import { FibonacciStreakCard } from '@/components/student/dashboard/fibonacci-streak-card';
-import { PaymentHistoryTable } from '@/components/student/dashboard/payment-history-table';
 import { SuggestionForm } from '@/components/student/dashboard/suggestion-form';
+
+const PaymentHistoryTable = dynamic(
+  () => import('@/components/student/dashboard/payment-history-table').then(mod => mod.PaymentHistoryTable),
+  { ssr: false }
+);
 
 // TODO: Replace with actual logged-in user's library and email
 const HARDCODED_LIBRARY_ID = 'library1';

@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import dynamic from 'next/dynamic';
 import { PlusCircle } from 'lucide-react';
 import {
   collection,
@@ -34,9 +35,13 @@ import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
 import type { Expense } from '@/lib/types';
 import { ExpenseForm } from '@/components/admin/expenses/expense-form';
-import { ExpensesDataTable } from '@/components/admin/expenses/data-table';
 import { columns as expenseColumns } from '@/components/admin/expenses/columns';
 import { deleteExpense } from '@/lib/actions/expenses';
+
+const ExpensesDataTable = dynamic(
+  () => import('@/components/admin/expenses/data-table').then(mod => mod.ExpensesDataTable),
+  { ssr: false }
+);
 
 type ModalState = {
   isOpen: boolean;

@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import dynamic from 'next/dynamic';
 import { collection, query, orderBy } from 'firebase/firestore';
 
 import { Card, CardContent } from '@/components/ui/card';
@@ -8,7 +9,6 @@ import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
 import type { Suggestion, Student } from '@/lib/types';
 import { updateSuggestionStatus, deleteSuggestion } from '@/lib/actions/suggestions';
-import { SuggestionsDataTable } from '@/components/admin/suggestions/data-table';
 import { columns as suggestionColumns } from '@/components/admin/suggestions/columns';
 import {
   AlertDialog,
@@ -20,6 +20,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+
+const SuggestionsDataTable = dynamic(
+  () => import('@/components/admin/suggestions/data-table').then(mod => mod.SuggestionsDataTable),
+  { ssr: false }
+);
 
 // TODO: Replace with actual logged-in user's library
 const HARDCODED_LIBRARY_ID = 'library1';

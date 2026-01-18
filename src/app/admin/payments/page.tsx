@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import dynamic from 'next/dynamic';
 import { HandCoins, PlusCircle } from 'lucide-react';
 import {
   collection,
@@ -20,8 +21,12 @@ import {
 import { generateSimulatedReceipt } from '@/ai/flows/generate-simulated-receipt';
 
 import { columns as paymentColumns } from '@/components/admin/payments/columns';
-import { PaymentsDataTable } from '@/components/admin/payments/data-table';
 import { ReceiptDialog } from '@/components/receipt-dialog';
+
+const PaymentsDataTable = dynamic(
+  () => import('@/components/admin/payments/data-table').then(mod => mod.PaymentsDataTable),
+  { ssr: false }
+);
 
 // TODO: Replace with actual logged-in user's library
 const HARDCODED_LIBRARY_ID = 'library1';

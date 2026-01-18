@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import dynamic from 'next/dynamic';
 import { PlusCircle } from 'lucide-react';
 import {
   collection,
@@ -39,9 +40,13 @@ import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
 import type { Student } from '@/lib/types';
 import { StudentForm } from '@/components/admin/students/student-form';
-import { StudentDataTable } from '@/components/admin/students/data-table';
 import { columns as studentColumns } from '@/components/admin/students/columns';
 import { deleteStudent } from '@/lib/actions/students';
+
+const StudentDataTable = dynamic(
+  () => import('@/components/admin/students/data-table').then((mod) => mod.StudentDataTable),
+  { ssr: false }
+);
 
 type ModalState = {
   isOpen: boolean;
