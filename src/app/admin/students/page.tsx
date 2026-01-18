@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import dynamic from 'next/dynamic';
-import { PlusCircle } from 'lucide-react';
+import { PlusCircle, Archive } from 'lucide-react';
 import {
   collection,
   query,
@@ -39,6 +39,8 @@ import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
 import type { Student } from '@/lib/types';
 import { StudentForm } from '@/components/admin/students/student-form';
 import { columns as studentColumns } from '@/components/admin/students/columns';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 
 const StudentDataTable = dynamic(
   () => import('@/components/admin/students/data-table').then((mod) => mod.StudentDataTable),
@@ -65,6 +67,7 @@ export default function StudentsPage() {
 
   const [modalState, setModalState] = React.useState<ModalState>({ isOpen: false });
   const [alertState, setAlertState] = React.useState<AlertState>({ isOpen: false });
+  const [showInactive, setShowInactive] = React.useState(false);
 
   const studentsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
@@ -73,17 +76,19 @@ export default function StudentsPage() {
     );
   }, [firestore, user]);
 
-  const { data: students, isLoading } = useCollection<Omit<Student, 'docId'>>(studentsQuery);
+  const { data: students, isLoading } = useCollection<Student>(studentsQuery);
   
-  const studentsWithDocId = React.useMemo(() => {
-    return students?.map(s => ({ ...s, docId: s.id })) ?? [];
-  }, [students]);
+  const filteredStudents = React.useMemo(() => {
+    if (!students) return [];
+    if (showInactive) return students;
+    return students.filter(s => s.status !== 'inactive');
+  }, [students, showInactive]);
 
   const openModal = (student?: Student) => setModalState({ isOpen: true, student });
   const closeModal = () => setModalState({ isOpen: false, student: undefined });
 
   const openDeleteAlert = (student: Student) =>
-    setAlertState({ isOpen: true, studentId: student.docId, studentName: student.name });
+    setAlertState({ isOpen: true, studentId: student.id, studentName: student.name });
   const closeDeleteAlert = () =>
     setAlertState({ isOpen: false, studentId: undefined, studentName: undefined });
 
@@ -174,8 +179,19 @@ export default function StudentsPage() {
         <CardContent className="p-0">
           <StudentDataTable
             columns={memoizedColumns}
-            data={studentsWithDocId ?? []}
+            data={filteredStudents}
             isLoading={isLoading}
+            toolbarContent={
+                <div className="flex items-center space-x-2">
+                    <Archive className="h-5 w-5 text-muted-foreground" />
+                    <Label htmlFor="show-inactive">Show Inactive Students</Label>
+                    <Switch
+                        id="show-inactive"
+                        checked={showInactive}
+                        onCheckedChange={setShowInactive}
+                    />
+                </div>
+            }
           />
         </CardContent>
       </Card>

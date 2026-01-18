@@ -30,12 +30,14 @@ interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
   isLoading?: boolean;
+  toolbarContent?: React.ReactNode;
 }
 
 export function StudentDataTable<TData, TValue>({
   columns,
   data,
   isLoading,
+  toolbarContent,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
@@ -60,7 +62,7 @@ export function StudentDataTable<TData, TValue>({
 
   return (
     <div className="space-y-4 p-4">
-      <div className="flex items-center">
+      <div className="flex items-center justify-between">
         <Input
           placeholder="Filter by name or email..."
           value={(table.getColumn('name')?.getFilterValue() as string) ?? ''}
@@ -69,6 +71,7 @@ export function StudentDataTable<TData, TValue>({
           }
           className="max-w-sm"
         />
+        {toolbarContent}
       </div>
       <div className="rounded-md border">
         <Table>

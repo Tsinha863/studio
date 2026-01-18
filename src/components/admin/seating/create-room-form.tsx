@@ -15,11 +15,15 @@ import { roomFormSchema, type RoomFormValues } from '@/lib/schemas';
 import { Spinner } from '@/components/spinner';
 import { Label } from '@/components/ui/label';
 import { PlusCircle } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Seat } from '@/lib/types';
 
 interface CreateRoomFormProps {
   libraryId: string;
   onSuccess: () => void;
 }
+
+const tiers: Seat['tier'][] = ['basic', 'standard', 'premium'];
 
 export function CreateRoomForm({ libraryId, onSuccess }: CreateRoomFormProps) {
   const { firestore, user } = useFirebase();
@@ -28,7 +32,8 @@ export function CreateRoomForm({ libraryId, onSuccess }: CreateRoomFormProps) {
 
   const [name, setName] = React.useState('');
   const [capacity, setCapacity] = React.useState<number | string>(20);
-  const [errors, setErrors] = React.useState<Partial<Record<keyof Omit<RoomFormValues, 'tier'>, string>>>({});
+  const [tier, setTier] = React.useState<Seat['tier']>('standard');
+  const [errors, setErrors] = React.useState<Partial<Record<keyof RoomFormValues, string>>>({});
 
   const handleSubmit = async () => {
     if (!user || !firestore) {
@@ -41,7 +46,7 @@ export function CreateRoomForm({ libraryId, onSuccess }: CreateRoomFormProps) {
     }
 
     setErrors({});
-    const validation = roomFormSchema.safeParse({ name, capacity: Number(capacity), tier: 'standard' });
+    const validation = roomFormSchema.safeParse({ name, capacity: Number(capacity), tier });
 
     if (!validation.success) {
       const newErrors: Partial<Record<keyof RoomFormValues, string>> = {};
@@ -73,7 +78,7 @@ export function CreateRoomForm({ libraryId, onSuccess }: CreateRoomFormProps) {
         batch.set(seatRef, {
           roomId: roomRef.id,
           libraryId,
-          tier: 'standard',
+          tier: validation.data.tier,
           assignments: {},
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
@@ -98,6 +103,7 @@ export function CreateRoomForm({ libraryId, onSuccess }: CreateRoomFormProps) {
       // Reset form on success
       setName('');
       setCapacity(20);
+      setTier('standard');
       setErrors({});
       onSuccess();
 
@@ -114,9 +120,9 @@ export function CreateRoomForm({ libraryId, onSuccess }: CreateRoomFormProps) {
   };
 
   return (
-    <form onSubmit={(e) => e.preventDefault()} className="flex flex-wrap items-end gap-4">
+    <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="flex flex-wrap items-end gap-4">
         <div className="flex-grow space-y-2" style={{minWidth: '200px'}}>
-            <Label htmlFor="roomName" className="sr-only">Room Name</Label>
+            <Label htmlFor="roomName">Room Name</Label>
             <Input
                 id="roomName"
                 placeholder="Enter room name"
@@ -139,9 +145,24 @@ export function CreateRoomForm({ libraryId, onSuccess }: CreateRoomFormProps) {
                 min="1"
                 className="w-24"
             />
+             {errors.capacity && <p className="text-sm font-medium text-destructive w-full">{errors.capacity}</p>}
+        </div>
+
+        <div className="space-y-2">
+            <Label htmlFor="tier">Seat Tier</Label>
+            <Select onValueChange={(value: Seat['tier']) => setTier(value)} value={tier} disabled={isSubmitting}>
+                <SelectTrigger id="tier" className="w-[120px]">
+                    <SelectValue placeholder="Select tier" />
+                </SelectTrigger>
+                <SelectContent>
+                    {tiers.map((t) => (
+                        <SelectItem key={t} value={t} className="capitalize">{t}</SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
         </div>
         
-        <Button type="button" onClick={handleSubmit} disabled={isSubmitting || !user}>
+        <Button type="submit" disabled={isSubmitting || !user}>
           {isSubmitting ? (
             <>
               <Spinner className="mr-2 h-4 w-4" />
@@ -154,7 +175,6 @@ export function CreateRoomForm({ libraryId, onSuccess }: CreateRoomFormProps) {
             </>
           )}
         </Button>
-        {errors.capacity && <p className="text-sm font-medium text-destructive w-full">{errors.capacity}</p>}
     </form>
   );
 }

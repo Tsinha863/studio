@@ -2,16 +2,23 @@
 
 import { ColumnDef } from '@tanstack/react-table';
 import { format } from 'date-fns';
-import { Check, Download, MoreHorizontal, ThumbsDown, ThumbsUp, X } from 'lucide-react';
+import { Download, ThumbsDown, ThumbsUp } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { DataTableColumnHeader } from '@/components/admin/students/data-table-header';
 import type { PrintRequest, PrintRequestStatus } from '@/lib/types';
 import { Spinner } from '@/components/spinner';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 type ColumnsConfig = {
-  onStatusUpdate: (requestId: string, newStatus: 'Approved' | 'Rejected') => void;
+  onApprove: (requestId: string) => void;
+  onReject: (requestId: string) => void;
   processingId: string | null;
 };
 
@@ -21,7 +28,7 @@ const statusColors: Record<PrintRequestStatus, 'default' | 'secondary' | 'destru
     Rejected: 'destructive',
 };
 
-export const columns = ({ onStatusUpdate, processingId }: ColumnsConfig): ColumnDef<PrintRequest>[] => [
+export const columns = ({ onApprove, onReject, processingId }: ColumnsConfig): ColumnDef<PrintRequest>[] => [
   {
     accessorKey: 'createdAt',
     header: ({ column }) => (
@@ -76,6 +83,21 @@ export const columns = ({ onStatusUpdate, processingId }: ColumnsConfig): Column
     cell: ({ row }) => {
       const status = row.original.status;
       const variant = statusColors[status] || 'default';
+
+      if (status === 'Rejected' && row.original.rejectionReason) {
+        return (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger>
+                <Badge variant={variant} className="capitalize">{status}</Badge>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{row.original.rejectionReason}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        );
+      }
       return <Badge variant={variant} className="capitalize">{status}</Badge>;
     },
   },
@@ -93,14 +115,16 @@ export const columns = ({ onStatusUpdate, processingId }: ColumnsConfig): Column
       return (
         <div className="flex justify-end gap-2">
             {isProcessing ? (
-                <Spinner />
+                <div className="flex items-center justify-center w-full h-full">
+                    <Spinner />
+                </div>
             ) : (
                 <>
                     <Button
                         type="button"
                         size="sm"
                         variant="outline"
-                        onClick={() => onStatusUpdate(request.id, 'Approved')}
+                        onClick={() => onApprove(request.id)}
                         disabled={!!processingId}
                     >
                         <ThumbsUp className="mr-2 h-4 w-4" />
@@ -110,7 +134,7 @@ export const columns = ({ onStatusUpdate, processingId }: ColumnsConfig): Column
                         type="button"
                         size="sm"
                         variant="destructive"
-                        onClick={() => onStatusUpdate(request.id, 'Rejected')}
+                        onClick={() => onReject(request.id)}
                         disabled={!!processingId}
                     >
                          <ThumbsDown className="mr-2 h-4 w-4" />

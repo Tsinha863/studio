@@ -4,6 +4,7 @@ import * as React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { collection, query, where, limit } from 'firebase/firestore';
 import {
   Bell,
   Home,
@@ -35,9 +36,30 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Logo } from '@/components/logo';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
+import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
+import { Student } from '@/lib/types';
+import { Skeleton } from '@/components/ui/skeleton';
+
+// TODO: Replace with actual logged-in user's library and email
+const HARDCODED_LIBRARY_ID = 'library1';
+const HARDCODED_STUDENT_EMAIL = 'student@campushub.com'; 
 
 function UserMenu() {
+  const { firestore, user } = useFirebase();
   const userAvatar = PlaceHolderImages.find((p) => p.id === 'user-avatar');
+
+  const studentQuery = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return query(
+      collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students`),
+      where('email', '==', HARDCODED_STUDENT_EMAIL),
+      limit(1)
+    );
+  }, [firestore, user]);
+
+  const { data: studentData, isLoading: isLoadingStudent } = useCollection<Student>(studentQuery);
+  const student = React.useMemo(() => (studentData && studentData[0]) ? studentData[0] : null, [studentData]);
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -57,12 +79,19 @@ function UserMenu() {
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-56" align="end" forceMount>
         <DropdownMenuLabel className="font-normal">
-          <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">Aarav Sharma</p>
-            <p className="text-xs leading-none text-muted-foreground">
-              student@campushub.com
-            </p>
-          </div>
+          {isLoadingStudent ? (
+            <div className="flex flex-col space-y-2">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-3 w-32" />
+            </div>
+          ) : (
+            <div className="flex flex-col space-y-1">
+              <p className="text-sm font-medium leading-none">{student?.name || 'Student'}</p>
+              <p className="text-xs leading-none text-muted-foreground">
+                {student?.email || 'No email'}
+              </p>
+            </div>
+          )}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem>
@@ -112,14 +141,6 @@ function MainSidebar() {
                             <Link href="/student/print-on-desk">
                                 <Printer />
                                 <span>Print on Desk</span>
-                            </Link>
-                        </SidebarMenuButton>
-                    </SidebarMenuItem>
-                    <SidebarMenuItem>
-                        <SidebarMenuButton asChild tooltip="Suggestions" isActive={pathname.startsWith('/student/suggestions')}>
-                             <Link href="#">
-                                <Lightbulb />
-                                <span>My Suggestions</span>
                             </Link>
                         </SidebarMenuButton>
                     </SidebarMenuItem>

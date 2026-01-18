@@ -18,8 +18,7 @@ export interface User {
 export type TimeSlot = 'morning' | 'afternoon' | 'night';
 
 export interface Student {
-  id: string; // Custom ID, used as Firestore document ID. Immutable.
-  docId: string; // Firestore document ID
+  id: string; // Custom ID, used as Firestore document ID.
   libraryId: string;
   userId?: string; // Optional link to a User account
   name: string;
@@ -56,7 +55,6 @@ export type ExpenseCategory = 'rent' | 'utilities' | 'supplies' | 'salaries' | '
 
 export interface Expense {
   id: string; // Firestore document ID
-  docId?: string; // Firestore document ID
   libraryId: string;
   description: string;
   amount: number;
@@ -68,7 +66,6 @@ export interface Expense {
 
 export interface Room {
   id: string;
-  docId?: string;
   libraryId: string;
   name: string;
   capacity: number;
@@ -129,7 +126,6 @@ export type PrintRequestStatus = 'Pending' | 'Approved' | 'Rejected';
 
 export interface PrintRequest {
   id: string;
-  docId: string;
   libraryId: string;
   studentId: string;
   studentName: string;

@@ -112,11 +112,11 @@ function LoginForm() {
   };
   
   const handleDemo = () => {
-    form.setValue('email', 'student@campushub.com');
+    form.setValue('email', 'admin@campushub.com');
     form.setValue('password', 'password123');
     toast({
         title: 'Demo Mode',
-        description: 'Student credentials filled. Click "Sign In" to continue.',
+        description: 'Admin credentials filled. Click "Sign In" to continue.',
     });
   }
 

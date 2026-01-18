@@ -24,7 +24,7 @@ import { Badge } from '@/components/ui/badge';
 import type { Suggestion } from '@/lib/types';
 import { DataTableColumnHeader } from '../students/data-table-header';
 
-type SuggestionWithStudent = Suggestion & { studentName: string; docId: string };
+type SuggestionWithStudent = Suggestion & { studentName: string };
 type SuggestionStatus = Suggestion['status'];
 
 const statusColors: Record<SuggestionStatus, 'default' | 'secondary' | 'destructive' | 'success'> = {
@@ -84,7 +84,7 @@ export const columns = ({ onStatusChange, onDelete }: ColumnsConfig): ColumnDef<
         <Select
           value={suggestion.status}
           onValueChange={(value: SuggestionStatus) =>
-            onStatusChange(suggestion.docId, value)
+            onStatusChange(suggestion.id, value)
           }
         >
           <SelectTrigger className="w-[140px] capitalize">
@@ -119,7 +119,7 @@ export const columns = ({ onStatusChange, onDelete }: ColumnsConfig): ColumnDef<
               <DropdownMenuLabel>Actions</DropdownMenuLabel>
               <DropdownMenuItem
                 className="text-destructive"
-                onClick={() => onDelete(suggestion.docId)}
+                onClick={() => onDelete(suggestion.id)}
               >
                 Delete Suggestion
               </DropdownMenuItem>

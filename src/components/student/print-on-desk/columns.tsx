@@ -2,12 +2,11 @@
 
 import { ColumnDef } from '@tanstack/react-table';
 import { format } from 'date-fns';
-import { Download } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import type { PrintRequest, PrintRequestStatus } from '@/lib/types';
 import { DataTableColumnHeader } from '@/components/admin/students/data-table-header';
-import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
 const statusColors: Record<PrintRequestStatus, 'default' | 'secondary' | 'destructive' | 'success'> = {
     Pending: 'secondary',
@@ -58,6 +57,23 @@ export const columns: ColumnDef<PrintRequest>[] = [
     cell: ({ row }) => {
       const status = row.original.status;
       const variant = statusColors[status] || 'default';
+      const reason = row.original.rejectionReason;
+
+      if (status === 'Rejected' && reason) {
+        return (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger>
+                <Badge variant={variant} className="capitalize cursor-help">{status}</Badge>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Reason: {reason}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        );
+      }
+
       return <Badge variant={variant} className="capitalize">{status}</Badge>;
     },
   },

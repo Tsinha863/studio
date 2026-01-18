@@ -5,16 +5,13 @@ import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
   Bell,
-  Book,
   CreditCard,
   IndianRupee,
   Home,
   LogOut,
-  PlusCircle,
   Settings,
   User,
   Users,
-  Wind,
   Megaphone,
   Lightbulb,
   Printer,
@@ -30,7 +27,6 @@ import {
   SidebarTrigger,
   SidebarInset,
   useSidebar,
-  SidebarFooter,
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import {
@@ -95,7 +91,6 @@ function UserMenu() {
 }
 
 function MainSidebar() {
-    const { open } = useSidebar();
     const pathname = usePathname();
     return (
         <Sidebar>
@@ -175,11 +170,6 @@ function MainSidebar() {
                     </SidebarMenuItem>
                 </SidebarMenu>
             </SidebarContent>
-            <SidebarFooter className="group-data-[collapsible=icon]:hidden">
-                <Button variant="outline">
-                    <PlusCircle className="mr-2" /> New Student
-                </Button>
-            </SidebarFooter>
         </Sidebar>
     )
 }

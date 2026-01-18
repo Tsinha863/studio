@@ -11,25 +11,27 @@ interface AssignedSeatCardProps {
 }
 
 export function AssignedSeatCard({ assignments, isLoading }: AssignedSeatCardProps) {
-  const firstAssignment = assignments && assignments.length > 0 ? assignments[0] : null;
-
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">My Seat</CardTitle>
+        <CardTitle className="text-sm font-medium">My Seats</CardTitle>
         <Armchair className="h-4 w-4 text-muted-foreground" />
       </CardHeader>
       <CardContent>
         {isLoading ? (
-          <>
+          <div className="space-y-2">
             <Skeleton className="h-8 w-1/2" />
             <Skeleton className="mt-2 h-4 w-1/4" />
-          </>
-        ) : firstAssignment ? (
-          <>
-            <div className="text-2xl font-bold">{firstAssignment.seatId}</div>
-            <p className="text-xs text-muted-foreground capitalize">{firstAssignment.timeSlot} Slot</p>
-          </>
+          </div>
+        ) : assignments && assignments.length > 0 ? (
+            <div className="space-y-2">
+                {assignments.map((assignment, index) => (
+                    <div key={`${assignment.seatId}-${assignment.timeSlot}-${index}`}>
+                        <div className="text-2xl font-bold">{assignment.seatId}</div>
+                        <p className="text-xs text-muted-foreground capitalize">{assignment.timeSlot} Slot</p>
+                    </div>
+                ))}
+            </div>
         ) : (
           <>
             <div className="text-2xl font-bold">Not Assigned</div>

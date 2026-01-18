@@ -6,7 +6,6 @@ import { Timestamp } from 'firebase/firestore';
 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import type { Student } from '@/lib/types';
 import { DataTableColumnHeader } from '@/components/admin/students/data-table-header';
 import { Spinner } from '@/components/spinner';
 import type { PaymentWithDetails } from '@/app/admin/payments/page';
@@ -82,6 +81,16 @@ export const columns = ({ handleMarkAsPaid, isPaying }: ColumnsConfig): ColumnDe
     cell: ({ row }) => {
       const date = row.original.paymentDate?.toDate();
       return date ? <span>{format(date, 'MMM d, yyyy')}</span> : <span className="text-muted-foreground">N/A</span>;
+    },
+    filterFn: (row, id, value) => {
+      const val = row.getValue(id) as Timestamp | null;
+      if (!value) return true;
+      if (!val) return false;
+      const rowDate = val.toDate();
+      const filterDate = value as Date;
+      return rowDate.getFullYear() === filterDate.getFullYear() &&
+             rowDate.getMonth() === filterDate.getMonth() &&
+             rowDate.getDate() === filterDate.getDate();
     },
   },
   {

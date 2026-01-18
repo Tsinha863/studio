@@ -88,8 +88,8 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
         const actor = { id: user.uid, name: user.displayName || 'Admin' };
         const batch = writeBatch(firestore);
         
-        if (student?.docId) { // This is an existing student
-            const studentRef = doc(firestore, `libraries/${libraryId}/students/${student.docId}`);
+        if (student?.id) { // This is an existing student
+            const studentRef = doc(firestore, `libraries/${libraryId}/students/${student.id}`);
             batch.update(studentRef, {
               ...validation.data,
               lastInteractionAt: serverTimestamp(),
@@ -101,7 +101,7 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
               libraryId,
               user: actor,
               activityType: 'student_updated',
-              details: { studentId: student.docId, studentName: validation.data.name || 'N/A' },
+              details: { studentId: student.id, studentName: validation.data.name || 'N/A' },
               timestamp: serverTimestamp(),
             });
         } else { // This is a new student

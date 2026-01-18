@@ -25,8 +25,8 @@ export default function PrintOnDeskPage() {
     );
   }, [firestore, user]);
 
-  const { data: studentData, isLoading: isLoadingStudent } = useCollection<Omit<Student, 'docId'>>(studentQuery);
-  const student = React.useMemo(() => (studentData && studentData[0]) ? { ...studentData[0], docId: studentData[0].id } : null, [studentData]);
+  const { data: studentData, isLoading: isLoadingStudent } = useCollection<Student>(studentQuery);
+  const student = React.useMemo(() => (studentData && studentData[0]) ? studentData[0] : null, [studentData]);
 
   // 2. Get student's print requests
   const printRequestsQuery = useMemoFirebase(() => {
@@ -38,7 +38,7 @@ export default function PrintOnDeskPage() {
     );
   }, [firestore, user, student]);
 
-  const { data: printRequests, isLoading: isLoadingPrintRequests } = useCollection<Omit<PrintRequest, 'docId'>>(printRequestsQuery);
+  const { data: printRequests, isLoading: isLoadingPrintRequests } = useCollection<PrintRequest>(printRequestsQuery);
 
   return (
     <div className="flex flex-col gap-6">

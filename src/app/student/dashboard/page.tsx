@@ -36,8 +36,8 @@ export default function StudentDashboardPage() {
     );
   }, [firestore, user]);
 
-  const { data: studentData, isLoading: isLoadingStudent } = useCollection<Omit<Student, 'docId'>>(studentQuery);
-  const student = React.useMemo(() => (studentData && studentData[0]) ? { ...studentData[0], docId: studentData[0].id } : null, [studentData]);
+  const { data: studentData, isLoading: isLoadingStudent } = useCollection<Student>(studentQuery);
+  const student = React.useMemo(() => (studentData && studentData[0]) ? studentData[0] : null, [studentData]);
 
   // 2. Get student's payments
   const paymentsQuery = useMemoFirebase(() => {
@@ -49,7 +49,7 @@ export default function StudentDashboardPage() {
     );
   }, [firestore, user, student]);
 
-  const { data: payments, isLoading: isLoadingPayments } = useCollection<Omit<Payment, 'docId'>>(paymentsQuery);
+  const { data: payments, isLoading: isLoadingPayments } = useCollection<Payment>(paymentsQuery);
 
   const upcomingPayment = React.useMemo(() => {
     return payments?.find(p => p.status === 'pending' || p.status === 'overdue');

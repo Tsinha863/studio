@@ -99,9 +99,9 @@ export function ExpenseForm({ expense, libraryId, onSuccess, onCancel }: Expense
       const batch = writeBatch(firestore);
       const { expenseDate: validatedDate, ...expenseData } = validation.data;
 
-      if (expense?.docId) {
+      if (expense?.id) {
         // Update existing expense
-        const expenseRef = doc(firestore, `libraries/${libraryId}/expenses/${expense.docId}`);
+        const expenseRef = doc(firestore, `libraries/${libraryId}/expenses/${expense.id}`);
         batch.update(expenseRef, {
           ...expenseData,
           expenseDate: Timestamp.fromDate(validatedDate),
@@ -113,7 +113,7 @@ export function ExpenseForm({ expense, libraryId, onSuccess, onCancel }: Expense
           libraryId,
           user: actor,
           activityType: 'expense_updated',
-          details: { expenseId: expense.docId, newAmount: expenseData.amount },
+          details: { expenseId: expense.id, newAmount: expenseData.amount },
           timestamp: serverTimestamp(),
         });
       } else {
@@ -203,6 +203,7 @@ export function ExpenseForm({ expense, libraryId, onSuccess, onCancel }: Expense
         <Popover>
           <PopoverTrigger asChild>
             <Button
+              type="button"
               variant={"outline"}
               className={cn("w-full justify-start text-left font-normal", !expenseDate && "text-muted-foreground")}
               disabled={isSubmitting}

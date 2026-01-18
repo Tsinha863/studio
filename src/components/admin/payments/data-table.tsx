@@ -82,23 +82,6 @@ export function PaymentsDataTable<TData, TValue>({
           }
           className="h-10 max-w-sm"
         />
-        <Input
-          placeholder="Filter by seat..."
-          value={(table.getColumn('seatNumber')?.getFilterValue() as string) ?? ''}
-          onChange={(event) =>
-            table.getColumn('seatNumber')?.setFilterValue(event.target.value)
-          }
-          className="h-10 w-[150px]"
-        />
-        <Input
-          placeholder="Filter by amount..."
-          type="text"
-          value={(table.getColumn('amount')?.getFilterValue() as string) ?? ''}
-          onChange={(event) =>
-            table.getColumn('amount')?.setFilterValue(event.target.value)
-          }
-          className="h-10 w-[150px]"
-        />
         <Popover>
           <PopoverTrigger asChild>
             <Button
@@ -117,6 +100,28 @@ export function PaymentsDataTable<TData, TValue>({
               mode="single"
               selected={table.getColumn('dueDate')?.getFilterValue() as Date}
               onSelect={(date) => table.getColumn('dueDate')?.setFilterValue(date)}
+              initialFocus
+            />
+          </PopoverContent>
+        </Popover>
+         <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant={"outline"}
+              className={cn(
+                "h-10 w-[240px] justify-start text-left font-normal",
+                !table.getColumn('paymentDate')?.getFilterValue() && "text-muted-foreground"
+              )}
+            >
+              <CalendarIcon className="mr-2 h-4 w-4" />
+              {table.getColumn('paymentDate')?.getFilterValue() ? format(table.getColumn('paymentDate')?.getFilterValue() as Date, "PPP") : <span>Filter by payment date</span>}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="single"
+              selected={table.getColumn('paymentDate')?.getFilterValue() as Date}
+              onSelect={(date) => table.getColumn('paymentDate')?.setFilterValue(date)}
               initialFocus
             />
           </PopoverContent>

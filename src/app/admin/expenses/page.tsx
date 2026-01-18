@@ -73,17 +73,13 @@ export default function ExpensesPage() {
     );
   }, [firestore, user]);
 
-  const { data: expenses, isLoading } = useCollection<Omit<Expense, 'id'>>(expensesQuery);
+  const { data: expenses, isLoading } = useCollection<Expense>(expensesQuery);
   
-  const expensesWithDocId = React.useMemo(() => {
-    return expenses?.map(e => ({ ...e, docId: e.id })) ?? [];
-  }, [expenses]);
-
   const openModal = (expense?: Expense) => setModalState({ isOpen: true, expense });
   const closeModal = () => setModalState({ isOpen: false, expense: undefined });
 
   const openDeleteAlert = (expense: Expense) =>
-    setAlertState({ isOpen: true, expenseId: expense.docId });
+    setAlertState({ isOpen: true, expenseId: expense.id });
   const closeDeleteAlert = () =>
     setAlertState({ isOpen: false, expenseId: undefined });
 
@@ -153,7 +149,7 @@ export default function ExpensesPage() {
         <CardContent className="p-0">
           <ExpensesDataTable
             columns={memoizedColumns}
-            data={expensesWithDocId}
+            data={expenses || []}
             isLoading={isLoading}
           />
         </CardContent>

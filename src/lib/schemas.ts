@@ -46,7 +46,7 @@ const ACCEPTED_FILE_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'imag
 
 export const printRequestFormSchema = z.object({
   file: z
-    .instanceof(File)
+    .instanceof(File, { message: 'A file is required.' })
     .refine((file) => file.size <= MAX_FILE_SIZE, 'Max file size is 5MB.')
     .refine(
       (file) => ACCEPTED_FILE_TYPES.includes(file.type),

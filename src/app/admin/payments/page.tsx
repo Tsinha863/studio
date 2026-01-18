@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import dynamic from 'next/dynamic';
-import { HandCoins, PlusCircle } from 'lucide-react';
+import { PlusCircle } from 'lucide-react';
 import {
   collection,
   query,
@@ -44,8 +44,7 @@ type ReceiptState = {
   studentName?: string;
 };
 
-// New type for payments with student details
-export type PaymentWithDetails = Payment & { studentDocId?: string, docId: string, assignments: Student['assignments'] };
+export type PaymentWithDetails = Payment & { studentId: string, assignments: Student['assignments'] };
 
 export default function PaymentsPage() {
   const { toast } = useToast();
@@ -67,19 +66,16 @@ export default function PaymentsPage() {
     return collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students`);
   }, [firestore, user]);
 
-  const { data: payments, isLoading: isLoadingPayments } = useCollection<Omit<Payment, 'id'>>(paymentsQuery);
+  const { data: payments, isLoading: isLoadingPayments } = useCollection<Payment>(paymentsQuery);
   const { data: students, isLoading: isLoadingStudents } = useCollection<Student>(studentsQuery);
   
   const paymentsWithDetails: PaymentWithDetails[] = React.useMemo(() => {
     if (!payments || !students) return [];
     const studentMap = new Map(students.map(s => [s.id, { 
-        docId: s.docId, // Firestore document ID
         assignments: s.assignments || []
     }]));
     return payments.map(p => ({
         ...p,
-        docId: p.id,
-        studentDocId: studentMap.get(p.studentId)?.docId,
         assignments: studentMap.get(p.studentId)?.assignments || [],
     }));
   }, [payments, students]);
@@ -122,7 +118,7 @@ export default function PaymentsPage() {
       let createdCount = 0;
   
       for (const studentDoc of studentsSnapshot.docs) {
-        const student = { docId: studentDoc.id, ...studentDoc.data() } as Student;
+        const student = { id: studentDoc.id, ...studentDoc.data() } as Student;
         
         // 3. Create new payments for students with no unpaid bills
         if (!studentsWithUnpaidBills.has(student.id)) {
@@ -184,11 +180,11 @@ export default function PaymentsPage() {
   };
 
   const handleMarkAsPaid = async (payment: PaymentWithDetails) => {
-    if (!user || !firestore || !payment.studentDocId) {
+    if (!user || !firestore || !payment.studentId) {
        toast({
         variant: 'destructive',
         title: 'Error',
-        description: "Student document ID not found. Cannot process payment.",
+        description: "Student ID not found. Cannot process payment.",
       });
       return;
     };
@@ -197,7 +193,7 @@ export default function PaymentsPage() {
     try {
       await runTransaction(firestore, async (transaction) => {
         const paymentRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/payments/${payment.id}`);
-        const studentRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students/${payment.studentDocId}`);
+        const studentRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students/${payment.studentId}`);
         
         const [paymentDoc, studentDoc] = await Promise.all([
           transaction.get(paymentRef),
@@ -248,7 +244,7 @@ export default function PaymentsPage() {
       });
 
       // Generate receipt after successful transaction
-      const student = students?.find(s => s.docId === payment.studentDocId);
+      const student = students?.find(s => s.id === payment.studentId);
       if (student) {
           const receiptInput = {
               studentName: student.name,
