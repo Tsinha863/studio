@@ -42,6 +42,7 @@ import { StudentForm } from '@/components/admin/students/student-form';
 import { columns as studentColumns } from '@/components/admin/students/columns';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { Spinner } from '@/components/spinner';
 
 const StudentDataTable = dynamic(
   () => import('@/components/admin/students/data-table').then((mod) => mod.StudentDataTable),
@@ -71,6 +72,7 @@ export default function StudentsPage() {
   const [modalState, setModalState] = React.useState<ModalState>({ isOpen: false });
   const [alertState, setAlertState] = React.useState<AlertState>({ isOpen: false });
   const [showInactive, setShowInactive] = React.useState(false);
+  const [isDeleting, setIsDeleting] = React.useState(false);
 
   const studentsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
@@ -104,6 +106,7 @@ export default function StudentsPage() {
       return;
     }
     
+    setIsDeleting(true);
     try {
       await runTransaction(firestore, async (transaction) => {
         const studentRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students/${alertState.studentId}`);
@@ -155,6 +158,7 @@ export default function StudentsPage() {
         description: error instanceof Error ? error.message : 'Could not update the student status.',
       });
     } finally {
+      setIsDeleting(false);
       closeDeleteAlert();
     }
   };
@@ -238,7 +242,8 @@ export default function StudentsPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={closeDeleteAlert}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteStudent}>
+            <AlertDialogAction onClick={handleDeleteStudent} disabled={isDeleting}>
+              {isDeleting && <Spinner className="mr-2" />}
               Continue
             </AlertDialogAction>
           </AlertDialogFooter>

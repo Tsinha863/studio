@@ -36,6 +36,7 @@ import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
 import type { Announcement } from '@/lib/types';
 import { AnnouncementForm } from '@/components/admin/announcements/announcement-form';
 import { columns as announcementColumns } from '@/components/admin/announcements/columns';
+import { Spinner } from '@/components/spinner';
 
 const AnnouncementsDataTable = dynamic(
   () => import('@/components/admin/announcements/data-table').then(mod => mod.AnnouncementsDataTable),
@@ -62,6 +63,7 @@ export default function AnnouncementsPage() {
 
   const [modalState, setModalState] = React.useState<ModalState>({ isOpen: false });
   const [alertState, setAlertState] = React.useState<AlertState>({ isOpen: false });
+  const [isDeleting, setIsDeleting] = React.useState(false);
 
   const announcementsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
@@ -91,6 +93,7 @@ export default function AnnouncementsPage() {
       return;
     }
     
+    setIsDeleting(true);
     try {
       const batch = writeBatch(firestore);
       const actor = { id: user.uid, name: user.displayName || 'Admin' };
@@ -122,6 +125,7 @@ export default function AnnouncementsPage() {
         description: error instanceof Error ? error.message : 'Could not delete the announcement.',
       });
     } finally {
+      setIsDeleting(false);
       closeDeleteAlert();
     }
   };
@@ -192,7 +196,8 @@ export default function AnnouncementsPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={closeDeleteAlert}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete}>
+            <AlertDialogAction onClick={handleDelete} disabled={isDeleting}>
+              {isDeleting && <Spinner className="mr-2" />}
               Continue
             </AlertDialogAction>
           </AlertDialogFooter>

@@ -26,6 +26,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Spinner } from '@/components/spinner';
 
 const SuggestionsDataTable = dynamic(
   () => import('@/components/admin/suggestions/data-table').then(mod => mod.SuggestionsDataTable),
@@ -40,12 +41,11 @@ type AlertState = {
   suggestionId?: string;
 };
 
-type SuggestionWithId = Suggestion & { id: string };
-
 export default function SuggestionsPage() {
   const { toast } = useToast();
   const { firestore, user } = useFirebase();
   const [alertState, setAlertState] = React.useState<AlertState>({ isOpen: false });
+  const [isDeleting, setIsDeleting] = React.useState(false);
 
   // --- Data Fetching ---
   const suggestionsQuery = useMemoFirebase(() => {
@@ -125,6 +125,7 @@ export default function SuggestionsPage() {
       return;
     }
 
+    setIsDeleting(true);
     try {
       const batch = writeBatch(firestore);
       const actor = { id: user.uid, name: user.displayName || 'Admin' };
@@ -155,6 +156,7 @@ export default function SuggestionsPage() {
         description: error instanceof Error ? error.message : 'Could not delete the suggestion.',
       });
     } finally {
+      setIsDeleting(false);
       closeDeleteAlert();
     }
   };
@@ -198,7 +200,8 @@ export default function SuggestionsPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={closeDeleteAlert}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete}>
+            <AlertDialogAction onClick={handleDelete} disabled={isDeleting}>
+              {isDeleting && <Spinner className="mr-2" />}
               Continue
             </AlertDialogAction>
           </AlertDialogFooter>

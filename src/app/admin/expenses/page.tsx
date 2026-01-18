@@ -39,6 +39,7 @@ import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
 import type { Expense } from '@/lib/types';
 import { ExpenseForm } from '@/components/admin/expenses/expense-form';
 import { columns as expenseColumns } from '@/components/admin/expenses/columns';
+import { Spinner } from '@/components/spinner';
 
 const ExpensesDataTable = dynamic(
   () => import('@/components/admin/expenses/data-table').then(mod => mod.ExpensesDataTable),
@@ -66,6 +67,7 @@ export default function ExpensesPage() {
 
   const [modalState, setModalState] = React.useState<ModalState>({ isOpen: false });
   const [alertState, setAlertState] = React.useState<AlertState>({ isOpen: false });
+  const [isDeleting, setIsDeleting] = React.useState(false);
 
   const expensesQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
@@ -95,6 +97,7 @@ export default function ExpensesPage() {
       return;
     }
 
+    setIsDeleting(true);
     try {
       const batch = writeBatch(firestore);
       const actor = { id: user.uid, name: user.displayName || 'Admin' };
@@ -125,6 +128,7 @@ export default function ExpensesPage() {
         description: error instanceof Error ? error.message : 'Could not delete the expense.',
       });
     } finally {
+      setIsDeleting(false);
       closeDeleteAlert();
     }
   };
@@ -196,7 +200,8 @@ export default function ExpensesPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={closeDeleteAlert}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteExpense}>
+            <AlertDialogAction onClick={handleDeleteExpense} disabled={isDeleting}>
+              {isDeleting && <Spinner className="mr-2" />}
               Continue
             </AlertDialogAction>
           </AlertDialogFooter>

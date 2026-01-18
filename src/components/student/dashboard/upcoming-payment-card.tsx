@@ -7,6 +7,7 @@ import type { Payment } from '@/lib/types';
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface UpcomingPaymentCardProps {
   payment?: Payment;
@@ -37,7 +38,19 @@ export function UpcomingPaymentCard({ payment, isLoading }: UpcomingPaymentCardP
             <p className="text-xs text-muted-foreground">
               Due on {format(payment.dueDate.toDate(), 'MMM d, yyyy')}
             </p>
-            <Button size="sm" className='mt-4'>Pay Now</Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  {/* The disabled button is nested in a span to ensure the tooltip trigger works */}
+                  <span tabIndex={0}>
+                    <Button size="sm" className='mt-4' disabled>Pay Now</Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Online payments are not enabled in this demo.</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </>
         ) : (
           <>
