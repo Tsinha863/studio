@@ -59,7 +59,8 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
       email,
       status,
     };
-
+    
+    // The student ID cannot be changed after creation.
     const schema = student ? studentFormSchema.omit({ id: true }) : studentFormSchema;
     const validation = schema.safeParse(data);
 
@@ -89,8 +90,10 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
         const validatedData = validation.data;
 
         if (student?.docId) {
+            // For updates, docId is the student's custom ID.
             result = await updateStudent(firestore, libraryId, student.docId, validatedData, actor);
         } else {
+            // This is a new student
             result = await addStudent(firestore, libraryId, validatedData as StudentFormValues, actor);
         }
 
@@ -117,7 +120,6 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
 
   return (
     <div className="space-y-4">
-      {!student && (
         <div className="space-y-2">
           <Label htmlFor="studentId">Student ID</Label>
           <Input
@@ -125,11 +127,10 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
             placeholder="e.g., S12345"
             value={studentId}
             onChange={(e) => setStudentId(e.target.value)}
-            disabled={isSubmitting}
+            disabled={isSubmitting || !!student} // Can't edit ID after creation
           />
           {errors.id && <p className="text-sm font-medium text-destructive">{errors.id}</p>}
         </div>
-      )}
       <div className="space-y-2">
         <Label htmlFor="name">Full Name</Label>
         <Input

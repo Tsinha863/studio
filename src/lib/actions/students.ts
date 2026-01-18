@@ -43,13 +43,15 @@ export async function addStudent(
   try {
     const batch = writeBatch(db);
 
-    // 1. Create student document
-    const studentRef = doc(studentsCol(db, libraryId), studentId);
+    // Use the custom student ID as the document ID for simplicity and uniqueness
+    const studentRef = doc(db, `libraries/${libraryId}/students`, studentId);
+
     batch.set(studentRef, {
       ...studentData,
       id: studentId, // denormalize custom ID into the document
       libraryId,
       fibonacciStreak: 0,
+      paymentDue: 0,
       notes: [],
       tags: [],
       assignedSeatId: null,
@@ -60,7 +62,6 @@ export async function addStudent(
       updatedAt: serverTimestamp(),
     });
 
-    // 2. Create activity log
     const logRef = doc(activityLogsCol(db, libraryId));
     batch.set(logRef, {
       libraryId,
@@ -74,6 +75,13 @@ export async function addStudent(
     return { success: true };
   } catch (e: any) {
     console.error('Error adding student:', e);
+    // Provide a more specific error if it's a known issue
+    if (e.code === 'permission-denied') {
+        return { success: false, error: 'Permission denied. You might need to sign in again.'}
+    }
+    if (e.message.includes('exists')) {
+        return { success: false, error: `A student with ID ${studentId} already exists.` };
+    }
     return { success: false, error: e.message || 'An unknown error occurred.' };
   }
 }
@@ -81,7 +89,7 @@ export async function addStudent(
 export async function updateStudent(
   db: Firestore,
   libraryId: string,
-  docId: string,
+  docId: string, // Firestore document ID
   data: Partial<Omit<StudentFormValues, 'id'>>,
   actor: Actor
 ): Promise<ActionResponse> {
@@ -98,7 +106,6 @@ export async function updateStudent(
   try {
     const batch = writeBatch(db);
 
-    // 1. Update student document
     const studentRef = doc(db, `libraries/${libraryId}/students/${docId}`);
     batch.update(studentRef, {
       ...studentData,
@@ -106,7 +113,6 @@ export async function updateStudent(
       updatedAt: serverTimestamp(),
     });
 
-    // 2. Create activity log
     const logRef = doc(activityLogsCol(db, libraryId));
     batch.set(logRef, {
       libraryId,
@@ -124,6 +130,10 @@ export async function updateStudent(
   }
 }
 
+/**
+ * Soft-deletes a student by setting their status to 'inactive' and unassigning their seat.
+ * This is an atomic transaction.
+ */
 export async function deleteStudent(
   db: Firestore,
   libraryId: string,
@@ -166,7 +176,7 @@ export async function deleteStudent(
         libraryId,
         user: actor,
         activityType: 'student_deleted',
-        details: { studentId: docId },
+        details: { studentId: docId, studentName: studentData.name },
         timestamp: serverTimestamp(),
       });
     });

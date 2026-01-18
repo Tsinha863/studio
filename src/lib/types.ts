@@ -1,3 +1,5 @@
+'use client';
+
 import { Timestamp } from "firebase/firestore";
 
 export interface User {
@@ -14,8 +16,8 @@ export interface User {
 }
 
 export interface Student {
-  id: string; // Custom ID
-  docId?: string; // Firestore document ID
+  id: string; // Custom ID, immutable after creation
+  docId: string; // Firestore document ID
   libraryId: string;
   userId?: string; // Optional link to a User account
   name: string;
@@ -23,7 +25,7 @@ export interface Student {
   status: 'active' | 'at-risk' | 'inactive';
   assignedSeatId?: string | null; // Firestore Document ID of the Seat
   assignedRoomId?: string | null; // Firestore Document ID of the Room
-  assignedSeatLabel?: string | null; // The human-readable seat number, e.g., "A12"
+  assignedSeatLabel?: string | null; // Denormalized human-readable seat number
   fibonacciStreak: number;
   paymentDue: number;
   lastInteractionAt: Timestamp;
@@ -71,13 +73,13 @@ export interface Room {
 }
 
 export interface Seat {
-  id: string;
-  docId?: string;
+  id: string; // Firestore document ID
+  docId?: string; // Firestore document ID
   libraryId: string;
   roomId: string;
   seatNumber: string;
   tier: 'basic' | 'standard' | 'premium';
-  studentId?: string | null;
+  studentId?: string | null; // This is the Student's Firestore Document ID
   studentName?: string | null;
   timeSlot?: string;
   createdAt: Timestamp;

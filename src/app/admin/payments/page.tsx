@@ -37,9 +37,8 @@ type ReceiptState = {
   studentName?: string;
 };
 
-// New type for payments with student seat details
-export type PaymentWithSeat = Payment & { seatNumber?: string | null, docId: string };
-
+// New type for payments with student seat details and docId
+export type PaymentWithSeat = Payment & { seatNumber?: string | null, studentDocId?: string, docId: string };
 
 export default function PaymentsPage() {
   const { toast } = useToast();
@@ -56,22 +55,27 @@ export default function PaymentsPage() {
     );
   }, [firestore, user]);
 
-  // We also need student data to get the fibonacci streak and seat number
   const studentsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students`);
   }, [firestore, user]);
 
   const { data: payments, isLoading: isLoadingPayments } = useCollection<Omit<Payment, 'id'>>(paymentsQuery);
-  const { data: students, isLoading: isLoadingStudents } = useCollection<Omit<Student, 'docId'>>(studentsQuery);
+  const { data: students, isLoading: isLoadingStudents } = useCollection<Student>(studentsQuery);
   
-  const paymentsWithDetails = React.useMemo(() => {
+  const paymentsWithDetails: PaymentWithSeat[] = React.useMemo(() => {
     if (!payments || !students) return [];
-    const studentMap = new Map(students.map(s => [s.id, { fibonacciStreak: s.fibonacciStreak, status: s.status, seatNumber: s.assignedSeatId }]));
+    const studentMap = new Map(students.map(s => [s.id, { 
+        fibonacciStreak: s.fibonacciStreak, 
+        status: s.status, 
+        seatNumber: s.assignedSeatId,
+        docId: s.docId // Firestore document ID
+    }]));
     return payments.map(p => ({
         ...p,
         docId: p.id,
         seatNumber: studentMap.get(p.studentId)?.seatNumber || null,
+        studentDocId: studentMap.get(p.studentId)?.docId,
     }));
   }, [payments, students]);
 
@@ -99,14 +103,21 @@ export default function PaymentsPage() {
   };
 
   const handleMarkAsPaid = async (payment: PaymentWithSeat) => {
-    if (!user || !firestore || !students) return;
+    if (!user || !firestore || !payment.studentDocId) {
+       toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: "Student document ID not found. Cannot process payment.",
+      });
+      return
+    };
     setIsPaying(payment.id);
 
     const result = await markPaymentAsPaid(
       firestore,
       HARDCODED_LIBRARY_ID,
       payment.id,
-      payment.studentId,
+      payment.studentDocId,
       { id: user.uid, name: user.displayName || 'Admin' }
     );
 
@@ -116,15 +127,14 @@ export default function PaymentsPage() {
         description: `${payment.studentName}'s payment of ₹${payment.amount} has been recorded.`,
       });
 
-      // Find student to get their data for receipt
-      const student = students.find(s => s.id === payment.studentId);
+      const student = students?.find(s => s.docId === payment.studentDocId);
       if (student) {
           const receiptInput = {
               studentName: student.name,
               paymentAmount: payment.amount,
               paymentDate: new Date().toISOString().split('T')[0],
-              fibonacciStreak: (student.fibonacciStreak || 0) + 1, // Reflects the new streak
-              studentStatus: student.status,
+              fibonacciStreak: (student.fibonacciStreak || 0) + 1,
+              studentStatus: 'active', // Assume they become active
               paymentId: payment.id,
           };
           

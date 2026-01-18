@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Firestore, doc, collection, runTransaction, query, where, getDocs, serverTimestamp, writeBatch, WriteBatch } from 'firebase/firestore';
+import { Firestore, doc, collection, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { Check, ChevronsUpDown } from 'lucide-react';
 
 import { useFirebase } from '@/firebase';
@@ -47,17 +47,16 @@ export function AssignSeatDialog({
 }: AssignSeatDialogProps) {
   const { firestore, user, isUserLoading } = useFirebase();
   const { toast } = useToast();
-  const [selectedStudentId, setSelectedStudentId] = React.useState<string | undefined>();
+  const [selectedStudentDocId, setSelectedStudentDocId] = React.useState<string | undefined>();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isComboboxOpen, setIsComboboxOpen] = React.useState(false);
 
   const availableStudents = React.useMemo(() => {
-    // Show students who are not assigned a seat
     return students.filter(s => !s.assignedSeatId);
   }, [students]);
 
   const handleAssign = async () => {
-    if (!firestore || !user || !selectedStudentId) {
+    if (!firestore || !user || !selectedStudentDocId) {
       toast({
         variant: 'destructive',
         title: 'Action Failed',
@@ -71,7 +70,7 @@ export function AssignSeatDialog({
       const actor = { id: user.uid, name: user.displayName || 'Admin' };
 
       await runTransaction(firestore, async (transaction) => {
-        const studentDocRef = doc(firestore, `libraries/${libraryId}/students/${selectedStudentId}`);
+        const studentDocRef = doc(firestore, `libraries/${libraryId}/students/${selectedStudentDocId}`);
         const seatDocRef = doc(firestore, `libraries/${libraryId}/rooms/${seat.roomId}/seats/${seat.id}`);
         
         const [studentDoc, seatDoc] = await Promise.all([
@@ -83,13 +82,14 @@ export function AssignSeatDialog({
         if (!seatDoc.exists()) throw new Error('Seat not found.');
 
         const studentData = studentDoc.data() as Student;
-        const seatData = seatDoc.data();
+        const seatData = seatDoc.data() as Seat;
         
         if (studentData.assignedSeatId) {
            throw new Error(`Student is already assigned to seat ${studentData.assignedSeatLabel}.`);
         }
         if (seatData.studentId) throw new Error('Seat is already assigned.');
         
+        // Update student with seat info
         transaction.update(studentDocRef, {
           assignedSeatId: seat.id,
           assignedRoomId: seat.roomId,
@@ -97,8 +97,9 @@ export function AssignSeatDialog({
           updatedAt: serverTimestamp(),
         });
         
+        // Update seat with student info
         transaction.update(seatDocRef, {
-          studentId: studentData.id,
+          studentId: studentDoc.id, // Store student's Firestore document ID
           studentName: studentData.name,
           updatedAt: serverTimestamp(),
         });
@@ -134,12 +135,8 @@ export function AssignSeatDialog({
 
   const handleUnassign = async () => {
     if (!firestore || !user) {
-        toast({
-            variant: 'destructive',
-            title: 'Authentication Error',
-            description: 'User is not authenticated. Please log in and try again.',
-        });
-        return;
+      toast({ variant: 'destructive', title: 'Authentication Error' });
+      return;
     }
     setIsSubmitting(true);
     
@@ -152,24 +149,21 @@ export function AssignSeatDialog({
 
         if (!seatDoc.exists()) throw new Error('Seat not found.');
         
-        const seatData = seatDoc.data();
-        const studentCustomId = seatData.studentId;
+        const seatData = seatDoc.data() as Seat;
+        const studentDocId = seatData.studentId;
 
-        if (!studentCustomId) return; // Seat is already unassigned
+        if (!studentDocId) return; // Seat is already unassigned
         
-        const studentQuery = query(collection(firestore, `libraries/${libraryId}/students`), where('id', '==', studentCustomId), where('libraryId', '==', libraryId));
-        const studentQuerySnapshot = await getDocs(studentQuery);
+        const studentRef = doc(firestore, `libraries/${libraryId}/students`, studentDocId);
+        const studentDoc = await transaction.get(studentRef);
 
-        if (!studentQuerySnapshot.empty) {
-          const studentDocRef = studentQuerySnapshot.docs[0].ref;
-          transaction.update(studentDocRef, {
+        if (studentDoc.exists()) {
+          transaction.update(studentRef, {
             assignedSeatId: null,
             assignedRoomId: null,
             assignedSeatLabel: null,
             updatedAt: serverTimestamp(),
           });
-        } else {
-          console.warn(`Student with custom ID ${studentCustomId} not found, but unassigning seat.`);
         }
 
         transaction.update(seatRef, {
@@ -208,13 +202,13 @@ export function AssignSeatDialog({
   
   React.useEffect(() => {
     if (!isOpen) {
-        setSelectedStudentId(undefined);
+        setSelectedStudentDocId(undefined);
         setIsSubmitting(false);
     }
   }, [isOpen]);
 
   const isActionDisabled = isSubmitting || isUserLoading || !user;
-  const selectedStudentName = students.find(s => s.docId === selectedStudentId)?.name;
+  const selectedStudentName = students.find(s => s.docId === selectedStudentDocId)?.name;
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -244,7 +238,7 @@ export function AssignSeatDialog({
                   className="w-full justify-between"
                   disabled={isActionDisabled}
                 >
-                  {selectedStudentId ? selectedStudentName : "Select a student..."}
+                  {selectedStudentDocId ? selectedStudentName : "Select a student..."}
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
@@ -259,14 +253,14 @@ export function AssignSeatDialog({
                           key={student.docId}
                           value={student.name}
                           onSelect={() => {
-                            setSelectedStudentId(student.docId);
+                            setSelectedStudentDocId(student.docId);
                             setIsComboboxOpen(false);
                           }}
                         >
                           <Check
                             className={cn(
                               "mr-2 h-4 w-4",
-                              selectedStudentId === student.docId ? "opacity-100" : "opacity-0"
+                              selectedStudentDocId === student.docId ? "opacity-100" : "opacity-0"
                             )}
                           />
                           {student.name} ({student.id})
@@ -287,7 +281,7 @@ export function AssignSeatDialog({
               {isSubmitting ? 'Unassigning...' : 'Unassign Seat'}
             </Button>
           ) : (
-            <Button type="button" onClick={handleAssign} disabled={isActionDisabled || !selectedStudentId}>
+            <Button type="button" onClick={handleAssign} disabled={isActionDisabled || !selectedStudentDocId}>
               {isSubmitting && <Spinner className="mr-2" />}
               {isSubmitting ? 'Assigning...' : 'Assign Seat'}
             </Button>
