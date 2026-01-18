@@ -2,7 +2,6 @@
 
 import * as React from 'react';
 import dynamic from 'next/dynamic';
-import { PlusCircle } from 'lucide-react';
 import {
   collection,
   query,
@@ -10,17 +9,11 @@ import {
 
 import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
 import type { Room } from '@/lib/types';
-import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import {
   Card,
   CardContent,
+  CardHeader,
+  CardTitle,
 } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CreateRoomForm } from '@/components/admin/seating/create-room-form';
@@ -38,11 +31,9 @@ const HARDCODED_LIBRARY_ID = 'library1';
 export default function SeatingPage() {
   const { firestore, user } = useFirebase();
   const { toast } = useToast();
-  const [isModalOpen, setIsModalOpen] = React.useState(false);
 
   const roomsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
-    // Removed orderBy to prevent query hanging on missing index
     return query(
       collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/rooms`)
     );
@@ -51,8 +42,7 @@ export default function SeatingPage() {
   const { data: rooms, isLoading: isLoadingRooms } = useCollection<Omit<Room, 'docId'>>(roomsQuery);
 
   const onRoomCreated = () => {
-    setIsModalOpen(false);
-    toast({ title: 'Room Created', description: 'The room and its seats have been successfully created.' });
+    toast({ title: 'Room Created', description: 'The new room has been added.' });
   };
 
   return (
@@ -60,17 +50,26 @@ export default function SeatingPage() {
        <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight font-headline">
-            Seating Management
+            Seat Management
           </h1>
           <p className="text-muted-foreground">
-            Manage rooms and student seat assignments.
+            Create new rooms and manage student seat assignments.
           </p>
         </div>
-        <Button type="button" onClick={() => setIsModalOpen(true)}>
-          <PlusCircle className="mr-2" />
-          Create Room
-        </Button>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Room Management</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <CreateRoomForm
+            libraryId={HARDCODED_LIBRARY_ID}
+            onSuccess={onRoomCreated}
+          />
+        </CardContent>
+      </Card>
+
 
       <Card>
         <CardContent className="p-4 md:p-6">
@@ -93,34 +92,13 @@ export default function SeatingPage() {
             ))}
           </Tabs>
         ) : (
-          <div className="flex flex-col items-center justify-center gap-4 text-center py-10">
-            <h3 className="text-xl font-semibold">No Rooms Found</h3>
-            <p className="text-muted-foreground">Get started by creating your first room.</p>
-            <Button type="button" onClick={() => setIsModalOpen(true)}>
-              <PlusCircle className="mr-2" />
-              Create Room
-            </Button>
+          <div className="flex flex-col items-center justify-center gap-2 text-center py-10">
+            <h3 className="text-lg font-medium text-muted-foreground">No rooms added yet.</h3>
+            <p className="text-sm text-muted-foreground">Create your first room to manage seats and time slots.</p>
           </div>
         )}
         </CardContent>
       </Card>
-
-      {/* Add Room Modal */}
-      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Create New Room</DialogTitle>
-            <DialogDescription>
-              Define the name and seating capacity for the new room.
-            </DialogDescription>
-          </DialogHeader>
-          <CreateRoomForm
-            libraryId={HARDCODED_LIBRARY_ID}
-            onSuccess={onRoomCreated}
-            onCancel={() => setIsModalOpen(false)}
-          />
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
