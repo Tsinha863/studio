@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -6,7 +7,7 @@ import {
   collection,
   serverTimestamp,
   writeBatch,
-  getDoc
+  runTransaction,
 } from 'firebase/firestore';
 import { useFirebase } from '@/firebase';
 import { Button } from '@/components/ui/button';
@@ -88,9 +89,9 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
 
     try {
         const actor = { id: user.uid, name: user.displayName || 'Admin' };
-        const batch = writeBatch(firestore);
         
-        if (student?.id) { // This is an existing student
+        if (student?.id) { // UPDATE logic can use a simple batch write.
+            const batch = writeBatch(firestore);
             const studentRef = doc(firestore, `libraries/${libraryId}/students/${student.id}`);
             const { id, ...dataToUpdate } = validation.data;
             batch.update(studentRef, {
@@ -107,41 +108,43 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
               details: { studentId: student.id, studentName: validation.data.name || 'N/A' },
               timestamp: serverTimestamp(),
             });
-        } else { // This is a new student
-            const validatedData = validation.data as StudentFormValues;
-            const newStudentRef = doc(firestore, `libraries/${libraryId}/students`, validatedData.id);
+            await batch.commit();
 
-            // Check if a student with this ID already exists
-            const existingDoc = await getDoc(newStudentRef);
-            if (existingDoc.exists()) {
-              throw new Error(`A student with ID ${validatedData.id} already exists.`);
-            }
+        } else { // CREATE logic must be atomic to prevent duplicate IDs.
+            await runTransaction(firestore, async (transaction) => {
+                const validatedData = validation.data as StudentFormValues;
+                const newStudentRef = doc(firestore, `libraries/${libraryId}/students`, validatedData.id);
+                const logRef = doc(collection(firestore, `libraries/${libraryId}/activityLogs`));
 
-            const { id, ...dataToSave } = validatedData;
-            batch.set(newStudentRef, {
-                ...dataToSave,
-                libraryId,
-                fibonacciStreak: 0,
-                paymentDue: 0,
-                notes: [],
-                tags: [],
-                assignments: [],
-                lastInteractionAt: serverTimestamp(),
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
-            });
-        
-            const logRef = doc(collection(firestore, `libraries/${libraryId}/activityLogs`));
-            batch.set(logRef, {
-                libraryId,
-                user: actor,
-                activityType: 'student_created',
-                details: { studentId: validatedData.id, studentName: validatedData.name },
-                timestamp: serverTimestamp(),
+                const studentDoc = await transaction.get(newStudentRef);
+                if (studentDoc.exists()) {
+                    throw new Error(`A student with ID ${validatedData.id} already exists.`);
+                }
+
+                const { id, ...dataToSave } = validatedData;
+                transaction.set(newStudentRef, {
+                    ...dataToSave,
+                    libraryId,
+                    fibonacciStreak: 0,
+                    paymentDue: 0,
+                    notes: [],
+                    tags: [],
+                    assignments: [],
+                    lastInteractionAt: serverTimestamp(),
+                    createdAt: serverTimestamp(),
+                    updatedAt: serverTimestamp(),
+                });
+            
+                transaction.set(logRef, {
+                    libraryId,
+                    user: actor,
+                    activityType: 'student_created',
+                    details: { studentId: validatedData.id, studentName: validatedData.name },
+                    timestamp: serverTimestamp(),
+                });
             });
         }
 
-        await batch.commit();
         onSuccess();
     } catch (error) {
         console.error("Student form submission error:", error);
