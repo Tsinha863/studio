@@ -7,6 +7,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { ArrowLeft } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -183,7 +184,13 @@ export default function SignupPage() {
 
   return (
     <main className="flex min-h-screen w-full">
-      <div className="flex w-full flex-col items-center justify-center p-4 lg:w-1/2">
+      <div className="relative flex w-full flex-col items-center justify-center p-4 lg:w-1/2">
+        <Link href="/" className="absolute top-8 left-8">
+          <Button variant="ghost">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Welcome
+          </Button>
+        </Link>
         <SignupForm />
       </div>
       <div className="relative hidden w-1/2 flex-col justify-between bg-primary p-12 text-primary-foreground lg:flex">
