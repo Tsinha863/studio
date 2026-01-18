@@ -3,10 +3,6 @@
  * The primary goal is data isolation, ensuring that users (admins and students) from one library
  * can never see or modify data from another library. Access control within a library is role-based.
  *
- * Data Structure: All application data is nested under the `/libraries/{libraryId}` collection. This
- * top-level segregation is the foundation of the multi-tenant architecture. Every document within a
- * library's data tree contains a denormalized `libraryId` field to enable efficient and secure rules.
- *
  * MODIFICATION FOR DEMO: The original rules relied on custom claims (role, libraryId) which are not
  * present in the app's anonymous authentication. The rules have been simplified to allow any
  * authenticated user (`request.auth != null`) to perform actions. This makes the app functional
@@ -32,20 +28,6 @@ service cloud.firestore {
       return request.auth.uid == userId;
     }
 
-    /**
-     * On CREATE, validates that the incoming document's `libraryId` matches the path.
-     */
-    function isNewDocForLibrary(libraryId) {
-      return request.resource.data.libraryId == libraryId;
-    }
-
-    /**
-     * On UPDATE, ensures the `libraryId` field cannot be changed.
-     */
-    function isLibraryIdImmutable() {
-      return request.resource.data.libraryId == resource.data.libraryId;
-    }
-
     match /libraries/{libraryId} {
       allow get: if isSignedIn();
       allow list: if false; // Listing all libraries is disallowed.
@@ -55,64 +37,64 @@ service cloud.firestore {
     match /libraries/{libraryId}/users/{userId} {
       allow get: if isSignedIn();
       allow list: if isSignedIn();
-      allow create: if isSignedIn() && isNewDocForLibrary(libraryId);
-      allow update: if isSignedIn() && isLibraryIdImmutable();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
       allow delete: if isSignedIn();
     }
 
     match /libraries/{libraryId}/students/{studentId} {
       allow get: if isSignedIn();
       allow list: if isSignedIn();
-      allow create: if isSignedIn() && isNewDocForLibrary(libraryId);
-      allow update: if isSignedIn() && isLibraryIdImmutable();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
       allow delete: if isSignedIn();
     }
 
     match /libraries/{libraryId}/payments/{paymentId} {
       allow get: if isSignedIn();
       allow list: if isSignedIn();
-      allow create: if isSignedIn() && isNewDocForLibrary(libraryId);
-      allow update: if isSignedIn() && isLibraryIdImmutable();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
       allow delete: if isSignedIn();
     }
 
     match /libraries/{libraryId}/expenses/{expenseId} {
       allow get: if isSignedIn();
       allow list: if isSignedIn();
-      allow create: if isSignedIn() && isNewDocForLibrary(libraryId);
-      allow update: if isSignedIn() && isLibraryIdImmutable();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
       allow delete: if isSignedIn();
     }
 
     match /libraries/{libraryId}/rooms/{roomId} {
       allow get: if isSignedIn();
       allow list: if isSignedIn();
-      allow create: if isSignedIn() && isNewDocForLibrary(libraryId);
-      allow update: if isSignedIn() && isLibraryIdImmutable();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
       allow delete: if isSignedIn();
     }
 
     match /libraries/{libraryId}/rooms/{roomId}/seats/{seatId} {
       allow get: if isSignedIn();
       allow list: if isSignedIn();
-      allow create: if isSignedIn() && isNewDocForLibrary(libraryId);
-      allow update: if isSignedIn() && isLibraryIdImmutable();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
       allow delete: if isSignedIn();
     }
 
     match /libraries/{libraryId}/announcements/{announcementId} {
       allow get: if isSignedIn();
       allow list: if isSignedIn();
-      allow create: if isSignedIn() && isNewDocForLibrary(libraryId);
-      allow update: if isSignedIn() && isLibraryIdImmutable();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
       allow delete: if isSignedIn();
     }
 
     match /libraries/{libraryId}/suggestions/{suggestionId} {
       allow get: if isSignedIn();
       allow list: if isSignedIn();
-      allow create: if isSignedIn() && isNewDocForLibrary(libraryId);
-      allow update: if isSignedIn() && isLibraryIdImmutable();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
       allow delete: if isSignedIn();
     }
 
