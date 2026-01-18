@@ -1,6 +1,6 @@
 import {
   Activity,
-  DollarSign,
+  Rupee,
   Users,
   CreditCard,
   Plus,
@@ -49,13 +49,13 @@ export default function DashboardPage() {
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <KpiCard
           title="Total Revenue"
-          value={`$${kpiData.totalRevenue.toLocaleString()}`}
+          value={`₹${kpiData.totalRevenue.toLocaleString()}`}
           change="+20.1% from last month"
-          icon={<DollarSign />}
+          icon={<Rupee />}
         />
         <KpiCard
           title="Total Expenses"
-          value={`$${kpiData.totalExpenses.toLocaleString()}`}
+          value={`₹${kpiData.totalExpenses.toLocaleString()}`}
           change="+18.1% from last month"
           icon={<CreditCard />}
         />

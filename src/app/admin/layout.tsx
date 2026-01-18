@@ -6,7 +6,7 @@ import {
   Bell,
   Book,
   CreditCard,
-  DollarSign,
+  Rupee,
   Home,
   LogOut,
   PlusCircle,
@@ -124,7 +124,7 @@ function MainSidebar() {
                     </SidebarMenuItem>
                     <SidebarMenuItem>
                         <SidebarMenuButton href="#" tooltip="Expenses">
-                            <DollarSign />
+                            <Rupee />
                             <span>Expenses</span>
                         </SidebarMenuButton>
                     </SidebarMenuItem>

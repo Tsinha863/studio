@@ -75,7 +75,7 @@ export const activityLogsData: ActivityLog[] = [
         action: "Payment Received",
         user: { id: "user-1", name: "Admin" },
         timestamp: new Date(Date.now() - 3600000 * 0.5),
-        details: { studentName: "Olivia Martin", amount: "$50.00" }
+        details: { studentName: "Olivia Martin", amount: "₹50.00" }
     },
     {
         id: "2",
@@ -96,7 +96,7 @@ export const activityLogsData: ActivityLog[] = [
         action: "Expense Recorded",
         user: { id: "user-1", name: "Admin" },
         timestamp: new Date(Date.now() - 3600000 * 4),
-        details: { category: "Supplies", amount: "$120.00" }
+        details: { category: "Supplies", amount: "₹120.00" }
     },
     {
         id: "5",

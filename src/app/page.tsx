@@ -11,7 +11,6 @@ import {
   ArrowRight,
   Book,
   CreditCard,
-  DollarSign,
   Users,
 } from 'lucide-react';
 
