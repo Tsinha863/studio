@@ -34,7 +34,7 @@ interface ExpenseFormProps {
 const categories: ExpenseCategory[] = ['rent', 'utilities', 'supplies', 'salaries', 'other'];
 
 export function ExpenseForm({ expense, libraryId, onSuccess, onCancel }: ExpenseFormProps) {
-  const { firestore, user, isUserLoading } = useFirebase();
+  const { firestore, user } = useFirebase();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
@@ -85,7 +85,7 @@ export function ExpenseForm({ expense, libraryId, onSuccess, onCancel }: Expense
       toast({
         variant: 'destructive',
         title: 'Authentication Error',
-        description: 'User is not authenticated. Please log in and try again.',
+        description: 'You must be logged in to manage expenses.',
       });
       setIsSubmitting(false);
       return;
@@ -113,8 +113,6 @@ export function ExpenseForm({ expense, libraryId, onSuccess, onCancel }: Expense
     }
   };
 
-  const isFormDisabled = isSubmitting || isUserLoading || !user;
-
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-2">
@@ -124,7 +122,7 @@ export function ExpenseForm({ expense, libraryId, onSuccess, onCancel }: Expense
           placeholder="e.g., Office Supplies"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          disabled={isFormDisabled}
+          disabled={isSubmitting}
         />
         {errors.description && <p className="text-sm font-medium text-destructive">{errors.description}</p>}
       </div>
@@ -137,7 +135,7 @@ export function ExpenseForm({ expense, libraryId, onSuccess, onCancel }: Expense
           placeholder="100.00"
           value={amount}
           onChange={(e) => setAmount(e.target.value === '' ? '' : Number(e.target.value))}
-          disabled={isFormDisabled}
+          disabled={isSubmitting}
         />
         {errors.amount && <p className="text-sm font-medium text-destructive">{errors.amount}</p>}
       </div>
@@ -147,7 +145,7 @@ export function ExpenseForm({ expense, libraryId, onSuccess, onCancel }: Expense
         <Select
           onValueChange={(value: ExpenseCategory) => setCategory(value)}
           value={category}
-          disabled={isFormDisabled}
+          disabled={isSubmitting}
         >
           <SelectTrigger id="category">
             <SelectValue placeholder="Select a category" />
@@ -168,7 +166,7 @@ export function ExpenseForm({ expense, libraryId, onSuccess, onCancel }: Expense
             <Button
               variant={"outline"}
               className={cn("w-full justify-start text-left font-normal", !expenseDate && "text-muted-foreground")}
-              disabled={isFormDisabled}
+              disabled={isSubmitting}
             >
               <CalendarIcon className="mr-2 h-4 w-4" />
               {expenseDate ? format(expenseDate, "PPP") : <span>Pick a date</span>}
@@ -188,10 +186,10 @@ export function ExpenseForm({ expense, libraryId, onSuccess, onCancel }: Expense
       </div>
 
       <div className="flex justify-end gap-2 pt-4">
-        <Button type="button" variant="outline" onClick={onCancel} disabled={isFormDisabled}>
+        <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
           Cancel
         </Button>
-        <Button type="submit" disabled={isFormDisabled}>
+        <Button type="submit" disabled={isSubmitting || !user}>
           {isSubmitting ? (
             <>
               <Spinner className="mr-2 h-4 w-4" />

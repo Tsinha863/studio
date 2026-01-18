@@ -26,7 +26,7 @@ interface StudentFormProps {
 }
 
 export function StudentForm({ student, libraryId, onSuccess, onCancel }: StudentFormProps) {
-  const { firestore, user, isUserLoading } = useFirebase();
+  const { firestore, user } = useFirebase();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
@@ -83,7 +83,7 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
       toast({
         variant: 'destructive',
         title: 'Authentication Error',
-        description: 'User is not authenticated. Please log in and try again.',
+        description: 'You must be logged in to manage students.',
       });
       setIsSubmitting(false);
       return;
@@ -111,8 +111,6 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
     }
   };
 
-  const isFormDisabled = isSubmitting || isUserLoading || !user;
-
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       {!student && (
@@ -123,7 +121,7 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
             placeholder="e.g., S12345"
             value={studentId}
             onChange={(e) => setStudentId(e.target.value)}
-            disabled={isFormDisabled}
+            disabled={isSubmitting}
           />
           {errors.id && <p className="text-sm font-medium text-destructive">{errors.id}</p>}
         </div>
@@ -135,7 +133,7 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
           placeholder="John Doe"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          disabled={isFormDisabled}
+          disabled={isSubmitting}
         />
         {errors.name && <p className="text-sm font-medium text-destructive">{errors.name}</p>}
       </div>
@@ -147,7 +145,7 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
           placeholder="name@example.com"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          disabled={isFormDisabled}
+          disabled={isSubmitting}
         />
         {errors.email && <p className="text-sm font-medium text-destructive">{errors.email}</p>}
       </div>
@@ -156,7 +154,7 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
         <Select
           onValueChange={(value: 'paid' | 'pending' | 'overdue') => setPaymentStatus(value)}
           value={paymentStatus}
-          disabled={isFormDisabled}
+          disabled={isSubmitting}
         >
           <SelectTrigger id="paymentStatus">
             <SelectValue placeholder="Select payment status" />
@@ -176,15 +174,15 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
           placeholder="e.g., A12"
           value={assignedSeatId}
           onChange={(e) => setAssignedSeatId(e.target.value)}
-          disabled={isFormDisabled}
+          disabled={isSubmitting}
         />
         {errors.assignedSeatId && <p className="text-sm font-medium text-destructive">{errors.assignedSeatId}</p>}
       </div>
       <div className="flex justify-end gap-2 pt-4">
-        <Button type="button" variant="outline" onClick={onCancel} disabled={isFormDisabled}>
+        <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
           Cancel
         </Button>
-        <Button type="submit" disabled={isFormDisabled}>
+        <Button type="submit" disabled={isSubmitting || !user}>
           {isSubmitting ? (
             <>
               <Spinner className="mr-2 h-4 w-4" />

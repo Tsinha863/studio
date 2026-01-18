@@ -17,7 +17,7 @@ interface CreateRoomFormProps {
 }
 
 export function CreateRoomForm({ libraryId, onSuccess, onCancel }: CreateRoomFormProps) {
-  const { firestore, user, isUserLoading } = useFirebase();
+  const { firestore, user } = useFirebase();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
@@ -45,17 +45,17 @@ export function CreateRoomForm({ libraryId, onSuccess, onCancel }: CreateRoomFor
       return;
     }
 
-    setIsSubmitting(true);
-    if (!firestore || !user) {
+    if (!user || !firestore) {
       toast({
         variant: 'destructive',
         title: 'Authentication Error',
-        description: 'User is not authenticated. Please log in and try again.',
+        description: 'You must be logged in to create a room.',
       });
-      setIsSubmitting(false);
       return;
     }
 
+    setIsSubmitting(true);
+    
     const actor = { id: user.uid, name: user.displayName || 'Admin' };
     const result = await createRoomAndSeats(firestore, libraryId, validation.data, actor);
 
@@ -72,8 +72,6 @@ export function CreateRoomForm({ libraryId, onSuccess, onCancel }: CreateRoomFor
     }
   };
 
-  const isFormDisabled = isSubmitting || isUserLoading || !user;
-
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-2">
@@ -83,7 +81,7 @@ export function CreateRoomForm({ libraryId, onSuccess, onCancel }: CreateRoomFor
           placeholder="e.g., Main Hall"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          disabled={isFormDisabled}
+          disabled={isSubmitting}
         />
         {errors.name && <p className="text-sm font-medium text-destructive">{errors.name}</p>}
       </div>
@@ -96,17 +94,17 @@ export function CreateRoomForm({ libraryId, onSuccess, onCancel }: CreateRoomFor
           placeholder="20"
           value={capacity}
           onChange={(e) => setCapacity(e.target.value === '' ? '' : Number(e.target.value))}
-          disabled={isFormDisabled}
+          disabled={isSubmitting}
           min="1"
         />
         {errors.capacity && <p className="text-sm font-medium text-destructive">{errors.capacity}</p>}
       </div>
       
       <div className="flex justify-end gap-2 pt-4">
-        <Button type="button" variant="outline" onClick={onCancel} disabled={isFormDisabled}>
+        <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
           Cancel
         </Button>
-        <Button type="submit" disabled={isFormDisabled}>
+        <Button type="submit" disabled={isSubmitting || !user}>
           {isSubmitting ? (
             <>
               <Spinner className="mr-2 h-4 w-4" />

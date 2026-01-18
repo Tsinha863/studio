@@ -18,7 +18,7 @@ interface AnnouncementFormProps {
 }
 
 export function AnnouncementForm({ libraryId, onSuccess, onCancel }: AnnouncementFormProps) {
-  const { firestore, user, isUserLoading } = useFirebase();
+  const { firestore, user } = useFirebase();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [title, setTitle] = React.useState('');
@@ -46,7 +46,7 @@ export function AnnouncementForm({ libraryId, onSuccess, onCancel }: Announcemen
       toast({
         variant: 'destructive',
         title: 'Authentication Error',
-        description: 'User is not authenticated. Please log in and try again.',
+        description: 'You must be logged in to create an announcement.',
       });
       setIsSubmitting(false);
       return;
@@ -68,8 +68,6 @@ export function AnnouncementForm({ libraryId, onSuccess, onCancel }: Announcemen
     }
   };
 
-  const isFormDisabled = isSubmitting || isUserLoading || !user;
-
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-2">
@@ -79,7 +77,7 @@ export function AnnouncementForm({ libraryId, onSuccess, onCancel }: Announcemen
           placeholder="e.g., Library Closure Notice"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          disabled={isFormDisabled}
+          disabled={isSubmitting}
         />
         {errors.title && <p className="text-sm font-medium text-destructive">{errors.title}</p>}
       </div>
@@ -92,16 +90,16 @@ export function AnnouncementForm({ libraryId, onSuccess, onCancel }: Announcemen
           className="min-h-[120px]"
           value={content}
           onChange={(e) => setContent(e.target.value)}
-          disabled={isFormDisabled}
+          disabled={isSubmitting}
         />
         {errors.content && <p className="text-sm font-medium text-destructive">{errors.content}</p>}
       </div>
 
       <div className="flex justify-end gap-2 pt-4">
-        <Button type="button" variant="outline" onClick={onCancel} disabled={isFormDisabled}>
+        <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
           Cancel
         </Button>
-        <Button type="submit" disabled={isFormDisabled}>
+        <Button type="submit" disabled={isSubmitting || !user}>
           {isSubmitting ? (
             <>
               <Spinner className="mr-2 h-4 w-4" />
