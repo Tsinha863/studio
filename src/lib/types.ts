@@ -21,7 +21,9 @@ export interface Student {
   name: string;
   email: string;
   status: 'active' | 'at-risk' | 'inactive';
-  assignedSeatId?: string | null;
+  assignedSeatId?: string | null; // Firestore Document ID of the Seat
+  assignedRoomId?: string | null; // Firestore Document ID of the Room
+  assignedSeatLabel?: string | null; // The human-readable seat number, e.g., "A12"
   fibonacciStreak: number;
   paymentDue: number;
   lastInteractionAt: Timestamp;

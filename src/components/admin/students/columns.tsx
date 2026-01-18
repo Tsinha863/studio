@@ -63,10 +63,10 @@ export const columns = ({ openModal, openDeleteAlert }: ColumnsConfig): ColumnDe
     }
   },
   {
-    accessorKey: 'assignedSeatId',
+    accessorKey: 'assignedSeatLabel',
     header: 'Assigned Seat',
     cell: ({ row }) => {
-      return row.original.assignedSeatId || <span className="text-muted-foreground">N/A</span>;
+      return row.original.assignedSeatLabel || <span className="text-muted-foreground">N/A</span>;
     },
   },
   {

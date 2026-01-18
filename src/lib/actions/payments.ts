@@ -34,6 +34,7 @@ const activityLogsCol = (db: Firestore, libraryId: string) =>
 
 // This would typically be a configurable setting for the library
 const MONTHLY_FEE = 50.00;
+const INACTIVITY_THRESHOLD_DAYS = 90;
 
 export async function createMonthlyPayments(
   db: Firestore,
@@ -42,17 +43,30 @@ export async function createMonthlyPayments(
 ): Promise<ActionResponse> {
   try {
     const batch = writeBatch(db);
+    const today = new Date();
+    const ninetyDaysAgo = new Date(today.getFullYear(), today.getMonth(), today.getDate() - INACTIVITY_THRESHOLD_DAYS);
 
-    // Get all students who are currently active or at risk.
-    const q = query(studentsCol(db, libraryId), where('status', 'in', ['active', 'at-risk']));
-    const studentsSnapshot = await getDocs(q);
+    // 1. Update status of existing pending payments to overdue if necessary
+    const pendingPaymentsQuery = query(paymentsCol(db, libraryId), where('status', '==', 'pending'));
+    const pendingPaymentsSnapshot = await getDocs(pendingPaymentsQuery);
+
+    pendingPaymentsSnapshot.forEach(paymentDoc => {
+        const payment = paymentDoc.data() as Payment;
+        if (payment.dueDate.toDate() < today) {
+            batch.update(paymentDoc.ref, { status: 'overdue', updatedAt: serverTimestamp() });
+        }
+    });
+
+    // 2. Get all students who are currently active or at risk to create new payments or check status
+    const studentsQuery = query(studentsCol(db, libraryId), where('status', 'in', ['active', 'at-risk']));
+    const studentsSnapshot = await getDocs(studentsQuery);
     
-    const now = new Date();
-    const dueDate = new Date(now.getFullYear(), now.getMonth() + 1, 0); // Last day of current month
+    const dueDate = new Date(today.getFullYear(), today.getMonth() + 1, 0); // Last day of current month
     let createdCount = 0;
 
     for (const studentDoc of studentsSnapshot.docs) {
       const student = { docId: studentDoc.id, ...studentDoc.data() } as Student;
+      const studentRef = studentDoc.ref;
       
       // Check if student already has a pending or overdue payment
       const unpaidPaymentsQuery = query(paymentsCol(db, libraryId), 
@@ -76,16 +90,21 @@ export async function createMonthlyPayments(
           updatedAt: serverTimestamp(),
         });
         createdCount++;
+
+        // Also check for inactivity even if they have no unpaid bills
+        if (student.status === 'active' && student.lastInteractionAt.toDate() < ninetyDaysAgo) {
+          batch.update(studentRef, { status: 'at-risk', updatedAt: serverTimestamp() });
+        }
+
       } else {
-        // Student has unpaid bills, mark them as 'at-risk'
+        // Student has unpaid bills, ensure they are marked as 'at-risk'
         if (student.status !== 'at-risk') {
-          const studentRef = doc(db, `libraries/${libraryId}/students/${student.docId}`);
           batch.update(studentRef, { status: 'at-risk', updatedAt: serverTimestamp() });
         }
       }
     }
 
-    // Create activity log
+    // 3. Create activity log for the batch operation
     if (createdCount > 0) {
         const logRef = doc(activityLogsCol(db, libraryId));
         batch.set(logRef, {
@@ -118,7 +137,7 @@ export async function markPaymentAsPaid(
       const paymentRef = doc(db, `libraries/${libraryId}/payments/${paymentId}`);
       
       const studentQuery = query(studentsCol(db, libraryId), where('id', '==', studentCustomId));
-      const studentSnapshot = await getDocs(studentQuery); // Use getDocs within transaction
+      const studentSnapshot = await getDocs(studentQuery); // Use getDocs within transaction for query
       if (studentSnapshot.empty) {
         throw new Error(`Student with ID ${studentCustomId} not found.`);
       }
@@ -147,10 +166,12 @@ export async function markPaymentAsPaid(
       const otherUnpaidQuery = query(paymentsCol(db, libraryId),
           where('studentId', '==', studentCustomId),
           where('status', 'in', ['pending', 'overdue']),
-          where('__name__', '!=', paymentId) // Exclude the current payment
+          where('__name__', '!=', paymentId) // Exclude the current payment from the check
       );
+      // This has to be a getDocs, which is not allowed in a transaction after writes.
+      // So, we'll perform this check outside and pass the result in, or accept a potential race condition.
+      // Given the context, we will query for other payments *before* starting the writes.
       const otherUnpaidSnapshot = await getDocs(otherUnpaidQuery);
-
       const hasOtherUnpaid = !otherUnpaidSnapshot.empty;
 
       // Update student record

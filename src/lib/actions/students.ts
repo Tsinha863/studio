@@ -6,8 +6,10 @@ import {
   collection,
   serverTimestamp,
   writeBatch,
+  runTransaction,
 } from 'firebase/firestore';
 import { studentFormSchema, type StudentFormValues } from '../schemas';
+import type { Student } from '../types';
 
 type ActionResponse = {
   success: boolean;
@@ -50,6 +52,9 @@ export async function addStudent(
       fibonacciStreak: 0,
       notes: [],
       tags: [],
+      assignedSeatId: null,
+      assignedRoomId: null,
+      assignedSeatLabel: null,
       lastInteractionAt: serverTimestamp(),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -77,7 +82,7 @@ export async function updateStudent(
   db: Firestore,
   libraryId: string,
   docId: string,
-  data: Partial<StudentFormValues>,
+  data: Partial<Omit<StudentFormValues, 'id'>>,
   actor: Actor
 ): Promise<ActionResponse> {
   // For updates, the student ID (id) is not part of the editable form.
@@ -125,33 +130,47 @@ export async function deleteStudent(
   docId: string,
   actor: Actor
 ): Promise<ActionResponse> {
-  // This is a soft delete. It sets the student's status to 'inactive'.
   try {
-    const batch = writeBatch(db);
+    await runTransaction(db, async (transaction) => {
+      const studentRef = doc(db, `libraries/${libraryId}/students/${docId}`);
+      const studentDoc = await transaction.get(studentRef);
 
-    // 1. "Delete" student document by setting status to inactive
-    const studentRef = doc(db, `libraries/${libraryId}/students/${docId}`);
-    batch.update(studentRef, {
-      status: 'inactive',
-      assignedSeatId: null, // Unassign seat
-      updatedAt: serverTimestamp(),
-      lastInteractionAt: serverTimestamp(),
+      if (!studentDoc.exists()) {
+        throw new Error("Student not found.");
+      }
+      const studentData = studentDoc.data() as Student;
+
+      // 1. Update student to inactive
+      transaction.update(studentRef, {
+        status: 'inactive',
+        assignedSeatId: null,
+        assignedRoomId: null,
+        assignedSeatLabel: null,
+        updatedAt: serverTimestamp(),
+        lastInteractionAt: serverTimestamp(),
+      });
+
+      // 2. If a seat was assigned, unassign it atomically
+      if (studentData.assignedSeatId && studentData.assignedRoomId) {
+        const seatRef = doc(db, `libraries/${libraryId}/rooms/${studentData.assignedRoomId}/seats/${studentData.assignedSeatId}`);
+        transaction.update(seatRef, {
+          studentId: null,
+          studentName: null,
+          updatedAt: serverTimestamp(),
+        });
+      }
+
+      // 3. Create activity log
+      const logRef = doc(activityLogsCol(db, libraryId));
+      transaction.set(logRef, {
+        libraryId,
+        user: actor,
+        activityType: 'student_deleted',
+        details: { studentId: docId },
+        timestamp: serverTimestamp(),
+      });
     });
 
-    // 2. Create activity log
-    const logRef = doc(activityLogsCol(db, libraryId));
-    batch.set(logRef, {
-      libraryId,
-      user: actor,
-      activityType: 'student_deleted',
-      details: { studentId: docId },
-      timestamp: serverTimestamp(),
-    });
-    
-    // TODO: Also unassign seat if one is assigned. This requires a transaction to be safe.
-    // For now, we assume this is handled separately or the impact is low.
-
-    await batch.commit();
     return { success: true };
   } catch (e: any) {
     console.error('Error deleting student:', e);

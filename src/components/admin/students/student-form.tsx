@@ -34,7 +34,6 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
   const [name, setName] = React.useState('');
   const [email, setEmail] = React.useState('');
   const [status, setStatus] = React.useState<'active' | 'at-risk' | 'inactive'>('active');
-  const [assignedSeatId, setAssignedSeatId] = React.useState('');
   const [errors, setErrors] = React.useState<Partial<Record<keyof StudentFormValues, string>>>({});
 
   React.useEffect(() => {
@@ -43,13 +42,11 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
       setName(student.name || '');
       setEmail(student.email || '');
       setStatus(student.status || 'active');
-      setAssignedSeatId(student.assignedSeatId || '');
     } else {
       setStudentId('');
       setName('');
       setEmail('');
       setStatus('active');
-      setAssignedSeatId('');
     }
   }, [student]);
 
@@ -61,7 +58,6 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
       name,
       email,
       status,
-      assignedSeatId,
     };
 
     const schema = student ? studentFormSchema.omit({ id: true }) : studentFormSchema;
@@ -90,11 +86,12 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
     try {
         const actor = { id: user.uid, name: user.displayName || 'Admin' };
         let result;
+        const validatedData = validation.data;
 
         if (student?.docId) {
-            result = await updateStudent(firestore, libraryId, student.docId, validation.data, actor);
+            result = await updateStudent(firestore, libraryId, student.docId, validatedData, actor);
         } else {
-            result = await addStudent(firestore, libraryId, validation.data as StudentFormValues, actor);
+            result = await addStudent(firestore, libraryId, validatedData as StudentFormValues, actor);
         }
 
         if (result.success) {
@@ -173,17 +170,6 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
           </SelectContent>
         </Select>
         {errors.status && <p className="text-sm font-medium text-destructive">{errors.status}</p>}
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="assignedSeatId">Assigned Seat ID (Optional)</Label>
-        <Input
-          id="assignedSeatId"
-          placeholder="e.g., A12"
-          value={assignedSeatId}
-          onChange={(e) => setAssignedSeatId(e.target.value)}
-          disabled={isSubmitting}
-        />
-        {errors.assignedSeatId && <p className="text-sm font-medium text-destructive">{errors.assignedSeatId}</p>}
       </div>
       <div className="flex justify-end gap-2 pt-4">
         <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>

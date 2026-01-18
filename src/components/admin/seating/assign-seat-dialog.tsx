@@ -57,11 +57,6 @@ export function AssignSeatDialog({
   }, [students]);
 
   const handleAssign = async () => {
-    console.log("ASSIGN SEAT CLICKED");
-    console.log("USER:", user);
-    console.log("LIBRARY ID:", libraryId);
-    console.log("SELECTED STUDENT ID:", selectedStudentId);
-
     if (!firestore || !user || !selectedStudentId) {
       toast({
         variant: 'destructive',
@@ -91,12 +86,14 @@ export function AssignSeatDialog({
         const seatData = seatDoc.data();
         
         if (studentData.assignedSeatId) {
-           throw new Error(`Student is already assigned to seat ${studentData.assignedSeatId}.`);
+           throw new Error(`Student is already assigned to seat ${studentData.assignedSeatLabel}.`);
         }
         if (seatData.studentId) throw new Error('Seat is already assigned.');
         
         transaction.update(studentDocRef, {
-          assignedSeatId: seatData.seatNumber,
+          assignedSeatId: seat.id,
+          assignedRoomId: seat.roomId,
+          assignedSeatLabel: seat.seatNumber,
           updatedAt: serverTimestamp(),
         });
         
@@ -136,10 +133,6 @@ export function AssignSeatDialog({
   };
 
   const handleUnassign = async () => {
-    console.log("UNASSIGN SEAT CLICKED");
-    console.log("USER:", user);
-    console.log("LIBRARY ID:", libraryId);
-
     if (!firestore || !user) {
         toast({
             variant: 'destructive',
@@ -171,6 +164,8 @@ export function AssignSeatDialog({
           const studentDocRef = studentQuerySnapshot.docs[0].ref;
           transaction.update(studentDocRef, {
             assignedSeatId: null,
+            assignedRoomId: null,
+            assignedSeatLabel: null,
             updatedAt: serverTimestamp(),
           });
         } else {
@@ -242,6 +237,7 @@ export function AssignSeatDialog({
              <Popover open={isComboboxOpen} onOpenChange={setIsComboboxOpen}>
               <PopoverTrigger asChild>
                 <Button
+                  type="button"
                   variant="outline"
                   role="combobox"
                   aria-expanded={isComboboxOpen}
