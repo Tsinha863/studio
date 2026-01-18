@@ -44,8 +44,8 @@ export function CreateRoomForm({ libraryId, onSuccess, onCancel }: CreateRoomFor
     if (!firestore || !user) {
       toast({
         variant: 'destructive',
-        title: 'Error',
-        description: 'Could not connect to the database. Please try again.',
+        title: 'Authentication Error',
+        description: 'User is not authenticated. Please log in and try again.',
       });
       setIsSubmitting(false);
       return;
@@ -67,7 +67,7 @@ export function CreateRoomForm({ libraryId, onSuccess, onCancel }: CreateRoomFor
     }
   };
 
-  const isFormDisabled = isSubmitting || isUserLoading;
+  const isFormDisabled = isSubmitting || isUserLoading || !user;
 
   return (
     <Form {...form}>

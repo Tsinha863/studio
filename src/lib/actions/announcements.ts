@@ -61,7 +61,7 @@ export async function addAnnouncement(
     return { success: true };
   } catch (e: any) {
     console.error('Error adding announcement:', e);
-    return { success: false, error: e.message };
+    return { success: false, error: e.message || 'An unknown error occurred.' };
   }
 }
 
@@ -91,6 +91,6 @@ export async function deleteAnnouncement(
     return { success: true };
   } catch (e: any) {
     console.error('Error deleting announcement:', e);
-    return { success: false, error: e.message };
+    return { success: false, error: e.message || 'An unknown error occurred.' };
   }
 }

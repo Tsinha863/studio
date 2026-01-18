@@ -93,7 +93,7 @@ export async function createRoomAndSeats(
     return { success: true };
   } catch (e: any) {
     console.error('Error creating room and seats:', e);
-    return { success: false, error: e.message };
+    return { success: false, error: e.message || 'An unknown error occurred.' };
   }
 }
 
@@ -158,7 +158,7 @@ export async function assignSeat(
     return { success: true };
   } catch (e: any) {
     console.error('Error assigning seat:', e);
-    return { success: false, error: e.message };
+    return { success: false, error: e.message || 'An unknown error occurred.' };
   }
 }
 
@@ -227,6 +227,6 @@ export async function unassignSeat(
     return { success: true };
   } catch (e: any) {
     console.error('Error unassigning seat:', e);
-    return { success: false, error: e.message };
+    return { success: false, error: e.message || 'An unknown error occurred.' };
   }
 }

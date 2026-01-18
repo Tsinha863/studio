@@ -65,8 +65,7 @@ export async function addStudent(
     return { success: true };
   } catch (e: any) {
     console.error('Error adding student:', e);
-    // Note: In a real app, you would use the non-blocking error emitter here
-    return { success: false, error: e.message };
+    return { success: false, error: e.message || 'An unknown error occurred.' };
   }
 }
 
@@ -111,7 +110,7 @@ export async function updateStudent(
     return { success: true };
   } catch (e: any) {
     console.error('Error updating student:', e);
-    return { success: false, error: e.message };
+    return { success: false, error: e.message || 'An unknown error occurred.' };
   }
 }
 
@@ -142,6 +141,6 @@ export async function deleteStudent(
     return { success: true };
   } catch (e: any) {
     console.error('Error deleting student:', e);
-    return { success: false, error: e.message };
+    return { success: false, error: e.message || 'An unknown error occurred.' };
   }
 }

@@ -51,7 +51,14 @@ export function AssignSeatDialog({
   }, [students]);
 
   const handleAssign = async () => {
-    if (!firestore || !user || !selectedStudentId) return;
+    if (!firestore || !user || !selectedStudentId) {
+        toast({
+            variant: 'destructive',
+            title: 'Action Failed',
+            description: 'User not authenticated or no student selected.',
+        });
+        return;
+    }
     setIsSubmitting(true);
 
     const actor = { id: user.uid, name: user.displayName || 'Admin' };
@@ -67,7 +74,14 @@ export function AssignSeatDialog({
   };
 
   const handleUnassign = async () => {
-    if (!firestore || !user) return;
+    if (!firestore || !user) {
+        toast({
+            variant: 'destructive',
+            title: 'Authentication Error',
+            description: 'User is not authenticated. Please log in and try again.',
+        });
+        return;
+    }
     setIsSubmitting(true);
     
     const actor = { id: user.uid, name: user.displayName || 'Admin' };
@@ -89,7 +103,7 @@ export function AssignSeatDialog({
     }
   }, [isOpen]);
 
-  const isActionDisabled = isSubmitting || isUserLoading;
+  const isActionDisabled = isSubmitting || isUserLoading || !user;
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>

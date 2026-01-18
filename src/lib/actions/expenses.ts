@@ -68,7 +68,7 @@ export async function addExpense(
     return { success: true };
   } catch (e: any) {
     console.error('Error adding expense:', e);
-    return { success: false, error: e.message };
+    return { success: false, error: e.message || 'An unknown error occurred.' };
   }
 }
 
@@ -115,7 +115,7 @@ export async function updateExpense(
     return { success: true };
   } catch (e: any) {
     console.error('Error updating expense:', e);
-    return { success: false, error: e.message };
+    return { success: false, error: e.message || 'An unknown error occurred.' };
   }
 }
 
@@ -146,6 +146,6 @@ export async function deleteExpense(
     return { success: true };
   } catch (e: any) {
     console.error('Error deleting expense:', e);
-    return { success: false, error: e.message };
+    return { success: false, error: e.message || 'An unknown error occurred.' };
   }
 }

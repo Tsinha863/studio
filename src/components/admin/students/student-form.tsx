@@ -57,8 +57,8 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
     if (!firestore || !user) {
       toast({
         variant: 'destructive',
-        title: 'Error',
-        description: 'Could not connect to the database. Please try again.',
+        title: 'Authentication Error',
+        description: 'User is not authenticated. Please log in and try again.',
       });
       setIsSubmitting(false);
       return;
@@ -88,7 +88,7 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
     }
   };
 
-  const isFormDisabled = isSubmitting || isUserLoading;
+  const isFormDisabled = isSubmitting || isUserLoading || !user;
 
   return (
     <Form {...form}>
