@@ -131,6 +131,7 @@ export default function PaymentsPage() {
             status: 'pending',
             dueDate: Timestamp.fromDate(dueDate),
             paymentDate: null,
+            method: 'Online',
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           });

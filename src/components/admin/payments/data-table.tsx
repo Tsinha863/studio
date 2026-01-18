@@ -28,7 +28,13 @@ import {
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 
@@ -85,6 +91,7 @@ export function PaymentsDataTable<TData, TValue>({
         <Popover>
           <PopoverTrigger asChild>
             <Button
+              type="button"
               variant={"outline"}
               className={cn(
                 "h-10 w-[240px] justify-start text-left font-normal",
@@ -107,6 +114,7 @@ export function PaymentsDataTable<TData, TValue>({
          <Popover>
           <PopoverTrigger asChild>
             <Button
+              type="button"
               variant={"outline"}
               className={cn(
                 "h-10 w-[240px] justify-start text-left font-normal",

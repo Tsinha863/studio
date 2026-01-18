@@ -62,7 +62,7 @@ export function SeatingPlan({ libraryId, roomId }: SeatingPlanProps) {
         ].filter(Boolean);
 
         toast({
-            title: `Seat ${seat.id} Assignments`,
+            title: `Seat ${seat.id}`,
             description: assignmentInfo.length > 0 ? assignmentInfo.join(' | ') : 'Available all day.',
         });
         return;

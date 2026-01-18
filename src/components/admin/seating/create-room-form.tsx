@@ -35,7 +35,8 @@ export function CreateRoomForm({ libraryId, onSuccess }: CreateRoomFormProps) {
   const [tier, setTier] = React.useState<Seat['tier']>('standard');
   const [errors, setErrors] = React.useState<Partial<Record<keyof RoomFormValues, string>>>({});
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     if (!user || !firestore) {
       toast({
         variant: 'destructive',
@@ -120,7 +121,7 @@ export function CreateRoomForm({ libraryId, onSuccess }: CreateRoomFormProps) {
   };
 
   return (
-    <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="flex flex-wrap items-end gap-4">
+    <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-4">
         <div className="flex-grow space-y-2" style={{minWidth: '200px'}}>
             <Label htmlFor="roomName">Room Name</Label>
             <Input

@@ -17,7 +17,7 @@ function formatActivity(log: ActivityLog): string {
         case 'student_updated':
             return `${userName} updated student ${log.details.studentName}.`;
         case 'student_deleted':
-            return `${userName} deleted student with ID ${log.details.studentId}.`;
+            return `${userName} archived student ${log.details.studentName}.`;
         case 'payment_processed':
             return `${userName} processed a payment of ${formatCurrency(log.details.amount)} for ${log.details.studentName}.`;
         case 'monthly_payments_created':
@@ -42,6 +42,12 @@ function formatActivity(log: ActivityLog): string {
             return `${userName} updated a suggestion's status to ${log.details.newStatus}.`;
         case 'suggestion_deleted':
             return `${userName} deleted a suggestion (ID: ${log.details.suggestionId}).`;
+        case 'print_request_submitted':
+            return `${userName} submitted a print request for ${log.details.fileName}.`;
+        case 'print_request_approved':
+            return `${userName} approved print request ${log.details.requestId}.`;
+        case 'print_request_rejected':
+             return `${userName} rejected print request ${log.details.requestId}.`;
         default:
             return `${userName} performed an action: ${log.activityType}.`;
     }

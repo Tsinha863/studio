@@ -47,6 +47,7 @@ export interface Payment {
   paymentDate: Timestamp | null; // Null if not paid
   dueDate: Timestamp;
   status: 'paid' | 'pending' | 'overdue';
+  method: 'Online' | 'Cash';
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -111,7 +112,7 @@ export interface Suggestion {
 }
 
 export interface ActivityLog {
-  id?: string;
+  id: string;
   libraryId: string;
   activityType: string;
   user: {
