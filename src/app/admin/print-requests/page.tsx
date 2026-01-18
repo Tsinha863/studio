@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import dynamic from 'next/dynamic';
-import { collection, query, orderBy, writeBatch, doc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { collection, query, orderBy, writeBatch, doc, serverTimestamp } from 'firebase/firestore';
 
 import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
 import type { PrintRequest } from '@/lib/types';
@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Spinner } from '@/components/spinner';
 
 const PrintRequestDataTable = dynamic(
   () => import('@/components/admin/print-requests/data-table').then(mod => mod.PrintRequestDataTable),
@@ -41,6 +42,7 @@ export default function PrintRequestsPage() {
   const [processingId, setProcessingId] = React.useState<string | null>(null);
   const [rejectionDialog, setRejectionDialog] = React.useState<RejectionDialogState>({ isOpen: false });
   const [rejectionReason, setRejectionReason] = React.useState('');
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
 
 
   const requestsQuery = useMemoFirebase(() => {
@@ -59,6 +61,7 @@ export default function PrintRequestsPage() {
       return;
     }
     setProcessingId(requestId);
+    setIsSubmitting(true);
     
     try {
         const batch = writeBatch(firestore);
@@ -101,6 +104,7 @@ export default function PrintRequestsPage() {
         });
     } finally {
         setProcessingId(null);
+        setIsSubmitting(false);
         setRejectionDialog({ isOpen: false });
         setRejectionReason('');
     }
@@ -155,11 +159,15 @@ export default function PrintRequestsPage() {
                 placeholder="e.g., File is corrupted, incorrect format..."
                 value={rejectionReason}
                 onChange={(e) => setRejectionReason(e.target.value)}
+                disabled={isSubmitting}
             />
           </div>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmRejection}>Confirm Rejection</AlertDialogAction>
+            <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmRejection} disabled={isSubmitting}>
+              {isSubmitting && <Spinner className="mr-2" />}
+              Confirm Rejection
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
