@@ -70,7 +70,7 @@ export function PrintRequestForm({ student, libraryId, isLoading }: PrintRequest
         libraryId,
         studentId: student.id,
         studentName: student.name,
-        seatId: student.assignedSeatId || null,
+        seatId: student.assignments?.[0]?.seatId || null,
         fileUrl: downloadURL,
         fileName: file.name,
         notes: data.notes || '',

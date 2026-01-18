@@ -44,8 +44,8 @@ type ReceiptState = {
   studentName?: string;
 };
 
-// New type for payments with student seat details and docId
-export type PaymentWithSeat = Payment & { seatNumber?: string | null, studentDocId?: string, docId: string };
+// New type for payments with student details
+export type PaymentWithDetails = Payment & { studentDocId?: string, docId: string, assignments: Student['assignments'] };
 
 export default function PaymentsPage() {
   const { toast } = useToast();
@@ -70,19 +70,17 @@ export default function PaymentsPage() {
   const { data: payments, isLoading: isLoadingPayments } = useCollection<Omit<Payment, 'id'>>(paymentsQuery);
   const { data: students, isLoading: isLoadingStudents } = useCollection<Student>(studentsQuery);
   
-  const paymentsWithDetails: PaymentWithSeat[] = React.useMemo(() => {
+  const paymentsWithDetails: PaymentWithDetails[] = React.useMemo(() => {
     if (!payments || !students) return [];
     const studentMap = new Map(students.map(s => [s.id, { 
-        fibonacciStreak: s.fibonacciStreak, 
-        status: s.status, 
-        seatNumber: s.assignedSeatId,
-        docId: s.docId // Firestore document ID
+        docId: s.docId, // Firestore document ID
+        assignments: s.assignments || []
     }]));
     return payments.map(p => ({
         ...p,
         docId: p.id,
-        seatNumber: studentMap.get(p.studentId)?.seatNumber || null,
         studentDocId: studentMap.get(p.studentId)?.docId,
+        assignments: studentMap.get(p.studentId)?.assignments || [],
     }));
   }, [payments, students]);
 
@@ -185,7 +183,7 @@ export default function PaymentsPage() {
     }
   };
 
-  const handleMarkAsPaid = async (payment: PaymentWithSeat) => {
+  const handleMarkAsPaid = async (payment: PaymentWithDetails) => {
     if (!user || !firestore || !payment.studentDocId) {
        toast({
         variant: 'destructive',

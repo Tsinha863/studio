@@ -15,6 +15,8 @@ export interface User {
   updatedAt: Timestamp;
 }
 
+export type TimeSlot = 'morning' | 'afternoon' | 'night';
+
 export interface Student {
   id: string; // Custom ID, used as Firestore document ID. Immutable.
   docId: string; // Firestore document ID
@@ -23,9 +25,11 @@ export interface Student {
   name: string;
   email: string;
   status: 'active' | 'at-risk' | 'inactive';
-  assignedSeatId?: string | null; // Firestore Document ID of the Seat
-  assignedRoomId?: string | null; // Firestore Document ID of the Room
-  assignedSeatLabel?: string | null; // Denormalized human-readable seat number
+  assignments: {
+    seatId: string;
+    roomId: string;
+    timeSlot: TimeSlot;
+  }[];
   fibonacciStreak: number;
   paymentDue: number;
   lastInteractionAt: Timestamp;
@@ -81,9 +85,11 @@ export interface Seat {
   libraryId: string;
   roomId: string;
   tier: 'basic' | 'standard' | 'premium';
-  studentId?: string | null; // This is the Student's Firestore Document ID
-  studentName?: string | null; // Denormalized for quick display
-  timeSlot?: string;
+  assignments: {
+    morning?: { studentId: string; studentName: string; };
+    afternoon?: { studentId: string; studentName: string; };
+    night?: { studentId: string; studentName: string; };
+  };
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }

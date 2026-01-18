@@ -75,8 +75,7 @@ export function CreateRoomForm({ libraryId, onSuccess }: CreateRoomFormProps) {
           roomId: roomRef.id,
           libraryId,
           tier: 'standard', // Tier is defaulted to standard for simplicity
-          studentId: null,
-          studentName: null,
+          assignments: {},
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });

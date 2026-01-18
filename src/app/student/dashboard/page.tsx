@@ -60,7 +60,7 @@ export default function StudentDashboardPage() {
       <WelcomeHeader studentName={student?.name} isLoading={isLoadingStudent} />
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        <AssignedSeatCard seatId={student?.assignedSeatId} isLoading={isLoadingStudent} />
+        <AssignedSeatCard assignments={student?.assignments || []} isLoading={isLoadingStudent} />
         <UpcomingPaymentCard payment={upcomingPayment} isLoading={isLoadingPayments} />
         <FibonacciStreakCard streak={student?.fibonacciStreak || 0} isLoading={isLoadingStudent} />
       </div>

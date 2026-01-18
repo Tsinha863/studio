@@ -107,9 +107,33 @@
           "description": "Contact email of the student.",
           "format": "email"
         },
-        "assignedSeatId": {
-          "type": "string",
-          "description": "The ID of the seat assigned to the student."
+        "assignments": {
+          "type": "array",
+          "description": "List of seat assignments for the student.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "seatId": {
+                "type": "string"
+              },
+              "roomId": {
+                "type": "string"
+              },
+              "timeSlot": {
+                "type": "string",
+                "enum": [
+                  "morning",
+                  "afternoon",
+                  "night"
+                ]
+              }
+            },
+            "required": [
+              "seatId",
+              "roomId",
+              "timeSlot"
+            ]
+          }
         },
         "status": {
           "type": "string",
@@ -139,18 +163,34 @@
           "items": {
             "type": "object",
             "properties": {
-              "text": { "type": "string" },
-              "createdAt": { "type": "string", "format": "date-time" },
-              "authorId": { "type": "string" },
-              "authorName": { "type": "string" }
+              "text": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "authorId": {
+                "type": "string"
+              },
+              "authorName": {
+                "type": "string"
+              }
             },
-            "required": ["text", "createdAt", "authorId", "authorName"]
+            "required": [
+              "text",
+              "createdAt",
+              "authorId",
+              "authorName"
+            ]
           }
         },
         "tags": {
           "type": "array",
           "description": "CRM tags for categorizing students.",
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         },
         "createdAt": {
           "type": "string",
@@ -212,7 +252,11 @@
         "status": {
           "type": "string",
           "description": "Status of the payment.",
-          "enum": ["paid", "pending", "overdue"]
+          "enum": [
+            "paid",
+            "pending",
+            "overdue"
+          ]
         },
         "method": {
           "type": "string",
@@ -258,7 +302,13 @@
         "category": {
           "type": "string",
           "description": "Category of the expense.",
-          "enum": ["rent", "utilities", "supplies", "salaries", "other"]
+          "enum": [
+            "rent",
+            "utilities",
+            "supplies",
+            "salaries",
+            "other"
+          ]
         },
         "amount": {
           "type": "number",
@@ -358,17 +408,44 @@
           "type": "string",
           "description": "Tier of the seat (e.g., 'premium', 'standard')."
         },
-        "studentId": {
-          "type": "string",
-          "description": "Reference to Student. (Optional, Relationship: Student 1:1 Seat).  Identifies the student currently assigned to the seat."
-        },
-        "studentName": {
-          "type": "string",
-          "description": "Denormalized name of the student assigned to the seat."
-        },
-        "timeSlot": {
-          "type": "string",
-          "description": "Time slot for which the seat is reserved."
+        "assignments": {
+          "type": "object",
+          "description": "Map of time slots to student assignments.",
+          "properties": {
+            "morning": {
+              "type": "object",
+              "properties": {
+                "studentId": {
+                  "type": "string"
+                },
+                "studentName": {
+                  "type": "string"
+                }
+              }
+            },
+            "afternoon": {
+              "type": "object",
+              "properties": {
+                "studentId": {
+                  "type": "string"
+                },
+                "studentName": {
+                  "type": "string"
+                }
+              }
+            },
+            "night": {
+              "type": "object",
+              "properties": {
+                "studentId": {
+                  "type": "string"
+                },
+                "studentName": {
+                  "type": "string"
+                }
+              }
+            }
+          }
         },
         "createdAt": {
           "type": "string",
@@ -583,7 +660,11 @@
         "status": {
           "type": "string",
           "description": "The current status of the print request.",
-          "enum": ["Pending", "Approved", "Rejected"]
+          "enum": [
+            "Pending",
+            "Approved",
+            "Rejected"
+          ]
         },
         "rejectionReason": {
           "type": "string",

@@ -9,6 +9,7 @@ import {
   runTransaction,
   doc,
   serverTimestamp,
+  deleteField,
 } from 'firebase/firestore';
 
 import { Button } from '@/components/ui/button';
@@ -105,25 +106,23 @@ export default function StudentsPage() {
         
         const studentData = studentDoc.data() as Student;
   
-        // 1. Update student to inactive
+        // 1. Unassign student from any seats
+        if (studentData.assignments && studentData.assignments.length > 0) {
+            for (const assignment of studentData.assignments) {
+                const seatRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/rooms/${assignment.roomId}/seats/${assignment.seatId}`);
+                transaction.update(seatRef, {
+                    [`assignments.${assignment.timeSlot}`]: deleteField()
+                });
+            }
+        }
+  
+        // 2. Update student to inactive and clear assignments
         transaction.update(studentRef, {
           status: 'inactive',
-          assignedSeatId: null,
-          assignedRoomId: null,
-          assignedSeatLabel: null,
+          assignments: [],
           updatedAt: serverTimestamp(),
           lastInteractionAt: serverTimestamp(),
         });
-  
-        // 2. If a seat was assigned, unassign it atomically.
-        if (studentData.assignedSeatId && studentData.assignedRoomId) {
-          const seatRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/rooms/${studentData.assignedRoomId}/seats/${studentData.assignedSeatId}`);
-          transaction.update(seatRef, {
-            studentId: null,
-            studentName: null,
-            updatedAt: serverTimestamp(),
-          });
-        }
   
         // 3. Create activity log for the soft delete.
         const logRef = doc(collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/activityLogs`));
@@ -138,7 +137,7 @@ export default function StudentsPage() {
 
       toast({
         title: 'Student Set to Inactive',
-        description: `${alertState.studentName} has been marked as inactive.`,
+        description: `${alertState.studentName} has been marked as inactive and unassigned from all seats.`,
       });
 
     } catch (error) {

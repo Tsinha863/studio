@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Firestore, doc, collection, runTransaction, serverTimestamp } from 'firebase/firestore';
+import { doc, collection, runTransaction, serverTimestamp, deleteField } from 'firebase/firestore';
 import { Check, ChevronsUpDown } from 'lucide-react';
 
 import { useFirebase } from '@/firebase';
@@ -25,7 +25,7 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/ui/command';
-import type { Seat, Student } from '@/lib/types';
+import type { Seat, Student, TimeSlot } from '@/lib/types';
 import { Spinner } from '@/components/spinner';
 
 interface AssignSeatDialogProps {
@@ -34,6 +34,7 @@ interface AssignSeatDialogProps {
   seat: Seat;
   students: (Student & { id: string })[];
   libraryId: string;
+  timeSlot: TimeSlot;
   onSuccess: () => void;
 }
 
@@ -43,6 +44,7 @@ export function AssignSeatDialog({
   seat,
   students,
   libraryId,
+  timeSlot,
   onSuccess,
 }: AssignSeatDialogProps) {
   const { firestore, user, isUserLoading } = useFirebase();
@@ -50,10 +52,17 @@ export function AssignSeatDialog({
   const [selectedStudentId, setSelectedStudentId] = React.useState<string | undefined>();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isComboboxOpen, setIsComboboxOpen] = React.useState(false);
+  
+  const currentAssignment = seat.assignments?.[timeSlot];
 
   const availableStudents = React.useMemo(() => {
-    return students.filter(s => !s.assignedSeatId && s.status !== 'inactive');
-  }, [students]);
+    const studentsWithAssignmentInSlot = new Set(
+        students
+            .filter(s => s.assignments?.some(a => a.timeSlot === timeSlot))
+            .map(s => s.id)
+    );
+    return students.filter(s => !studentsWithAssignmentInSlot.has(s.id) && s.status !== 'inactive');
+  }, [students, timeSlot]);
 
   const handleAssign = async () => {
     if (!firestore || !user || !selectedStudentId) {
@@ -64,6 +73,12 @@ export function AssignSeatDialog({
       });
       return;
     }
+    const studentToAssign = students.find(s => s.id === selectedStudentId);
+    if (!studentToAssign) {
+        toast({ variant: 'destructive', title: 'Student not found' });
+        return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -73,7 +88,7 @@ export function AssignSeatDialog({
         
         const [studentDoc, seatDoc] = await Promise.all([
           transaction.get(studentDocRef),
-          transaction.get(seatDoc),
+          transaction.get(seatDocRef),
         ]);
 
         if (!studentDoc.exists()) throw new Error('Student not found.');
@@ -82,43 +97,37 @@ export function AssignSeatDialog({
         const studentData = studentDoc.data() as Student;
         const seatData = seatDoc.data() as Seat;
         
-        if (studentData.assignedSeatId) {
-           throw new Error(`Student is already assigned to seat ${studentData.assignedSeatLabel}.`);
+        if (seatData.assignments?.[timeSlot]) {
+           throw new Error(`Seat ${seat.id} is already assigned for ${timeSlot}.`);
         }
-        if (seatData.studentId) throw new Error('Seat is already assigned.');
+        if (studentData.assignments?.some(a => a.timeSlot === timeSlot)) {
+            throw new Error(`${studentToAssign.name} already has an assignment for ${timeSlot}.`);
+        }
         
-        // Update student with seat info
-        transaction.update(studentDocRef, {
-          assignedSeatId: seat.id,
-          assignedRoomId: seat.roomId,
-          assignedSeatLabel: seat.id, // The seat ID is the label
-          updatedAt: serverTimestamp(),
-          lastInteractionAt: serverTimestamp(),
-        });
+        const newStudentAssignments = [...(studentData.assignments || []), { seatId: seat.id, roomId: seat.roomId, timeSlot }];
         
-        // Update seat with student info
-        transaction.update(seatDocRef, {
-          studentId: studentDoc.id,
-          studentName: studentData.name,
-          updatedAt: serverTimestamp(),
+        transaction.update(studentDocRef, { assignments: newStudentAssignments, lastInteractionAt: serverTimestamp() });
+        transaction.update(seatDocRef, { 
+            [`assignments.${timeSlot}`]: { studentId: studentToAssign.id, studentName: studentToAssign.name },
+            updatedAt: serverTimestamp(),
         });
 
-        // Create activity log
         const logRef = doc(collection(firestore, `libraries/${libraryId}/activityLogs`));
         transaction.set(logRef, {
           libraryId,
           user: { id: user.uid, name: user.displayName || 'Admin' },
           activityType: 'seat_assigned',
           details: {
-            studentName: studentData.name,
+            studentName: studentToAssign.name,
             seatNumber: seat.id,
             roomId: seat.roomId,
+            timeSlot,
           },
           timestamp: serverTimestamp(),
         });
       });
 
-      toast({ title: 'Seat Assigned', description: `Seat ${seat.id} has been assigned.` });
+      toast({ title: 'Seat Assigned', description: `Seat ${seat.id} (${timeSlot}) has been assigned.` });
       onSuccess();
 
     } catch (error) {
@@ -134,42 +143,37 @@ export function AssignSeatDialog({
   };
 
   const handleUnassign = async () => {
-    if (!firestore || !user) {
-      toast({ variant: 'destructive', title: 'Authentication Error' });
+    if (!firestore || !user || !currentAssignment) {
+      toast({ variant: 'destructive', title: 'Error', description: 'No assignment to remove.' });
       return;
     }
+    const studentIdToUnassign = currentAssignment.studentId;
     setIsSubmitting(true);
     
     try {
       await runTransaction(firestore, async (transaction) => {
         const seatRef = doc(firestore, `libraries/${libraryId}/rooms/${seat.roomId}/seats/${seat.id}`);
-        const seatDoc = await transaction.get(seatRef);
+        const studentRef = doc(firestore, `libraries/${libraryId}/students`, studentIdToUnassign);
+        
+        const [seatDoc, studentDoc] = await Promise.all([
+            transaction.get(seatRef),
+            transaction.get(studentRef)
+        ]);
 
         if (!seatDoc.exists()) throw new Error('Seat not found.');
         
-        const seatData = seatDoc.data() as Seat;
-        const studentIdToUnassign = seatData.studentId;
-
-        if (!studentIdToUnassign) return; // Seat is already unassigned
-        
-        const studentRef = doc(firestore, `libraries/${libraryId}/students`, studentIdToUnassign);
-        const studentDoc = await transaction.get(studentRef);
-
-        // Update student record only if they exist
+        // Update student record
         if (studentDoc.exists()) {
-          transaction.update(studentRef, {
-            assignedSeatId: null,
-            assignedRoomId: null,
-            assignedSeatLabel: null,
-            updatedAt: serverTimestamp(),
-            lastInteractionAt: serverTimestamp(),
-          });
+          const studentData = studentDoc.data() as Student;
+          const newStudentAssignments = studentData.assignments?.filter(a => 
+            !(a.seatId === seat.id && a.roomId === seat.roomId && a.timeSlot === timeSlot)
+          ) || [];
+          transaction.update(studentRef, { assignments: newStudentAssignments, lastInteractionAt: serverTimestamp() });
         }
 
-        // Always unassign the seat
+        // Update seat record
         transaction.update(seatRef, {
-          studentId: null,
-          studentName: null,
+          [`assignments.${timeSlot}`]: deleteField(),
           updatedAt: serverTimestamp(),
         });
 
@@ -180,15 +184,16 @@ export function AssignSeatDialog({
           user: { id: user.uid, name: user.displayName || 'Admin' },
           activityType: 'seat_unassigned',
           details: {
-            studentName: seatData.studentName,
+            studentName: currentAssignment.studentName,
             seatNumber: seat.id,
             roomId: seat.roomId,
+            timeSlot,
           },
           timestamp: serverTimestamp(),
         });
       });
       
-      toast({ title: 'Seat Unassigned', description: `Seat ${seat.id} is now available.` });
+      toast({ title: 'Seat Unassigned', description: `Seat ${seat.id} (${timeSlot}) is now available.` });
       onSuccess();
     } catch (error) {
       console.error("UNASSIGN SEAT ERROR:", error);
@@ -216,17 +221,17 @@ export function AssignSeatDialog({
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Manage Seat {seat.id}</DialogTitle>
+          <DialogTitle>Manage Seat {seat.id} - <span className="capitalize">{timeSlot}</span></DialogTitle>
           <DialogDescription>
-            {seat.studentId
-              ? `This seat is currently assigned to ${seat.studentName}.`
-              : 'Assign this seat to an active student.'}
+            {currentAssignment
+              ? `This seat is assigned to ${currentAssignment.studentName} for the ${timeSlot}.`
+              : `Assign this seat for the ${timeSlot}.`}
           </DialogDescription>
         </DialogHeader>
         
-        {seat.studentId ? (
+        {currentAssignment ? (
           <div className='py-4'>
-            <p>Would you like to make this seat available?</p>
+            <p>Would you like to make this seat available for the {timeSlot} slot?</p>
           </div>
         ) : (
           <div className="py-4">
@@ -248,7 +253,7 @@ export function AssignSeatDialog({
                 <Command>
                   <CommandInput placeholder="Search student..." />
                   <CommandList>
-                    <CommandEmpty>No available students found.</CommandEmpty>
+                    <CommandEmpty>No available students found for this slot.</CommandEmpty>
                     <CommandGroup>
                       {availableStudents.map((student) => (
                         <CommandItem
@@ -277,7 +282,7 @@ export function AssignSeatDialog({
         )}
 
         <DialogFooter>
-          {seat.studentId ? (
+          {currentAssignment ? (
             <Button type="button" variant="destructive" onClick={handleUnassign} disabled={isActionDisabled}>
               {isSubmitting && <Spinner className="mr-2" />}
               {isSubmitting ? 'Unassigning...' : 'Unassign Seat'}
@@ -293,5 +298,3 @@ export function AssignSeatDialog({
     </Dialog>
   );
 }
-
-    

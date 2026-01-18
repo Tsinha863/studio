@@ -1,24 +1,24 @@
 'use client';
 
 import * as React from 'react';
-import {
-  collection,
-  query,
-  orderBy
-} from 'firebase/firestore';
+import { collection, query } from 'firebase/firestore';
 import { User as UserIcon } from 'lucide-react';
 
 import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
-import type { Seat, Student } from '@/lib/types';
+import type { Seat, Student, TimeSlot } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { AssignSeatDialog } from './assign-seat-dialog';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useToast } from '@/hooks/use-toast';
 
 interface SeatingPlanProps {
   libraryId: string;
   roomId: string;
 }
+
+type DisplayMode = TimeSlot | 'fullDay';
 
 const tierStyles = {
   available: {
@@ -31,14 +31,14 @@ const tierStyles = {
 
 export function SeatingPlan({ libraryId, roomId }: SeatingPlanProps) {
   const { firestore, user } = useFirebase();
-
+  const { toast } = useToast();
+  
+  const [displayMode, setDisplayMode] = React.useState<DisplayMode>('fullDay');
   const [selectedSeat, setSelectedSeat] = React.useState<Seat | null>(null);
   const [isAssignDialogOpen, setIsAssignDialogOpen] = React.useState(false);
 
   const seatsQuery = useMemoFirebase(() => {
     if (!firestore || !user || !roomId) return null;
-    // We order by document ID, which requires a manual index but is possible.
-    // For now, we sort client-side to avoid index configuration.
     return query(
       collection(firestore, `libraries/${libraryId}/rooms/${roomId}/seats`)
     );
@@ -54,6 +54,19 @@ export function SeatingPlan({ libraryId, roomId }: SeatingPlanProps) {
   const { data: students, isLoading: isLoadingStudents } = useCollection<Omit<Student, 'id' | 'docId'>>(studentsQuery);
   
   const handleSeatClick = (seat: Seat) => {
+    if (displayMode === 'fullDay') {
+        const assignmentInfo = [
+            seat.assignments?.morning && `Morning: ${seat.assignments.morning.studentName}`,
+            seat.assignments?.afternoon && `Afternoon: ${seat.assignments.afternoon.studentName}`,
+            seat.assignments?.night && `Night: ${seat.assignments.night.studentName}`,
+        ].filter(Boolean);
+
+        toast({
+            title: `Seat ${seat.id} Assignments`,
+            description: assignmentInfo.length > 0 ? assignmentInfo.join(' | ') : 'Available all day.',
+        });
+        return;
+    }
     setSelectedSeat(seat);
     setIsAssignDialogOpen(true);
   };
@@ -90,39 +103,57 @@ export function SeatingPlan({ libraryId, roomId }: SeatingPlanProps) {
 
   return (
     <TooltipProvider>
+      <Tabs value={displayMode} onValueChange={(value) => setDisplayMode(value as DisplayMode)} className="w-full">
+        <TabsList className="mb-6 grid w-full grid-cols-4">
+          <TabsTrigger value="morning">Morning</TabsTrigger>
+          <TabsTrigger value="afternoon">Afternoon</TabsTrigger>
+          <TabsTrigger value="night">Night</TabsTrigger>
+          <TabsTrigger value="fullDay">Full Day</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
       <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-4">
-        {sortedSeats.map((seat) => (
-          <Tooltip key={seat.id}>
-            <TooltipTrigger asChild>
-              <button
-                onClick={() => handleSeatClick(seat)}
-                className={cn(
-                  'flex h-14 w-14 flex-col items-center justify-center rounded-md border text-xs font-semibold transition-colors',
-                  seat.studentId
-                    ? tierStyles.assigned
-                    : tierStyles.available[seat.tier]
-                )}
-              >
-                {seat.studentId ? (
-                  <UserIcon className="h-5 w-5" />
-                ) : (
-                  <span className="text-lg font-bold">{seat.id}</span>
-                )}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p className="font-bold">Seat {seat.id}</p>
-              {seat.studentName ? (
-                <p>Assigned to: {seat.studentName}</p>
-              ) : (
-                <p>Status: Available</p>
-              )}
-              <p className='capitalize'>Tier: {seat.tier}</p>
-            </TooltipContent>
-          </Tooltip>
-        ))}
+        {sortedSeats.map((seat) => {
+           const isAssignedForCurrentSlot = displayMode !== 'fullDay' && seat.assignments?.[displayMode];
+           const isAssignedAtAll = seat.assignments?.morning || seat.assignments?.afternoon || seat.assignments?.night;
+           const showAsAssigned = displayMode === 'fullDay' ? isAssignedAtAll : isAssignedForCurrentSlot;
+
+           const tooltipDescription = [
+                seat.assignments?.morning && `Morning: ${seat.assignments.morning.studentName}`,
+                seat.assignments?.afternoon && `Afternoon: ${seat.assignments.afternoon.studentName}`,
+                seat.assignments?.night && `Night: ${seat.assignments.night.studentName}`,
+            ].filter(Boolean).join(' | ') || 'Status: Available';
+
+          return (
+            <Tooltip key={seat.id}>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => handleSeatClick(seat)}
+                  className={cn(
+                    'flex h-14 w-14 flex-col items-center justify-center rounded-md border text-xs font-semibold transition-colors',
+                    showAsAssigned
+                      ? tierStyles.assigned
+                      : tierStyles.available[seat.tier]
+                  )}
+                >
+                  {showAsAssigned ? (
+                    <UserIcon className="h-5 w-5" />
+                  ) : (
+                    <span className="text-lg font-bold">{seat.id}</span>
+                  )}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="font-bold">Seat {seat.id}</p>
+                <p>{tooltipDescription}</p>
+                <p className='capitalize'>Tier: {seat.tier}</p>
+              </TooltipContent>
+            </Tooltip>
+          );
+        })}
       </div>
-      {selectedSeat && (
+      {selectedSeat && displayMode !== 'fullDay' && (
         <AssignSeatDialog
           isOpen={isAssignDialogOpen}
           onOpenChange={setIsAssignDialogOpen}
@@ -130,10 +161,9 @@ export function SeatingPlan({ libraryId, roomId }: SeatingPlanProps) {
           students={students || []}
           libraryId={libraryId}
           onSuccess={onDialogSuccess}
+          timeSlot={displayMode}
         />
       )}
     </TooltipProvider>
   );
 }
-
-    

@@ -6,19 +6,18 @@ import { Timestamp } from 'firebase/firestore';
 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import type { Payment } from '@/lib/types';
+import type { Student } from '@/lib/types';
 import { DataTableColumnHeader } from '@/components/admin/students/data-table-header';
 import { Spinner } from '@/components/spinner';
+import type { PaymentWithDetails } from '@/app/admin/payments/page';
 
-// This type needs to match the one in `payments/page.tsx`
-type PaymentWithSeat = Payment & { seatNumber?: string | null, docId: string };
 
 type ColumnsConfig = {
-  handleMarkAsPaid: (payment: PaymentWithSeat) => void;
+  handleMarkAsPaid: (payment: PaymentWithDetails) => void;
   isPaying: string | false;
 };
 
-export const columns = ({ handleMarkAsPaid, isPaying }: ColumnsConfig): ColumnDef<PaymentWithSeat>[] => [
+export const columns = ({ handleMarkAsPaid, isPaying }: ColumnsConfig): ColumnDef<PaymentWithDetails>[] => [
   {
     accessorKey: 'studentName',
     header: ({ column }) => (
@@ -26,13 +25,20 @@ export const columns = ({ handleMarkAsPaid, isPaying }: ColumnsConfig): ColumnDe
     ),
   },
   {
-    accessorKey: 'seatNumber',
+    accessorKey: 'assignments',
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Seat" />
     ),
     cell: ({ row }) => {
-      const seat = row.original.seatNumber;
-      return seat ? <span>{seat}</span> : <span className="text-muted-foreground">N/A</span>;
+      const assignments = row.original.assignments;
+      if (!assignments || assignments.length === 0) {
+        return <span className="text-muted-foreground">N/A</span>;
+      }
+      const assignmentText = assignments
+        .map(a => `${a.seatId}(${a.timeSlot.charAt(0).toUpperCase()})`)
+        .join(', ');
+
+      return <span title={assignmentText}>{assignmentText}</span>;
     },
   },
   {

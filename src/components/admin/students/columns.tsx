@@ -63,10 +63,22 @@ export const columns = ({ openModal, openDeleteAlert }: ColumnsConfig): ColumnDe
     }
   },
   {
-    accessorKey: 'assignedSeatLabel',
+    accessorKey: 'assignments',
     header: 'Assigned Seat',
     cell: ({ row }) => {
-      return row.original.assignedSeatLabel || <span className="text-muted-foreground">N/A</span>;
+      const assignments = row.original.assignments;
+      if (!assignments || assignments.length === 0) {
+        return <span className="text-muted-foreground">N/A</span>;
+      }
+      const assignmentText = assignments
+        .map(a => `${a.seatId} (${a.timeSlot.charAt(0).toUpperCase()})`)
+        .join(', ');
+      
+      return (
+        <div className="max-w-[150px] truncate" title={assignmentText}>
+          {assignmentText}
+        </div>
+      );
     },
   },
   {
