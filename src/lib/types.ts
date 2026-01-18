@@ -119,4 +119,20 @@ export interface ActivityLog {
   details: Record<string, any>;
 }
 
-    
+export type PrintRequestStatus = 'Pending' | 'Approved' | 'Rejected';
+
+export interface PrintRequest {
+  id: string;
+  docId: string;
+  libraryId: string;
+  studentId: string;
+  studentName: string;
+  seatId: string | null;
+  fileUrl: string;
+  fileName: string;
+  notes: string;
+  status: PrintRequestStatus;
+  rejectionReason?: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}

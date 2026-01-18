@@ -11,6 +11,7 @@ import {
   Settings,
   User,
   Lightbulb,
+  Printer,
 } from 'lucide-react';
 import {
   SidebarProvider,
@@ -103,6 +104,14 @@ function MainSidebar() {
                             <Link href="/student/dashboard">
                                 <Home />
                                 <span>Dashboard</span>
+                            </Link>
+                        </SidebarMenuButton>
+                    </SidebarMenuItem>
+                     <SidebarMenuItem>
+                        <SidebarMenuButton asChild tooltip="Print on Desk" isActive={pathname === '/student/print-on-desk'}>
+                            <Link href="/student/print-on-desk">
+                                <Printer />
+                                <span>Print on Desk</span>
                             </Link>
                         </SidebarMenuButton>
                     </SidebarMenuItem>

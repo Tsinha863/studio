@@ -540,6 +540,77 @@
         "activityType",
         "timestamp"
       ]
+    },
+    "PrintRequest": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "PrintRequest",
+      "type": "object",
+      "description": "Represents a student's request to print a document.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the PrintRequest entity."
+        },
+        "libraryId": {
+          "type": "string",
+          "description": "Reference to Library. (Relationship: Library 1:N PrintRequest)."
+        },
+        "studentId": {
+          "type": "string",
+          "description": "Reference to Student. (Relationship: Student 1:N PrintRequest)."
+        },
+        "studentName": {
+          "type": "string",
+          "description": "Denormalized name of the student for easier display."
+        },
+        "seatId": {
+          "type": "string",
+          "description": "Denormalized seat ID of the student at the time of request."
+        },
+        "fileUrl": {
+          "type": "string",
+          "description": "URL of the uploaded file in Firebase Storage.",
+          "format": "uri"
+        },
+        "fileName": {
+          "type": "string",
+          "description": "Original name of the uploaded file."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Optional notes from the student (e.g., page numbers, color/bw)."
+        },
+        "status": {
+          "type": "string",
+          "description": "The current status of the print request.",
+          "enum": ["Pending", "Approved", "Rejected"]
+        },
+        "rejectionReason": {
+          "type": "string",
+          "description": "Optional reason provided by the admin for rejecting the request."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp indicating when the request was created.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp indicating when the request was last updated.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "libraryId",
+        "studentId",
+        "studentName",
+        "fileUrl",
+        "fileName",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
     }
   },
   "auth": {
@@ -749,10 +820,28 @@
             }
           ]
         }
+      },
+      {
+        "path": "libraries/{libraryId}/printRequests/{printRequestId}",
+        "definition": {
+          "entityName": "PrintRequest",
+          "schema": {
+            "$ref": "#/backend/entities/PrintRequest"
+          },
+          "description": "Stores student print requests. Includes the 'libraryId' for authorization independence.",
+          "params": [
+            {
+              "name": "libraryId",
+              "description": "Unique identifier for the library."
+            },
+            {
+              "name": "printRequestId",
+              "description": "Unique identifier for the print request."
+            }
+          ]
+        }
       }
     ],
     "reasoning": "The Firestore structure is designed for a multi-tenant library system, prioritizing strict library isolation and role-based access control. The core principle is Authorization Independence achieved through the denormalization of the `libraryId` in every document. This eliminates the need for `get()` calls in security rules, simplifying the rules and ensuring atomic operations. The structure uses structural segregation by storing data with different access requirements in separate collections, which also helps with list operation QAPs. Access is modeled based on path-based ownership for user-specific data and a global role-based access control (DBAC) with dedicated collections for admin users. The explicit state modeling utilizes the status filed (e.g., for suggestions)."
   }
 }
-
-    

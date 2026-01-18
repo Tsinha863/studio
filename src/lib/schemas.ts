@@ -40,3 +40,19 @@ export const suggestionStatusSchema = z.object({
 });
 
 export type SuggestionStatusValues = z.infer<typeof suggestionStatusSchema>;
+
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+const ACCEPTED_FILE_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+
+export const printRequestFormSchema = z.object({
+  file: z
+    .instanceof(File)
+    .refine((file) => file.size <= MAX_FILE_SIZE, 'Max file size is 5MB.')
+    .refine(
+      (file) => ACCEPTED_FILE_TYPES.includes(file.type),
+      'Only .pdf, .jpg, .png, and .webp formats are supported.'
+    ),
+  notes: z.string().max(200, 'Notes must be 200 characters or less.').optional(),
+});
+
+export type PrintRequestFormValues = z.infer<typeof printRequestFormSchema>;
