@@ -66,7 +66,7 @@ export default function SeatingPage() {
             Manage rooms and student seat assignments.
           </p>
         </div>
-        <Button onClick={() => setIsModalOpen(true)}>
+        <Button type="button" onClick={() => setIsModalOpen(true)}>
           <PlusCircle className="mr-2" />
           Create Room
         </Button>
@@ -96,7 +96,7 @@ export default function SeatingPage() {
           <div className="flex flex-col items-center justify-center gap-4 text-center py-10">
             <h3 className="text-xl font-semibold">No Rooms Found</h3>
             <p className="text-muted-foreground">Get started by creating your first room.</p>
-            <Button onClick={() => setIsModalOpen(true)}>
+            <Button type="button" onClick={() => setIsModalOpen(true)}>
               <PlusCircle className="mr-2" />
               Create Room
             </Button>

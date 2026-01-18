@@ -166,7 +166,7 @@ export default function StudentsPage() {
             View, add, edit, and manage all students in your library.
           </p>
         </div>
-        <Button onClick={() => openModal()}>
+        <Button type="button" onClick={() => openModal()}>
           <PlusCircle className="mr-2" />
           Add Student
         </Button>

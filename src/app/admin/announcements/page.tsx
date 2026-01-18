@@ -144,7 +144,7 @@ export default function AnnouncementsPage() {
             Create and manage global announcements for all users.
           </p>
         </div>
-        <Button onClick={openModal}>
+        <Button type="button" onClick={openModal}>
           <PlusCircle className="mr-2" />
           New Announcement
         </Button>

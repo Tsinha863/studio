@@ -301,7 +301,7 @@ export default function PaymentsPage() {
             Create monthly invoices and track student payments.
           </p>
         </div>
-        <Button onClick={handleCreatePayments} disabled={isCreating}>
+        <Button type="button" onClick={handleCreatePayments} disabled={isCreating}>
           {isCreating ? <Spinner className="mr-2" /> : <PlusCircle className="mr-2" />}
           {isCreating ? 'Creating...' : 'Create Monthly Payments'}
         </Button>

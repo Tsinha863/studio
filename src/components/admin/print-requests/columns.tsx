@@ -48,7 +48,7 @@ export const columns = ({ onStatusUpdate, processingId }: ColumnsConfig): Column
     accessorKey: 'fileName',
     header: 'File',
     cell: ({ row }) => (
-      <Button variant="link" asChild className="p-0 h-auto font-medium">
+      <Button type="button" variant="link" asChild className="p-0 h-auto font-medium">
         <a
           href={row.original.fileUrl}
           target="_blank"
@@ -97,6 +97,7 @@ export const columns = ({ onStatusUpdate, processingId }: ColumnsConfig): Column
             ) : (
                 <>
                     <Button
+                        type="button"
                         size="sm"
                         variant="outline"
                         onClick={() => onStatusUpdate(request.id, 'Approved')}
@@ -106,6 +107,7 @@ export const columns = ({ onStatusUpdate, processingId }: ColumnsConfig): Column
                         Approve
                     </Button>
                     <Button
+                        type="button"
                         size="sm"
                         variant="destructive"
                         onClick={() => onStatusUpdate(request.id, 'Rejected')}

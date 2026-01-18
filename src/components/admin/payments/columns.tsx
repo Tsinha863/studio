@@ -105,6 +105,7 @@ export const columns = ({ handleMarkAsPaid, isPaying }: ColumnsConfig): ColumnDe
 
       return (
         <Button
+          type="button"
           variant="outline"
           size="sm"
           onClick={() => handleMarkAsPaid(payment)}

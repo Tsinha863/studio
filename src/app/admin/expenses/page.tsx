@@ -144,7 +144,7 @@ export default function ExpensesPage() {
             Track and manage all library expenses.
           </p>
         </div>
-        <Button onClick={() => openModal()}>
+        <Button type="button" onClick={() => openModal()}>
           <PlusCircle className="mr-2" />
           Add Expense
         </Button>
