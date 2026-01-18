@@ -13,7 +13,10 @@ import {
   type ColumnFiltersState,
   type VisibilityState,
 } from '@tanstack/react-table';
+import { format } from 'date-fns';
+import { Calendar as CalendarIcon, X as ClearIcon } from 'lucide-react';
 
+import { cn } from '@/lib/utils';
 import {
   Table,
   TableBody,
@@ -26,6 +29,9 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
@@ -59,17 +65,62 @@ export function PaymentsDataTable<TData, TValue>({
     },
   });
 
+  const isFiltered = table.getState().columnFilters.length > 0;
+
+  const resetFilters = () => {
+    table.resetColumnFilters();
+  };
+
   return (
     <div className="space-y-4 p-4">
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-2">
         <Input
           placeholder="Filter by student name..."
           value={(table.getColumn('studentName')?.getFilterValue() as string) ?? ''}
           onChange={(event) =>
             table.getColumn('studentName')?.setFilterValue(event.target.value)
           }
-          className="max-w-sm"
+          className="h-10 max-w-sm"
         />
+        <Input
+          placeholder="Filter by seat..."
+          value={(table.getColumn('seatNumber')?.getFilterValue() as string) ?? ''}
+          onChange={(event) =>
+            table.getColumn('seatNumber')?.setFilterValue(event.target.value)
+          }
+          className="h-10 w-[150px]"
+        />
+        <Input
+          placeholder="Filter by amount..."
+          type="text"
+          value={(table.getColumn('amount')?.getFilterValue() as string) ?? ''}
+          onChange={(event) =>
+            table.getColumn('amount')?.setFilterValue(event.target.value)
+          }
+          className="h-10 w-[150px]"
+        />
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant={"outline"}
+              className={cn(
+                "h-10 w-[240px] justify-start text-left font-normal",
+                !table.getColumn('dueDate')?.getFilterValue() && "text-muted-foreground"
+              )}
+            >
+              <CalendarIcon className="mr-2 h-4 w-4" />
+              {table.getColumn('dueDate')?.getFilterValue() ? format(table.getColumn('dueDate')?.getFilterValue() as Date, "PPP") : <span>Filter by due date</span>}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="single"
+              selected={table.getColumn('dueDate')?.getFilterValue() as Date}
+              onSelect={(date) => table.getColumn('dueDate')?.setFilterValue(date)}
+              initialFocus
+            />
+          </PopoverContent>
+        </Popover>
         <Select
             value={(table.getColumn('status')?.getFilterValue() as string) ?? 'all'}
             onValueChange={(value) => {
@@ -77,7 +128,7 @@ export function PaymentsDataTable<TData, TValue>({
                 table.getColumn('status')?.setFilterValue(filterValue);
             }}
         >
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="h-10 w-[180px]">
                 <SelectValue placeholder="Filter by status" />
             </SelectTrigger>
             <SelectContent>
@@ -87,6 +138,12 @@ export function PaymentsDataTable<TData, TValue>({
                 <SelectItem value="overdue">Overdue</SelectItem>
             </SelectContent>
         </Select>
+        {isFiltered && (
+          <Button variant="ghost" onClick={resetFilters} className="h-10">
+            <ClearIcon className="mr-2 h-4 w-4" />
+            Reset
+          </Button>
+        )}
       </div>
       <div className="rounded-md border">
         <Table>

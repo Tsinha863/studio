@@ -2,6 +2,7 @@
 
 import { ColumnDef } from '@tanstack/react-table';
 import { format } from 'date-fns';
+import { Timestamp } from 'firebase/firestore';
 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -9,18 +10,30 @@ import type { Payment } from '@/lib/types';
 import { DataTableColumnHeader } from '@/components/admin/students/data-table-header';
 import { Spinner } from '@/components/spinner';
 
+// This type needs to match the one in `payments/page.tsx`
+type PaymentWithSeat = Payment & { seatNumber?: string | null, docId: string };
 
 type ColumnsConfig = {
-  handleMarkAsPaid: (payment: Payment) => void;
+  handleMarkAsPaid: (payment: PaymentWithSeat) => void;
   isPaying: string | false;
 };
 
-export const columns = ({ handleMarkAsPaid, isPaying }: ColumnsConfig): ColumnDef<Payment>[] => [
+export const columns = ({ handleMarkAsPaid, isPaying }: ColumnsConfig): ColumnDef<PaymentWithSeat>[] => [
   {
     accessorKey: 'studentName',
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Student" />
     ),
+  },
+  {
+    accessorKey: 'seatNumber',
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Seat" />
+    ),
+    cell: ({ row }) => {
+      const seat = row.original.seatNumber;
+      return seat ? <span>{seat}</span> : <span className="text-muted-foreground">N/A</span>;
+    },
   },
   {
     accessorKey: 'amount',
@@ -44,6 +57,15 @@ export const columns = ({ handleMarkAsPaid, isPaying }: ColumnsConfig): ColumnDe
     cell: ({ row }) => {
       const date = row.original.dueDate.toDate();
       return <span>{format(date, 'MMM d, yyyy')}</span>;
+    },
+    filterFn: (row, id, value) => {
+      if (!value) return true;
+      const rowDate = (row.getValue(id) as Timestamp).toDate();
+      const filterDate = value as Date;
+      // compare date part only
+      return rowDate.getFullYear() === filterDate.getFullYear() &&
+             rowDate.getMonth() === filterDate.getMonth() &&
+             rowDate.getDate() === filterDate.getDate();
     },
   },
     {

@@ -37,6 +37,10 @@ type ReceiptState = {
   studentName?: string;
 };
 
+// New type for payments with student seat details
+export type PaymentWithSeat = Payment & { seatNumber?: string | null, docId: string };
+
+
 export default function PaymentsPage() {
   const { toast } = useToast();
   const { firestore, user } = useFirebase();
@@ -52,7 +56,7 @@ export default function PaymentsPage() {
     );
   }, [firestore, user]);
 
-  // We also need student data to get the fibonacci streak for receipt generation
+  // We also need student data to get the fibonacci streak and seat number
   const studentsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students`);
@@ -61,9 +65,15 @@ export default function PaymentsPage() {
   const { data: payments, isLoading: isLoadingPayments } = useCollection<Omit<Payment, 'id'>>(paymentsQuery);
   const { data: students, isLoading: isLoadingStudents } = useCollection<Omit<Student, 'docId'>>(studentsQuery);
   
-  const paymentsWithDocId = React.useMemo(() => {
-    return payments?.map(p => ({ ...p, docId: p.id })) ?? [];
-  }, [payments]);
+  const paymentsWithDetails = React.useMemo(() => {
+    if (!payments || !students) return [];
+    const studentMap = new Map(students.map(s => [s.id, { fibonacciStreak: s.fibonacciStreak, status: s.status, seatNumber: s.assignedSeatId }]));
+    return payments.map(p => ({
+        ...p,
+        docId: p.id,
+        seatNumber: studentMap.get(p.studentId)?.seatNumber || null,
+    }));
+  }, [payments, students]);
 
   const handleCreatePayments = async () => {
     if (!user || !firestore) return;
@@ -88,7 +98,7 @@ export default function PaymentsPage() {
     }
   };
 
-  const handleMarkAsPaid = async (payment: Payment) => {
+  const handleMarkAsPaid = async (payment: PaymentWithSeat) => {
     if (!user || !firestore || !students) return;
     setIsPaying(payment.id);
 
@@ -165,7 +175,7 @@ export default function PaymentsPage() {
         <CardContent className="p-0">
           <PaymentsDataTable
             columns={memoizedColumns}
-            data={paymentsWithDocId}
+            data={paymentsWithDetails}
             isLoading={isLoadingPayments || isLoadingStudents}
           />
         </CardContent>
