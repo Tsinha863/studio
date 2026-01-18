@@ -37,6 +37,7 @@ import {
 } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 
 interface DataTableProps<TData, TValue> {
@@ -72,6 +73,14 @@ export function PaymentsDataTable<TData, TValue>({
   });
 
   const isFiltered = table.getState().columnFilters.length > 0;
+  const isMobile = useIsMobile();
+
+  React.useEffect(() => {
+    // Hide 'assignments' column on mobile for better readability
+    if (table.getColumn('assignments')) {
+        table.getColumn('assignments')?.toggleVisibility(!isMobile);
+    }
+  }, [isMobile, table]);
 
   const resetFilters = () => {
     table.resetColumnFilters();
@@ -79,14 +88,14 @@ export function PaymentsDataTable<TData, TValue>({
 
   return (
     <div className="space-y-4 p-4">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
         <Input
           placeholder="Filter by student name..."
           value={(table.getColumn('studentName')?.getFilterValue() as string) ?? ''}
           onChange={(event) =>
             table.getColumn('studentName')?.setFilterValue(event.target.value)
           }
-          className="h-10 max-w-sm"
+          className="h-10 w-full sm:max-w-sm"
         />
         <Popover>
           <PopoverTrigger asChild>
@@ -94,7 +103,7 @@ export function PaymentsDataTable<TData, TValue>({
               type="button"
               variant={"outline"}
               className={cn(
-                "h-10 w-[240px] justify-start text-left font-normal",
+                "h-10 w-full justify-start text-left font-normal sm:w-[240px]",
                 !table.getColumn('dueDate')?.getFilterValue() && "text-muted-foreground"
               )}
             >
@@ -117,7 +126,7 @@ export function PaymentsDataTable<TData, TValue>({
               type="button"
               variant={"outline"}
               className={cn(
-                "h-10 w-[240px] justify-start text-left font-normal",
+                "h-10 w-full justify-start text-left font-normal sm:w-[240px]",
                 !table.getColumn('paymentDate')?.getFilterValue() && "text-muted-foreground"
               )}
             >
@@ -141,7 +150,7 @@ export function PaymentsDataTable<TData, TValue>({
                 table.getColumn('status')?.setFilterValue(filterValue);
             }}
         >
-            <SelectTrigger className="h-10 w-[180px]">
+            <SelectTrigger className="h-10 w-full sm:w-[180px]">
                 <SelectValue placeholder="Filter by status" />
             </SelectTrigger>
             <SelectContent>
@@ -152,7 +161,7 @@ export function PaymentsDataTable<TData, TValue>({
             </SelectContent>
         </Select>
         {isFiltered && (
-          <Button variant="ghost" onClick={resetFilters} className="h-10" type="button">
+          <Button variant="ghost" onClick={resetFilters} className="h-10 w-full sm:w-auto" type="button">
             <ClearIcon className="mr-2 h-4 w-4" />
             Reset
           </Button>
