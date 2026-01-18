@@ -220,7 +220,7 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-screen w-full">
       <div className="relative flex w-full flex-col items-center justify-center p-4 lg:w-1/2">
-        <Link href="/" className="absolute top-8 left-8">
+        <Link href="/" className="absolute top-4 left-4 sm:top-8 sm:left-8">
           <Button variant="ghost">
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Welcome

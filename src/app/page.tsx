@@ -56,9 +56,9 @@ export default function WelcomePage() {
       {/* Main Content */}
       <main className="flex-1">
         {/* Hero Section */}
-        <section className="py-24 sm:py-32 lg:py-40">
+        <section className="py-20 sm:py-24 lg:py-32">
           <div className="container text-center">
-            <h1 className="text-4xl font-bold tracking-tighter sm:text-6xl lg:text-7xl font-headline">
+            <h1 className="text-4xl font-bold tracking-tighter sm:text-5xl md:text-6xl lg:text-7xl font-headline">
               Your Campus, Organized.
             </h1>
             <p className="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground">
@@ -95,10 +95,10 @@ export default function WelcomePage() {
 
 
         {/* Features Section */}
-        <section className="py-24 sm:py-32">
+        <section className="py-20 sm:py-24 lg:py-32">
           <div className="container">
             <div className="mx-auto mb-16 max-w-2xl text-center">
-              <h2 className="text-3xl font-bold tracking-tight sm:text-4xl font-headline">
+              <h2 className="text-3xl font-bold tracking-tight sm:text-4xl font-headline text-balance">
                 Everything you need. All in one place.
               </h2>
               <p className="mt-4 text-lg text-muted-foreground">
@@ -126,9 +126,9 @@ export default function WelcomePage() {
         </section>
 
         {/* Call to Action Section */}
-        <section className="py-24 bg-card border-t">
+        <section className="py-20 sm:py-24 lg:py-32 bg-card border-t">
           <div className="container text-center">
-            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl font-headline">
+            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl font-headline text-balance">
               Ready to transform your library management?
             </h2>
             <p className="mx-auto mt-4 max-w-xl text-lg text-muted-foreground">

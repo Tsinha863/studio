@@ -47,7 +47,7 @@ export default function SeatingPage() {
 
   return (
     <div className="flex flex-col gap-6">
-       <div className="flex items-center justify-between">
+       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight font-headline">
             Seat Management
@@ -80,7 +80,7 @@ export default function SeatingPage() {
             </div>
         ) : rooms && rooms.length > 0 ? (
           <Tabs defaultValue={rooms[0].id} className="w-full">
-            <TabsList className="grid w-full grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4">
               {rooms.map(room => (
                 <TabsTrigger key={room.id} value={room.id}>{room.name}</TabsTrigger>
               ))}

@@ -62,7 +62,7 @@ export function StudentDataTable<TData, TValue>({
 
   return (
     <div className="space-y-4 p-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-between">
         <Input
           placeholder="Filter by name or email..."
           value={(table.getColumn('name')?.getFilterValue() as string) ?? ''}

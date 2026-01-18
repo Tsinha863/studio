@@ -91,7 +91,7 @@ export function SeatingPlan({ libraryId, roomId }: SeatingPlanProps) {
 
   if (isLoadingSeats) {
     return (
-        <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-4">
+        <div className="grid grid-cols-4 gap-2 sm:grid-cols-8 sm:gap-4 md:grid-cols-10 lg:grid-cols-12">
             {Array.from({ length: 20 }).map((_, i) => (
                 <Skeleton key={i} className="h-14 w-14 rounded-md" />
             ))}
@@ -114,7 +114,7 @@ export function SeatingPlan({ libraryId, roomId }: SeatingPlanProps) {
         </TabsList>
       </Tabs>
 
-      <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-4">
+      <div className="grid grid-cols-4 gap-2 sm:grid-cols-8 sm:gap-4 md:grid-cols-10 lg:grid-cols-12">
         {sortedSeats.map((seat) => {
            const isAssignedForCurrentSlot = displayMode !== 'fullDay' && seat.assignments?.[displayMode];
            const isAssignedAtAll = seat.assignments?.morning || seat.assignments?.afternoon || seat.assignments?.night;
