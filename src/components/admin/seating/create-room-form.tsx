@@ -1,12 +1,17 @@
 'use client';
 
 import * as React from 'react';
+import {
+  doc,
+  collection,
+  serverTimestamp,
+  writeBatch,
+} from 'firebase/firestore';
 import { useFirebase } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { roomFormSchema, type RoomFormValues } from '@/lib/schemas';
-import { createRoomAndSeats } from '@/lib/actions/seating';
 import { Spinner } from '@/components/spinner';
 import { Label } from '@/components/ui/label';
 
@@ -27,7 +32,20 @@ export function CreateRoomForm({ libraryId, onSuccess, onCancel }: CreateRoomFor
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log("CREATE ROOM CLICKED");
+
+    if (!user || !firestore) {
+      toast({
+        variant: 'destructive',
+        title: 'Authentication Error',
+        description: 'User not authenticated or library not ready. Please try again.',
+      });
+      console.error("Auth check failed:", { user, firestore });
+      return;
+    }
+
     setErrors({});
+    setIsSubmitting(true);
 
     const data = {
       name,
@@ -42,33 +60,70 @@ export function CreateRoomForm({ libraryId, onSuccess, onCancel }: CreateRoomFor
         newErrors[path] = err.message;
       });
       setErrors(newErrors);
+      setIsSubmitting(false);
       return;
     }
-
-    if (!user || !firestore) {
-      toast({
-        variant: 'destructive',
-        title: 'Authentication Error',
-        description: 'You must be logged in to create a room.',
-      });
-      return;
-    }
-
-    setIsSubmitting(true);
     
-    const actor = { id: user.uid, name: user.displayName || 'Admin' };
-    const result = await createRoomAndSeats(firestore, libraryId, validation.data, actor);
+    try {
+      const actor = { id: user.uid, name: user.displayName || 'Admin' };
+      const batch = writeBatch(firestore);
 
-    setIsSubmitting(false);
+      // 1. Create the room document
+      const roomRef = doc(collection(firestore, `libraries/${libraryId}/rooms`));
+      batch.set(roomRef, {
+        ...validation.data,
+        libraryId,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
 
-    if (result.success) {
+      // 2. Create the seat documents within the room's subcollection
+      const seatsColRef = collection(firestore, `libraries/${libraryId}/rooms/${roomRef.id}/seats`);
+      for (let i = 1; i <= validation.data.capacity; i++) {
+        const seatRef = doc(seatsColRef);
+        batch.set(seatRef, {
+          seatNumber: i.toString(),
+          roomId: roomRef.id,
+          libraryId,
+          tier: 'standard', // Default tier
+          studentId: null,
+          studentName: null,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
+
+      // 3. Create activity log
+      const logRef = doc(collection(firestore, `libraries/${libraryId}/activityLogs`));
+      batch.set(logRef, {
+        libraryId,
+        user: actor,
+        activityType: 'room_created',
+        details: {
+          roomId: roomRef.id,
+          name: validation.data.name,
+          capacity: validation.data.capacity,
+        },
+        timestamp: serverTimestamp(),
+      });
+
+      await batch.commit();
+
+      toast({
+        title: 'Room Created',
+        description: 'The new room and its seats have been created.',
+      });
       onSuccess();
-    } else {
+
+    } catch (error) {
+      console.error("CREATE ROOM ERROR:", error);
       toast({
         variant: 'destructive',
-        title: 'An error occurred',
-        description: result.error || 'The operation failed. Please try again.',
+        title: 'Failed to Create Room',
+        description: error instanceof Error ? error.message : 'An unknown error occurred.',
       });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
