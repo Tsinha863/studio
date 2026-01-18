@@ -88,7 +88,7 @@
       "properties": {
         "id": {
           "type": "string",
-          "description": "Unique identifier for the Student entity."
+          "description": "Custom unique identifier for the Student entity."
         },
         "libraryId": {
           "type": "string",
@@ -96,15 +96,29 @@
         },
         "userId": {
           "type": "string",
-          "description": "Reference to User. (Relationship: User 1:1 Student).  Links to the user account for the student."
+          "description": "Reference to User. (Optional, Relationship: User 1:1 Student). Links to the user account for the student."
         },
         "name": {
           "type": "string",
           "description": "Name of the student."
         },
-        "major": {
+        "email": {
           "type": "string",
-          "description": "Major of the student."
+          "description": "Contact email of the student.",
+          "format": "email"
+        },
+        "assignedSeatId": {
+          "type": "string",
+          "description": "The ID of the seat assigned to the student."
+        },
+        "paymentStatus": {
+          "type": "string",
+          "description": "The current payment status of the student.",
+          "enum": [
+            "paid",
+            "pending",
+            "overdue"
+          ]
         },
         "paymentDue": {
           "type": "number",
@@ -116,20 +130,21 @@
         },
         "createdAt": {
           "type": "string",
-          "description": "Timestamp indicating when the student was created.",
+          "description": "Timestamp indicating when the student record was created.",
           "format": "date-time"
         },
         "updatedAt": {
           "type": "string",
-          "description": "Timestamp indicating when the student was last updated.",
+          "description": "Timestamp indicating when the student record was last updated.",
           "format": "date-time"
         }
       },
       "required": [
         "id",
         "libraryId",
-        "userId",
         "name",
+        "email",
+        "paymentStatus",
         "createdAt",
         "updatedAt"
       ]
@@ -424,7 +439,7 @@
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "ActivityLog",
       "type": "object",
-      "description": "Represents an activity log entry.",
+      "description": "Represents an activity log entry, typically created by a server-side process in response to user actions.",
       "properties": {
         "id": {
           "type": "string",
@@ -432,39 +447,47 @@
         },
         "libraryId": {
           "type": "string",
-          "description": "Reference to Library. (Relationship: Library 1:N ActivityLog). Identifies the library to which the activity log belongs."
+          "description": "Reference to Library. Identifies the library to which the activity log belongs."
         },
-        "userId": {
-          "type": "string",
-          "description": "Reference to User.  Identifies the user who performed the activity."
+        "user": {
+          "type": "object",
+          "description": "Denormalized information about the user who performed the activity.",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "The UID of the user."
+            },
+            "name": {
+              "type": "string",
+              "description": "The name of the user at the time of the activity."
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ]
         },
         "activityType": {
           "type": "string",
-          "description": "Type of activity (e.g., 'login', 'payment', 'seat assignment')."
+          "description": "A specific type for the activity (e.g., 'student_created', 'payment_processed')."
         },
-        "description": {
-          "type": "string",
-          "description": "Description of the activity."
+        "details": {
+          "type": "object",
+          "description": "A flexible object containing relevant details about the log entry.",
+          "properties": {}
         },
-        "createdAt": {
+        "timestamp": {
           "type": "string",
-          "description": "Timestamp indicating when the activity log was created.",
-          "format": "date-time"
-        },
-        "updatedAt": {
-          "type": "string",
-          "description": "Timestamp indicating when the activity log was last updated.",
+          "description": "The server-side timestamp of when the activity occurred.",
           "format": "date-time"
         }
       },
       "required": [
         "id",
         "libraryId",
-        "userId",
+        "user",
         "activityType",
-        "description",
-        "createdAt",
-        "updatedAt"
+        "timestamp"
       ]
     }
   },

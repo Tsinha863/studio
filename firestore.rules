@@ -252,16 +252,16 @@ service cloud.firestore {
     }
 
     /**
-     * @description Activity logs. Read-only for admins. No client writes allowed.
+     * @description Activity logs. Read-only for admins. Admins can create new log entries.
      * @path /libraries/{libraryId}/activityLogs/{logId}
-     * @allow (get, list) An admin of the library.
-     * @deny (create, update, delete) Any user. Logs should only be created by a trusted server environment.
-     * @principle Protects audit trail integrity by making it immutable from the client-side.
+     * @allow (get, list, create) An admin of the library.
+     * @deny (update, delete) Any user. Logs are immutable.
+     * @principle Protects audit trail integrity by making logs append-only for admins.
      */
     match /libraries/{libraryId}/activityLogs/{logId} {
       allow get: if isAdmin(libraryId);
       allow list: if isAdmin(libraryId);
-      allow create: if false;
+      allow create: if isAdmin(libraryId);
       allow update: if false;
       allow delete: if false;
     }

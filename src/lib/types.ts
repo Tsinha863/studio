@@ -1,3 +1,5 @@
+import { Timestamp } from "firebase/firestore";
+
 export interface User {
   id: string;
   libraryId: string;
@@ -12,15 +14,17 @@ export interface User {
 }
 
 export interface Student {
-  id: string;
+  id: string; // Custom ID
+  docId?: string; // Firestore document ID
   libraryId: string;
+  userId?: string; // Optional link to a User account
   name: string;
   email: string;
   status: 'active' | 'inactive' | 'graduated';
-  fibonacciStreak: number;
+  paymentStatus: 'paid' | 'pending' | 'overdue';
   assignedSeatId?: string;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
 }
 
 export interface Payment {
@@ -85,13 +89,13 @@ export interface Suggestion {
 }
 
 export interface ActivityLog {
-  id: string;
+  id?: string;
   libraryId: string;
-  action: string;
+  activityType: string;
   user: {
     id: string;
     name: string;
   };
-  timestamp: Date;
+  timestamp: Timestamp;
   details: Record<string, any>;
 }
