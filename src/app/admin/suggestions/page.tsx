@@ -70,7 +70,6 @@ export default function SuggestionsPage() {
     const studentMap = new Map(students.map((s) => [s.id, s.name]));
     return suggestions.map((s) => ({
       ...s,
-      docId: s.id,
       studentName: studentMap.get(s.studentId) || 'Unknown Student',
     }));
   }, [suggestions, students]);

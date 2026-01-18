@@ -71,15 +71,11 @@ export default function AnnouncementsPage() {
 
   const { data: announcements, isLoading } = useCollection<Omit<Announcement, 'id'>>(announcementsQuery);
 
-  const announcementsWithDocId = React.useMemo(() => {
-    return announcements?.map((a) => ({ ...a, docId: a.id })) ?? [];
-  }, [announcements]);
-
   const openModal = () => setModalState({ isOpen: true });
   const closeModal = () => setModalState({ isOpen: false });
 
   const openDeleteAlert = (announcement: Announcement) =>
-    setAlertState({ isOpen: true, announcementId: announcement.docId });
+    setAlertState({ isOpen: true, announcementId: announcement.id });
   const closeDeleteAlert = () =>
     setAlertState({ isOpen: false, announcementId: undefined });
 
@@ -153,7 +149,7 @@ export default function AnnouncementsPage() {
         <CardContent className="p-0">
           <AnnouncementsDataTable
             columns={memoizedColumns}
-            data={announcementsWithDocId}
+            data={announcements || []}
             isLoading={isLoading}
           />
         </CardContent>
