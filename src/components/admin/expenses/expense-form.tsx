@@ -167,7 +167,7 @@ export function ExpenseForm({ expense, libraryId, onSuccess, onCancel }: Expense
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="amount">Amount (₹)</Label>
+        <Label htmlFor="amount">Amount (INR)</Label>
         <Input
           id="amount"
           type="number"

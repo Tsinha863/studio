@@ -26,7 +26,6 @@ import {
   CardDescription,
 } from '@/components/ui/card';
 import type { Payment, Student, Expense, ActivityLog } from '@/lib/types';
-import { kpiData as staticKpiData } from '@/lib/dummy-data';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const IncomeExpenseChart = dynamic(() => import('@/components/admin/dashboard/income-expense-chart').then(mod => mod.IncomeExpenseChart), { 
@@ -93,11 +92,13 @@ export default function DashboardPage() {
       );
   }, [firestore, user]);
 
-  const { data: allStudents } = useCollection<Student>(allStudentsQuery);
+  const { data: allStudents, isLoading: isLoadingAllStudents } = useCollection<Student>(allStudentsQuery);
   const { data: recentStudents } = useCollection<Student>(recentStudentsQuery);
   const { data: activityLogs } = useCollection<ActivityLog>(activityQuery);
-  const { data: payments } = useCollection<Payment>(paymentsQuery);
-  const { data: expenses } = useCollection<Expense>(expensesQuery);
+  const { data: payments, isLoading: isLoadingPayments } = useCollection<Payment>(paymentsQuery);
+  const { data: expenses, isLoading: isLoadingExpenses } = useCollection<Expense>(expensesQuery);
+
+  const isKpiLoading = isLoadingPayments || isLoadingExpenses || isLoadingAllStudents;
 
   // --- Data Processing for Charts & KPIs ---
   const incomeExpenseData = React.useMemo(() => {
@@ -161,24 +162,28 @@ export default function DashboardPage() {
           value={new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(totalRevenue)}
           change="last 6 months"
           icon={<IndianRupee />}
+          isLoading={isKpiLoading}
         />
         <KpiCard
           title="Total Expenses"
           value={new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(totalExpenses)}
           change="last 6 months"
           icon={<CreditCard />}
+          isLoading={isKpiLoading}
         />
         <KpiCard
           title="Active Students"
           value={`${activeStudentCount}`}
           change={`${allStudents?.filter(s => s.status === 'at-risk').length || 0} at-risk`}
           icon={<Users />}
+          isLoading={isKpiLoading}
         />
         <KpiCard
           title="New Students"
           value={`+${newStudentsThisMonth}`}
           change="this month"
           icon={<Activity />}
+          isLoading={isKpiLoading}
         />
       </div>
 
