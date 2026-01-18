@@ -167,14 +167,28 @@
           "type": "string",
           "description": "Reference to Student. (Relationship: Student 1:N Payment). Identifies the student who made the payment."
         },
+        "studentName": {
+          "type": "string",
+          "description": "Denormalized name of the student for easier display."
+        },
         "amount": {
           "type": "number",
           "description": "Amount of the payment."
         },
-        "date": {
+        "paymentDate": {
           "type": "string",
-          "description": "Date of the payment.",
+          "description": "Date the payment was made.",
           "format": "date-time"
+        },
+        "dueDate": {
+          "type": "string",
+          "description": "Date the payment is due.",
+          "format": "date-time"
+        },
+        "status": {
+          "type": "string",
+          "description": "Status of the payment.",
+          "enum": ["paid", "pending", "overdue"]
         },
         "method": {
           "type": "string",
@@ -195,9 +209,10 @@
         "id",
         "libraryId",
         "studentId",
+        "studentName",
         "amount",
-        "date",
-        "method",
+        "dueDate",
+        "status",
         "createdAt",
         "updatedAt"
       ]
@@ -218,13 +233,14 @@
         },
         "category": {
           "type": "string",
-          "description": "Category of the expense (e.g., 'rent', 'utilities', 'supplies')."
+          "description": "Category of the expense.",
+          "enum": ["rent", "utilities", "supplies", "salaries", "other"]
         },
         "amount": {
           "type": "number",
           "description": "Amount of the expense."
         },
-        "date": {
+        "expenseDate": {
           "type": "string",
           "description": "Date of the expense.",
           "format": "date-time"
@@ -249,7 +265,7 @@
         "libraryId",
         "category",
         "amount",
-        "date",
+        "expenseDate",
         "createdAt",
         "updatedAt"
       ]

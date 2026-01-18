@@ -9,8 +9,8 @@ export interface User {
     email: string;
     avatarUrl?: string;
   };
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
 }
 
 export interface Student {
@@ -23,38 +23,45 @@ export interface Student {
   status: 'active' | 'inactive' | 'graduated';
   paymentStatus: 'paid' | 'pending' | 'overdue';
   assignedSeatId?: string;
+  fibonacciStreak: number;
+  paymentDue: number;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
 
 export interface Payment {
-  id: string;
+  id: string; // Firestore document ID
   libraryId: string;
-  studentId: string;
+  studentId: string; // The custom student ID
+  studentName: string;
   amount: number;
-  paymentDate: Date;
+  paymentDate: Timestamp | null; // Null if not paid
+  dueDate: Timestamp;
   status: 'paid' | 'pending' | 'overdue';
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
 }
 
+export type ExpenseCategory = 'rent' | 'utilities' | 'supplies' | 'salaries' | 'other';
+
 export interface Expense {
-  id: string;
+  id: string; // Firestore document ID
+  docId?: string; // Firestore document ID
   libraryId: string;
   description: string;
   amount: number;
-  category: 'utilities' | 'supplies' | 'maintenance' | 'staff' | 'other';
-  expenseDate: Date;
-  createdAt: Date;
-  updatedAt: Date;
+  category: ExpenseCategory;
+  expenseDate: Timestamp;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
 }
 
 export interface Room {
   id: string;
   libraryId: string;
   name: string;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
 }
 
 export interface Seat {
@@ -65,8 +72,8 @@ export interface Seat {
   tier: 'basic' | 'standard' | 'premium';
   assignedStudentId?: string;
   timeSlot?: string;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
 }
 
 export interface Announcement {
@@ -74,8 +81,8 @@ export interface Announcement {
   libraryId: string;
   title: string;
   content: string;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
 }
 
 export interface Suggestion {
@@ -84,8 +91,8 @@ export interface Suggestion {
   studentId: string;
   content: string;
   status: 'new' | 'viewed' | 'in-progress' | 'resolved' | 'closed';
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
 }
 
 export interface ActivityLog {

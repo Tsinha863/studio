@@ -7,6 +7,30 @@ interface ActivityFeedProps {
   logs: ActivityLog[];
 }
 
+function formatActivity(log: ActivityLog): string {
+    const userName = <span className="font-semibold">{log.user.name}</span>;
+    switch (log.activityType) {
+        case 'student_created':
+            return `${userName} created student ${log.details.studentName}.`;
+        case 'student_updated':
+            return `${userName} updated student ${log.details.studentName}.`;
+        case 'student_deleted':
+            return `${userName} deleted student with ID ${log.details.studentId}.`;
+        case 'payment_processed':
+            return `${userName} processed a payment of ₹${log.details.amount} for ${log.details.studentName}.`;
+        case 'monthly_payments_created':
+            return `${userName} created ${log.details.count} monthly invoices.`;
+        case 'expense_created':
+            return `${userName} recorded an expense of ₹${log.details.amount} for ${log.details.category}.`;
+        case 'expense_updated':
+            return `${userName} updated an expense record (ID: ${log.details.expenseId}).`;
+        case 'expense_deleted':
+            return `${userName} deleted an expense record (ID: ${log.details.expenseId}).`;
+        default:
+            return `${userName} performed an action: ${log.activityType}.`;
+    }
+}
+
 export function ActivityFeed({ logs }: ActivityFeedProps) {
   const userAvatar = PlaceHolderImages.find((p) => p.id === 'user-avatar');
 
@@ -19,14 +43,9 @@ export function ActivityFeed({ logs }: ActivityFeedProps) {
             <AvatarFallback>{log.user.name.charAt(0)}</AvatarFallback>
           </Avatar>
           <div className="grid gap-1">
-            <p className="text-sm font-medium leading-none">
-              <span className="font-semibold">{log.user.name}</span> {log.action.toLowerCase()}
-              {log.details.studentName && <span className="font-semibold"> {log.details.studentName}</span>}
-              {log.details.amount && <span className="text-muted-foreground"> for {log.details.amount}</span>}
-              .
-            </p>
+            <p className="text-sm font-medium leading-none" dangerouslySetInnerHTML={{ __html: formatActivity(log) }} />
             <p className="text-sm text-muted-foreground">
-              {formatDistanceToNow(new Date(log.timestamp), { addSuffix: true })}
+              {formatDistanceToNow(log.timestamp.toDate(), { addSuffix: true })}
             </p>
           </div>
         </div>

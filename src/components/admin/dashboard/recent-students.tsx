@@ -54,12 +54,12 @@ export function RecentStudents({ students }: RecentStudentsProps) {
                 </div>
               </TableCell>
               <TableCell>
-                <Badge variant={student.status === 'active' ? 'success' : 'secondary'}>
-                  {student.status}
+                <Badge variant={student.paymentStatus === 'paid' ? 'success' : student.paymentStatus === 'pending' ? 'secondary' : 'destructive'}>
+                  {student.paymentStatus}
                 </Badge>
               </TableCell>
               <TableCell className="text-right">
-                {formatDistanceToNow(new Date(student.createdAt), {
+                {formatDistanceToNow(student.createdAt.toDate(), {
                   addSuffix: true,
                 })}
               </TableCell>

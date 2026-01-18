@@ -1,17 +1,177 @@
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+'use client';
+
+import * as React from 'react';
+import { HandCoins, PlusCircle } from 'lucide-react';
+import {
+  collection,
+  query,
+  orderBy,
+} from 'firebase/firestore';
+
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { useToast } from '@/hooks/use-toast';
+import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
+import type { Payment, Student } from '@/lib/types';
+import {
+  createMonthlyPayments,
+  markPaymentAsPaid,
+} from '@/lib/actions/payments';
+import { generateSimulatedReceipt } from '@/ai/flows/generate-simulated-receipt';
+
+import { columns as paymentColumns } from '@/components/admin/payments/columns';
+import { PaymentsDataTable } from '@/components/admin/payments/data-table';
+import { ReceiptDialog } from '@/components/receipt-dialog';
+
+// TODO: Replace with actual logged-in user's library
+const HARDCODED_LIBRARY_ID = 'library1';
+
+type ReceiptState = {
+  isOpen: boolean;
+  receiptText?: string;
+  studentName?: string;
+};
 
 export default function PaymentsPage() {
+  const { toast } = useToast();
+  const { firestore, user } = useFirebase();
+  const [isCreating, setIsCreating] = React.useState(false);
+  const [isPaying, setIsPaying] = React.useState<string | false>(false);
+  const [receiptState, setReceiptState] = React.useState<ReceiptState>({ isOpen: false });
+
+  const paymentsQuery = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return query(
+      collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/payments`),
+      orderBy('dueDate', 'desc')
+    );
+  }, [firestore]);
+
+  // We also need student data to get the fibonacci streak for receipt generation
+  const studentsQuery = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students`);
+  }, [firestore]);
+
+  const { data: payments, isLoading: isLoadingPayments } = useCollection<Omit<Payment, 'id'>>(paymentsQuery);
+  const { data: students, isLoading: isLoadingStudents } = useCollection<Omit<Student, 'docId'>>(studentsQuery);
+  
+  const paymentsWithDocId = React.useMemo(() => {
+    return payments?.map(p => ({ ...p, docId: p.id })) ?? [];
+  }, [payments]);
+
+  const handleCreatePayments = async () => {
+    if (!user || !firestore) return;
+    setIsCreating(true);
+    const result = await createMonthlyPayments(firestore, HARDCODED_LIBRARY_ID, {
+      id: user.uid,
+      name: user.displayName || 'Admin',
+    });
+    setIsCreating(false);
+
+    if (result.success) {
+      toast({
+        title: 'Payments Created',
+        description: 'Monthly payment records have been generated for active students.',
+      });
+    } else {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: result.error || 'Could not create payments.',
+      });
+    }
+  };
+
+  const handleMarkAsPaid = async (payment: Payment) => {
+    if (!user || !firestore || !students) return;
+    setIsPaying(payment.id);
+
+    const result = await markPaymentAsPaid(
+      firestore,
+      HARDCODED_LIBRARY_ID,
+      payment.id,
+      payment.studentId,
+      { id: user.uid, name: user.displayName || 'Admin' }
+    );
+
+    if (result.success) {
+      toast({
+        title: 'Payment Confirmed',
+        description: `${payment.studentName}'s payment of ₹${payment.amount} has been recorded.`,
+      });
+
+      // Find student to get their data for receipt
+      const student = students.find(s => s.id === payment.studentId);
+      if (student) {
+          const receiptInput = {
+              studentName: student.name,
+              paymentAmount: payment.amount,
+              paymentDate: new Date().toISOString().split('T')[0],
+              fibonacciStreak: (student.fibonacciStreak || 0) + 1, // Reflects the new streak
+              studentStatus: student.status,
+              paymentId: payment.id,
+          };
+          
+          try {
+              const { receiptText } = await generateSimulatedReceipt(receiptInput);
+              setReceiptState({ isOpen: true, receiptText, studentName: student.name });
+          } catch (e) {
+              console.error("Receipt generation failed:", e);
+              toast({
+                  variant: "destructive",
+                  title: "Receipt Generation Failed",
+                  description: "Could not generate AI receipt, but payment was recorded."
+              })
+          }
+      }
+
+    } else {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: result.error || 'Could not process payment.',
+      });
+    }
+    setIsPaying(false);
+  };
+  
+  const closeReceiptDialog = () => setReceiptState({ isOpen: false });
+
+  const memoizedColumns = React.useMemo(() => paymentColumns({ handleMarkAsPaid, isPaying }), [isPaying]);
+
   return (
     <div className="flex flex-col gap-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight font-headline">
+            Payment Management
+          </h1>
+          <p className="text-muted-foreground">
+            Create monthly invoices and track student payments.
+          </p>
+        </div>
+        <Button onClick={handleCreatePayments} disabled={isCreating}>
+          <PlusCircle className="mr-2" />
+          {isCreating ? 'Creating...' : 'Create Monthly Payments'}
+        </Button>
+      </div>
       <Card>
-        <CardHeader>
-          <CardTitle>Payments</CardTitle>
-          <CardDescription>Manage your payments here.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p>Payment management interface coming soon.</p>
+        <CardContent className="p-0">
+          <PaymentsDataTable
+            columns={memoizedColumns}
+            data={paymentsWithDocId}
+            isLoading={isLoadingPayments || isLoadingStudents}
+          />
         </CardContent>
       </Card>
+      
+      <ReceiptDialog
+        isOpen={receiptState.isOpen}
+        onClose={closeReceiptDialog}
+        receiptText={receiptState.receiptText}
+        studentName={receiptState.studentName}
+      />
     </div>
   );
 }
