@@ -27,3 +27,16 @@ export const roomFormSchema = z.object({
 });
 
 export type RoomFormValues = z.infer<typeof roomFormSchema>;
+
+export const announcementFormSchema = z.object({
+  title: z.string().min(3, 'Title must be at least 3 characters.'),
+  content: z.string().min(10, 'Content must be at least 10 characters.'),
+});
+
+export type AnnouncementFormValues = z.infer<typeof announcementFormSchema>;
+
+export const suggestionStatusSchema = z.object({
+    status: z.enum(['new', 'viewed', 'in-progress', 'resolved', 'closed']),
+});
+
+export type SuggestionStatusValues = z.infer<typeof suggestionStatusSchema>;

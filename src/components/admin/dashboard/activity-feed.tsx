@@ -32,6 +32,14 @@ function formatActivity(log: ActivityLog): string {
             return `${userName} assigned seat ${log.details.seatNumber} to ${log.details.studentName}.`;
         case 'seat_unassigned':
             return `${userName} unassigned seat ${log.details.seatNumber}.`;
+        case 'announcement_created':
+            return `${userName} created an announcement: "${log.details.title}".`;
+        case 'announcement_deleted':
+            return `${userName} deleted an announcement (ID: ${log.details.announcementId}).`;
+        case 'suggestion_status_updated':
+            return `${userName} updated a suggestion's status to ${log.details.newStatus}.`;
+        case 'suggestion_deleted':
+            return `${userName} deleted a suggestion (ID: ${log.details.suggestionId}).`;
         default:
             return `${userName} performed an action: ${log.activityType}.`;
     }

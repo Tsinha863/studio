@@ -437,7 +437,14 @@
         },
         "status": {
           "type": "string",
-          "description": "Status of the suggestion (e.g., 'new', 'in progress', 'completed')."
+          "description": "Status of the suggestion.",
+          "enum": [
+            "new",
+            "viewed",
+            "in-progress",
+            "resolved",
+            "closed"
+          ]
         },
         "createdAt": {
           "type": "string",
