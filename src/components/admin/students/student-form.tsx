@@ -1,6 +1,13 @@
 'use client';
 
 import * as React from 'react';
+import {
+  doc,
+  collection,
+  serverTimestamp,
+  writeBatch,
+  getDoc
+} from 'firebase/firestore';
 import { useFirebase } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,7 +21,6 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import type { Student } from '@/lib/types';
 import { studentFormSchema, type StudentFormValues } from '@/lib/schemas';
-import { addStudent, updateStudent } from '@/lib/actions/students';
 import { Spinner } from '@/components/spinner';
 import { Label } from '@/components/ui/label';
 
@@ -51,11 +57,19 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
   }, [student]);
 
   const handleSubmit = async () => {
+    if (!firestore || !user) {
+      toast({
+        variant: 'destructive',
+        title: 'Authentication Error',
+        description: 'You must be logged in to manage students.',
+      });
+      return;
+    }
+
     setErrors({});
     setIsSubmitting(true);
 
     const data = { id: studentId, name, email, status };
-    
     const schema = student ? studentFormSchema.omit({ id: true }) : studentFormSchema;
     const validation = schema.safeParse(data);
 
@@ -70,42 +84,70 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
       return;
     }
 
-    if (!firestore || !user) {
-      toast({
-        variant: 'destructive',
-        title: 'Authentication Error',
-        description: 'You must be logged in to manage students.',
-      });
-      setIsSubmitting(false);
-      return;
-    }
-
     try {
         const actor = { id: user.uid, name: user.displayName || 'Admin' };
-        let result;
-        const validatedData = validation.data;
+        const batch = writeBatch(firestore);
+        
+        if (student?.docId) { // This is an existing student
+            const studentRef = doc(firestore, `libraries/${libraryId}/students/${student.docId}`);
+            batch.update(studentRef, {
+              ...validation.data,
+              lastInteractionAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            });
+        
+            const logRef = doc(collection(firestore, `libraries/${libraryId}/activityLogs`));
+            batch.set(logRef, {
+              libraryId,
+              user: actor,
+              activityType: 'student_updated',
+              details: { studentId: student.docId, studentName: validation.data.name || 'N/A' },
+              timestamp: serverTimestamp(),
+            });
+        } else { // This is a new student
+            const validatedData = validation.data as StudentFormValues;
+            const newStudentRef = doc(firestore, `libraries/${libraryId}/students`, validatedData.id);
 
-        if (student?.docId) {
-            result = await updateStudent(firestore, libraryId, student.docId, validatedData, actor);
-        } else {
-            result = await addStudent(firestore, libraryId, validatedData as StudentFormValues, actor);
-        }
+            // Check if a student with this ID already exists
+            const existingDoc = await getDoc(newStudentRef);
+            if (existingDoc.exists()) {
+              throw new Error(`A student with ID ${validatedData.id} already exists.`);
+            }
 
-        if (result.success) {
-            onSuccess();
-        } else {
-            toast({
-                variant: 'destructive',
-                title: 'An error occurred',
-                description: result.error || 'The operation failed. Please try again.',
+            batch.set(newStudentRef, {
+                ...validatedData,
+                id: validatedData.id,
+                libraryId,
+                fibonacciStreak: 0,
+                paymentDue: 0,
+                notes: [],
+                tags: [],
+                assignedSeatId: null,
+                assignedRoomId: null,
+                assignedSeatLabel: null,
+                lastInteractionAt: serverTimestamp(),
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+            });
+        
+            const logRef = doc(collection(firestore, `libraries/${libraryId}/activityLogs`));
+            batch.set(logRef, {
+                libraryId,
+                user: actor,
+                activityType: 'student_created',
+                details: { studentId: validatedData.id, studentName: validatedData.name },
+                timestamp: serverTimestamp(),
             });
         }
+
+        await batch.commit();
+        onSuccess();
     } catch (error) {
         console.error("Student form submission error:", error);
         toast({
             variant: "destructive",
             title: "An unexpected error occurred",
-            description: error instanceof Error ? error.message : "Please check the console for details."
+            description: error instanceof Error ? error.message : "The operation failed. Please try again."
         });
     } finally {
         setIsSubmitting(false);

@@ -7,6 +7,9 @@ import {
   collection,
   query,
   orderBy,
+  writeBatch,
+  doc,
+  serverTimestamp,
 } from 'firebase/firestore';
 
 import { Button } from '@/components/ui/button';
@@ -36,7 +39,6 @@ import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
 import type { Expense } from '@/lib/types';
 import { ExpenseForm } from '@/components/admin/expenses/expense-form';
 import { columns as expenseColumns } from '@/components/admin/expenses/columns';
-import { deleteExpense } from '@/lib/actions/expenses';
 
 const ExpensesDataTable = dynamic(
   () => import('@/components/admin/expenses/data-table').then(mod => mod.ExpensesDataTable),
@@ -86,28 +88,47 @@ export default function ExpensesPage() {
     setAlertState({ isOpen: false, expenseId: undefined });
 
   const handleDeleteExpense = async () => {
-    if (!alertState.expenseId || !user || !firestore) return;
+    if (!alertState.expenseId || !user || !firestore) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'User not authenticated or expense not found.',
+      });
+      return;
+    }
 
-    const result = await deleteExpense(
-      firestore,
-      HARDCODED_LIBRARY_ID,
-      alertState.expenseId,
-      { id: user.uid, name: user.displayName || 'Admin' }
-    );
+    try {
+      const batch = writeBatch(firestore);
+      const actor = { id: user.uid, name: user.displayName || 'Admin' };
 
-    if (result.success) {
+      const expenseRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/expenses/${alertState.expenseId}`);
+      batch.delete(expenseRef);
+  
+      const logRef = doc(collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/activityLogs`));
+      batch.set(logRef, {
+        libraryId: HARDCODED_LIBRARY_ID,
+        user: actor,
+        activityType: 'expense_deleted',
+        details: { expenseId: alertState.expenseId },
+        timestamp: serverTimestamp(),
+      });
+  
+      await batch.commit();
+
       toast({
         title: 'Expense Deleted',
         description: 'The expense has been removed from the system.',
       });
-    } else {
+    } catch (error) {
+      console.error("DELETE EXPENSE ERROR:", error);
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: result.error || 'Could not delete the expense.',
+        description: error instanceof Error ? error.message : 'Could not delete the expense.',
       });
+    } finally {
+      closeDeleteAlert();
     }
-    closeDeleteAlert();
   };
 
   const memoizedColumns = React.useMemo(() => expenseColumns({ openModal, openDeleteAlert }), []);

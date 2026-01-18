@@ -3,6 +3,13 @@
 import * as React from 'react';
 import { CalendarIcon } from 'lucide-react';
 import { format } from 'date-fns';
+import {
+  doc,
+  collection,
+  serverTimestamp,
+  writeBatch,
+  Timestamp,
+} from 'firebase/firestore';
 
 import { useFirebase } from '@/firebase';
 import { cn } from '@/lib/utils';
@@ -20,7 +27,6 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import type { Expense, ExpenseCategory } from '@/lib/types';
 import { expenseFormSchema, type ExpenseFormValues } from '@/lib/schemas';
-import { addExpense, updateExpense } from '@/lib/actions/expenses';
 import { Spinner } from '@/components/spinner';
 import { Label } from '@/components/ui/label';
 
@@ -59,8 +65,16 @@ export function ExpenseForm({ expense, libraryId, onSuccess, onCancel }: Expense
   }, [expense]);
 
   const handleSubmit = async () => {
-    setErrors({});
+    if (!firestore || !user) {
+      toast({
+        variant: 'destructive',
+        title: 'Authentication Error',
+        description: 'You must be logged in to manage expenses.',
+      });
+      return;
+    }
 
+    setErrors({});
     const data = {
       description,
       amount: Number(amount),
@@ -79,41 +93,59 @@ export function ExpenseForm({ expense, libraryId, onSuccess, onCancel }: Expense
       return;
     }
 
-    if (!firestore || !user) {
-      toast({
-        variant: 'destructive',
-        title: 'Authentication Error',
-        description: 'You must be logged in to manage expenses.',
-      });
-      return;
-    }
-
     setIsSubmitting(true);
     try {
       const actor = { id: user.uid, name: user.displayName || 'Admin' };
-      let result;
+      const batch = writeBatch(firestore);
+      const { expenseDate: validatedDate, ...expenseData } = validation.data;
 
       if (expense?.docId) {
-        result = await updateExpense(firestore, libraryId, expense.docId, validation.data, actor);
+        // Update existing expense
+        const expenseRef = doc(firestore, `libraries/${libraryId}/expenses/${expense.docId}`);
+        batch.update(expenseRef, {
+          ...expenseData,
+          expenseDate: Timestamp.fromDate(validatedDate),
+          updatedAt: serverTimestamp(),
+        });
+    
+        const logRef = doc(collection(firestore, `libraries/${libraryId}/activityLogs`));
+        batch.set(logRef, {
+          libraryId,
+          user: actor,
+          activityType: 'expense_updated',
+          details: { expenseId: expense.docId, newAmount: expenseData.amount },
+          timestamp: serverTimestamp(),
+        });
       } else {
-        result = await addExpense(firestore, libraryId, validation.data, actor);
-      }
-
-      if (result.success) {
-        onSuccess();
-      } else {
-        toast({
-          variant: 'destructive',
-          title: 'An error occurred',
-          description: result.error || 'The operation failed. Please try again.',
+        // Create new expense
+        const expenseRef = doc(collection(firestore, `libraries/${libraryId}/expenses`));
+        batch.set(expenseRef, {
+          ...expenseData,
+          libraryId,
+          expenseDate: Timestamp.fromDate(validatedDate),
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+    
+        const logRef = doc(collection(firestore, `libraries/${libraryId}/activityLogs`));
+        batch.set(logRef, {
+          libraryId,
+          user: actor,
+          activityType: 'expense_created',
+          details: { amount: expenseData.amount, category: expenseData.category },
+          timestamp: serverTimestamp(),
         });
       }
+
+      await batch.commit();
+      onSuccess();
+
     } catch (error) {
         console.error("Expense form submission error:", error);
         toast({
             variant: "destructive",
             title: "An unexpected error occurred",
-            description: error instanceof Error ? error.message : "Please check the console for details."
+            description: error instanceof Error ? error.message : "The operation failed. Please try again."
         });
     } finally {
         setIsSubmitting(false);

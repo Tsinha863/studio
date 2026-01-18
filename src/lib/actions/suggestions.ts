@@ -1,11 +1,12 @@
 'use server';
 
+/**
+ * @deprecated All business logic has been moved to client components for improved error handling and debugging.
+ * See `src/app/admin/suggestions/page.tsx` and `src/components/student/dashboard/suggestion-form.tsx`.
+ */
+
 import {
   Firestore,
-  doc,
-  collection,
-  serverTimestamp,
-  writeBatch,
 } from 'firebase/firestore';
 import type { Suggestion } from '../types';
 
@@ -19,39 +20,13 @@ type Actor = {
   name: string;
 };
 
-const suggestionsCol = (db: Firestore, libraryId: string) =>
-  collection(db, `libraries/${libraryId}/suggestions`);
-const activityLogsCol = (db: Firestore, libraryId: string) =>
-  collection(db, `libraries/${libraryId}/activityLogs`);
-
 export async function addSuggestion(
   db: Firestore,
   libraryId: string,
   studentId: string,
   content: string
 ): Promise<ActionResponse> {
-  if (!content || content.trim().length < 10) {
-    return { success: false, error: 'Suggestion is too short.' };
-  }
-
-  try {
-    const suggestionRef = doc(suggestionsCol(db, libraryId));
-    await writeBatch(db)
-      .set(suggestionRef, {
-        libraryId,
-        studentId,
-        content,
-        status: 'new',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-      .commit();
-
-    return { success: true };
-  } catch (e: any) {
-    console.error('Error adding suggestion:', e);
-    return { success: false, error: e.message };
-  }
+  throw new Error('This function is deprecated. Use client-side logic instead.');
 }
 
 export async function updateSuggestionStatus(
@@ -61,30 +36,7 @@ export async function updateSuggestionStatus(
   status: Suggestion['status'],
   actor: Actor
 ): Promise<ActionResponse> {
-  try {
-    const batch = writeBatch(db);
-
-    const suggestionRef = doc(db, `libraries/${libraryId}/suggestions/${suggestionId}`);
-    batch.update(suggestionRef, {
-      status,
-      updatedAt: serverTimestamp(),
-    });
-
-    const logRef = doc(activityLogsCol(db, libraryId));
-    batch.set(logRef, {
-      libraryId,
-      user: actor,
-      activityType: 'suggestion_status_updated',
-      details: { suggestionId, newStatus: status },
-      timestamp: serverTimestamp(),
-    });
-
-    await batch.commit();
-    return { success: true };
-  } catch (e: any) {
-    console.error('Error updating suggestion status:', e);
-    return { success: false, error: e.message };
-  }
+  throw new Error('This function is deprecated. Use client-side logic instead.');
 }
 
 
@@ -94,25 +46,5 @@ export async function deleteSuggestion(
   suggestionId: string,
   actor: Actor
 ): Promise<ActionResponse> {
-  try {
-    const batch = writeBatch(db);
-    
-    const suggestionRef = doc(db, `libraries/${libraryId}/suggestions/${suggestionId}`);
-    batch.delete(suggestionRef);
-
-    const logRef = doc(activityLogsCol(db, libraryId));
-    batch.set(logRef, {
-      libraryId,
-      user: actor,
-      activityType: 'suggestion_deleted',
-      details: { suggestionId },
-      timestamp: serverTimestamp(),
-    });
-
-    await batch.commit();
-    return { success: true };
-  } catch (e: any) {
-    console.error('Error deleting suggestion:', e);
-    return { success: false, error: e.message };
-  }
+  throw new Error('This function is deprecated. Use client-side logic instead.');
 }

@@ -3,7 +3,14 @@
 import * as React from 'react';
 import dynamic from 'next/dynamic';
 import { PlusCircle } from 'lucide-react';
-import { collection, query, orderBy } from 'firebase/firestore';
+import {
+  collection,
+  query,
+  orderBy,
+  writeBatch,
+  doc,
+  serverTimestamp,
+} from 'firebase/firestore';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -29,7 +36,6 @@ import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
 import type { Announcement } from '@/lib/types';
 import { AnnouncementForm } from '@/components/admin/announcements/announcement-form';
 import { columns as announcementColumns } from '@/components/admin/announcements/columns';
-import { deleteAnnouncement } from '@/lib/actions/announcements';
 
 const AnnouncementsDataTable = dynamic(
   () => import('@/components/admin/announcements/data-table').then(mod => mod.AnnouncementsDataTable),
@@ -78,28 +84,48 @@ export default function AnnouncementsPage() {
     setAlertState({ isOpen: false, announcementId: undefined });
 
   const handleDelete = async () => {
-    if (!alertState.announcementId || !user || !firestore) return;
+    if (!alertState.announcementId || !user || !firestore) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'User not authenticated or announcement not found.',
+      });
+      return;
+    }
+    
+    try {
+      const batch = writeBatch(firestore);
+      const actor = { id: user.uid, name: user.displayName || 'Admin' };
 
-    const result = await deleteAnnouncement(
-      firestore,
-      HARDCODED_LIBRARY_ID,
-      alertState.announcementId,
-      { id: user.uid, name: user.displayName || 'Admin' }
-    );
+      const announcementRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/announcements/${alertState.announcementId}`);
+      batch.delete(announcementRef);
+  
+      const logRef = doc(collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/activityLogs`));
+      batch.set(logRef, {
+        libraryId: HARDCODED_LIBRARY_ID,
+        user: actor,
+        activityType: 'announcement_deleted',
+        details: { announcementId: alertState.announcementId },
+        timestamp: serverTimestamp(),
+      });
+  
+      await batch.commit();
 
-    if (result.success) {
       toast({
         title: 'Announcement Deleted',
         description: 'The announcement has been removed.',
       });
-    } else {
+
+    } catch (error) {
+      console.error("DELETE ANNOUNCEMENT ERROR:", error);
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: result.error || 'Could not delete the announcement.',
+        description: error instanceof Error ? error.message : 'Could not delete the announcement.',
       });
+    } finally {
+      closeDeleteAlert();
     }
-    closeDeleteAlert();
   };
 
   const memoizedColumns = React.useMemo(

@@ -2,13 +2,19 @@
 
 import * as React from 'react';
 import dynamic from 'next/dynamic';
-import { collection, query, orderBy } from 'firebase/firestore';
+import {
+  collection,
+  query,
+  orderBy,
+  writeBatch,
+  doc,
+  serverTimestamp,
+} from 'firebase/firestore';
 
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
 import type { Suggestion, Student } from '@/lib/types';
-import { updateSuggestionStatus, deleteSuggestion } from '@/lib/actions/suggestions';
 import { columns as suggestionColumns } from '@/components/admin/suggestions/columns';
 import {
   AlertDialog,
@@ -71,26 +77,41 @@ export default function SuggestionsPage() {
 
   // --- Handlers ---
   const handleStatusChange = async (suggestionId: string, status: Suggestion['status']) => {
-    if (!user || !firestore) return;
+    if (!user || !firestore) {
+      toast({ variant: 'destructive', title: 'Error', description: 'You must be logged in to perform this action.'});
+      return;
+    }
 
-    const result = await updateSuggestionStatus(
-      firestore,
-      HARDCODED_LIBRARY_ID,
-      suggestionId,
-      status,
-      { id: user.uid, name: user.displayName || 'Admin' }
-    );
+    try {
+      const batch = writeBatch(firestore);
+      const actor = { id: user.uid, name: user.displayName || 'Admin' };
 
-    if (result.success) {
+      const suggestionRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/suggestions/${suggestionId}`);
+      batch.update(suggestionRef, {
+        status,
+        updatedAt: serverTimestamp(),
+      });
+  
+      const logRef = doc(collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/activityLogs`));
+      batch.set(logRef, {
+        libraryId: HARDCODED_LIBRARY_ID,
+        user: actor,
+        activityType: 'suggestion_status_updated',
+        details: { suggestionId, newStatus: status },
+        timestamp: serverTimestamp(),
+      });
+  
+      await batch.commit();
       toast({
         title: 'Status Updated',
         description: "The suggestion's status has been changed.",
       });
-    } else {
+    } catch (error) {
+      console.error("UPDATE SUGGESTION STATUS ERROR:", error);
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: result.error || 'Could not update the status.',
+        description: error instanceof Error ? error.message : 'Could not update the status.',
       });
     }
   };
@@ -100,28 +121,43 @@ export default function SuggestionsPage() {
   const closeDeleteAlert = () => setAlertState({ isOpen: false, suggestionId: undefined });
 
   const handleDelete = async () => {
-    if (!alertState.suggestionId || !user || !firestore) return;
+    if (!alertState.suggestionId || !user || !firestore) {
+      toast({ variant: 'destructive', title: 'Error', description: 'User not authenticated or suggestion not found.'});
+      return;
+    }
 
-    const result = await deleteSuggestion(
-      firestore,
-      HARDCODED_LIBRARY_ID,
-      alertState.suggestionId,
-      { id: user.uid, name: user.displayName || 'Admin' }
-    );
+    try {
+      const batch = writeBatch(firestore);
+      const actor = { id: user.uid, name: user.displayName || 'Admin' };
+      
+      const suggestionRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/suggestions/${alertState.suggestionId}`);
+      batch.delete(suggestionRef);
+  
+      const logRef = doc(collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/activityLogs`));
+      batch.set(logRef, {
+        libraryId: HARDCODED_LIBRARY_ID,
+        user: actor,
+        activityType: 'suggestion_deleted',
+        details: { suggestionId: alertState.suggestionId },
+        timestamp: serverTimestamp(),
+      });
+  
+      await batch.commit();
 
-    if (result.success) {
       toast({
         title: 'Suggestion Deleted',
         description: 'The suggestion has been removed.',
       });
-    } else {
+    } catch (error) {
+      console.error("DELETE SUGGESTION ERROR:", error);
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: result.error || 'Could not delete the suggestion.',
+        description: error instanceof Error ? error.message : 'Could not delete the suggestion.',
       });
+    } finally {
+      closeDeleteAlert();
     }
-    closeDeleteAlert();
   };
 
   const memoizedColumns = React.useMemo(

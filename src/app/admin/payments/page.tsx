@@ -7,6 +7,14 @@ import {
   collection,
   query,
   orderBy,
+  writeBatch,
+  doc,
+  serverTimestamp,
+  where,
+  Timestamp,
+  getDocs,
+  runTransaction,
+  increment,
 } from 'firebase/firestore';
 
 import { Button } from '@/components/ui/button';
@@ -14,14 +22,11 @@ import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
 import type { Payment, Student } from '@/lib/types';
-import {
-  createMonthlyPayments,
-  markPaymentAsPaid,
-} from '@/lib/actions/payments';
 import { generateSimulatedReceipt } from '@/ai/flows/generate-simulated-receipt';
 
 import { columns as paymentColumns } from '@/components/admin/payments/columns';
 import { ReceiptDialog } from '@/components/receipt-dialog';
+import { Spinner } from '@/components/spinner';
 
 const PaymentsDataTable = dynamic(
   () => import('@/components/admin/payments/data-table').then(mod => mod.PaymentsDataTable),
@@ -30,6 +35,8 @@ const PaymentsDataTable = dynamic(
 
 // TODO: Replace with actual logged-in user's library
 const HARDCODED_LIBRARY_ID = 'library1';
+const MONTHLY_FEE = 50.00;
+const INACTIVITY_THRESHOLD_DAYS = 90;
 
 type ReceiptState = {
   isOpen: boolean;
@@ -82,23 +89,99 @@ export default function PaymentsPage() {
   const handleCreatePayments = async () => {
     if (!user || !firestore) return;
     setIsCreating(true);
-    const result = await createMonthlyPayments(firestore, HARDCODED_LIBRARY_ID, {
-      id: user.uid,
-      name: user.displayName || 'Admin',
-    });
-    setIsCreating(false);
 
-    if (result.success) {
-      toast({
-        title: 'Payments Created',
-        description: 'Monthly payment records have been generated for active students.',
+    try {
+      const batch = writeBatch(firestore);
+      const actor = { id: user.uid, name: user.displayName || 'Admin' };
+      const today = new Date();
+      const ninetyDaysAgo = new Date(today.getFullYear(), today.getMonth(), today.getDate() - INACTIVITY_THRESHOLD_DAYS);
+      const dueDate = new Date(today.getFullYear(), today.getMonth() + 1, 0); // Last day of current month
+  
+      const paymentsCol = collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/payments`);
+      const studentsCol = collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students`);
+
+      // 1. Transition 'pending' payments to 'overdue'
+      const pendingToOverdueQuery = query(
+          paymentsCol, 
+          where('status', '==', 'pending'),
+          where('dueDate', '<', Timestamp.fromDate(today))
+      );
+      const pendingToOverdueSnapshot = await getDocs(pendingToOverdueQuery);
+      const newlyOverdueStudentIds = new Set<string>();
+      pendingToOverdueSnapshot.forEach(paymentDoc => {
+          batch.update(paymentDoc.ref, { status: 'overdue', updatedAt: serverTimestamp() });
+          newlyOverdueStudentIds.add(paymentDoc.data().studentId);
       });
-    } else {
+  
+      // 2. Query all students not 'inactive' and all unpaid payments
+      const activeStudentsQuery = query(studentsCol, where('status', 'in', ['active', 'at-risk']));
+      const studentsSnapshot = await getDocs(activeStudentsQuery);
+      
+      const allUnpaidPaymentsQuery = query(paymentsCol, where('status', 'in', ['pending', 'overdue']));
+      const allUnpaidPaymentsSnapshot = await getDocs(allUnpaidPaymentsQuery);
+      const studentsWithUnpaidBills = new Set(allUnpaidPaymentsSnapshot.docs.map(doc => doc.data().studentId));
+  
+      let createdCount = 0;
+  
+      for (const studentDoc of studentsSnapshot.docs) {
+        const student = { docId: studentDoc.id, ...studentDoc.data() } as Student;
+        
+        // 3. Create new payments for students with no unpaid bills
+        if (!studentsWithUnpaidBills.has(student.id)) {
+          const paymentRef = doc(paymentsCol);
+          batch.set(paymentRef, {
+            libraryId: HARDCODED_LIBRARY_ID,
+            studentId: student.id,
+            studentName: student.name,
+            amount: MONTHLY_FEE,
+            status: 'pending',
+            dueDate: Timestamp.fromDate(dueDate),
+            paymentDate: null,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+          createdCount++;
+        }
+  
+        // 4. Check for inactivity
+        if (student.status === 'active' && student.lastInteractionAt.toDate() < ninetyDaysAgo) {
+          batch.update(studentDoc.ref, { status: 'at-risk', updatedAt: serverTimestamp() });
+        }
+      }
+  
+      // 5. Update students with newly overdue payments to 'at-risk'
+      for (const studentId of newlyOverdueStudentIds) {
+        const studentDocRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students/${studentId}`);
+        batch.update(studentDocRef, { status: 'at-risk', updatedAt: serverTimestamp() });
+      }
+  
+      if (createdCount > 0) {
+          const logRef = doc(collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/activityLogs`));
+          batch.set(logRef, {
+            libraryId: HARDCODED_LIBRARY_ID,
+            user: actor,
+            activityType: 'monthly_payments_created',
+            details: { count: createdCount },
+            timestamp: serverTimestamp(),
+          });
+      }
+  
+      await batch.commit();
+
+      toast({
+        title: 'Payments Generated',
+        description: `${createdCount} new payment obligations were created.`,
+      });
+
+    } catch (error) {
+      console.error("CREATE MONTHLY PAYMENTS ERROR:", error);
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: result.error || 'Could not create payments.',
+        description: error instanceof Error ? error.message : "Could not create payments.",
       });
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -109,24 +192,64 @@ export default function PaymentsPage() {
         title: 'Error',
         description: "Student document ID not found. Cannot process payment.",
       });
-      return
+      return;
     };
     setIsPaying(payment.id);
 
-    const result = await markPaymentAsPaid(
-      firestore,
-      HARDCODED_LIBRARY_ID,
-      payment.id,
-      payment.studentDocId,
-      { id: user.uid, name: user.displayName || 'Admin' }
-    );
+    try {
+      await runTransaction(firestore, async (transaction) => {
+        const paymentRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/payments/${payment.id}`);
+        const studentRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students/${payment.studentDocId}`);
+        
+        const [paymentDoc, studentDoc] = await Promise.all([
+          transaction.get(paymentRef),
+          transaction.get(studentRef),
+        ]);
+  
+        if (!paymentDoc.exists()) throw new Error('Payment document not found.');
+        if (!studentDoc.exists()) throw new Error('Student document not found.');
+        
+        const paymentData = paymentDoc.data() as Payment;
+        if (paymentData.status === 'paid') return; // Idempotent
+        
+        const wasOverdue = paymentData.status === 'overdue';
+  
+        // Update payment
+        transaction.update(paymentRef, {
+          status: 'paid',
+          paymentDate: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+  
+        // Update student
+        transaction.update(studentRef, {
+          fibonacciStreak: wasOverdue ? 0 : increment(1),
+          status: 'active',
+          lastInteractionAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+  
+        // Create activity log
+        const logRef = doc(collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/activityLogs`));
+        transaction.set(logRef, {
+          libraryId: HARDCODED_LIBRARY_ID,
+          user: { id: user.uid, name: user.displayName || 'Admin' },
+          activityType: 'payment_processed',
+          details: {
+            studentName: studentDoc.data().name,
+            amount: paymentData.amount,
+            paymentId: payment.id,
+          },
+          timestamp: serverTimestamp(),
+        });
+      });
 
-    if (result.success) {
       toast({
         title: 'Payment Confirmed',
         description: `${payment.studentName}'s payment of ₹${payment.amount} has been recorded.`,
       });
 
+      // Generate receipt after successful transaction
       const student = students?.find(s => s.docId === payment.studentDocId);
       if (student) {
           const receiptInput = {
@@ -134,7 +257,7 @@ export default function PaymentsPage() {
               paymentAmount: payment.amount,
               paymentDate: new Date().toISOString().split('T')[0],
               fibonacciStreak: (student.fibonacciStreak || 0) + 1,
-              studentStatus: 'active', // Assume they become active
+              studentStatus: 'active',
               paymentId: payment.id,
           };
           
@@ -151,14 +274,16 @@ export default function PaymentsPage() {
           }
       }
 
-    } else {
+    } catch (error) {
+      console.error("MARK AS PAID ERROR:", error);
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: result.error || 'Could not process payment.',
+        description: error instanceof Error ? error.message : 'Could not process payment.',
       });
+    } finally {
+      setIsPaying(false);
     }
-    setIsPaying(false);
   };
   
   const closeReceiptDialog = () => setReceiptState({ isOpen: false });
@@ -177,7 +302,7 @@ export default function PaymentsPage() {
           </p>
         </div>
         <Button onClick={handleCreatePayments} disabled={isCreating}>
-          <PlusCircle className="mr-2" />
+          {isCreating ? <Spinner className="mr-2" /> : <PlusCircle className="mr-2" />}
           {isCreating ? 'Creating...' : 'Create Monthly Payments'}
         </Button>
       </div>

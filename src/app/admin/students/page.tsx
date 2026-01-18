@@ -6,18 +6,15 @@ import { PlusCircle } from 'lucide-react';
 import {
   collection,
   query,
-  where,
-  type CollectionReference,
-  type DocumentData,
+  runTransaction,
+  doc,
+  serverTimestamp,
 } from 'firebase/firestore';
 
 import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
 } from '@/components/ui/card';
 import {
   Dialog,
@@ -41,7 +38,6 @@ import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
 import type { Student } from '@/lib/types';
 import { StudentForm } from '@/components/admin/students/student-form';
 import { columns as studentColumns } from '@/components/admin/students/columns';
-import { deleteStudent } from '@/lib/actions/students';
 
 const StudentDataTable = dynamic(
   () => import('@/components/admin/students/data-table').then((mod) => mod.StudentDataTable),
@@ -79,9 +75,6 @@ export default function StudentsPage() {
   const { data: students, isLoading } = useCollection<Omit<Student, 'docId'>>(studentsQuery);
   
   const studentsWithDocId = React.useMemo(() => {
-    // The docId is the firestore document id, which is different from the student `id` field.
-    // We need the docId to perform updates/deletes.
-    // The useCollection hook returns the docId as `id`, so we rename it here.
     return students?.map(s => ({ ...s, docId: s.id })) ?? [];
   }, [students]);
 
@@ -94,28 +87,70 @@ export default function StudentsPage() {
     setAlertState({ isOpen: false, studentId: undefined, studentName: undefined });
 
   const handleDeleteStudent = async () => {
-    if (!alertState.studentId || !user || !firestore) return;
+    if (!alertState.studentId || !user || !firestore) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'User not authenticated or student not found.',
+      });
+      return;
+    }
+    
+    try {
+      await runTransaction(firestore, async (transaction) => {
+        const studentRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students/${alertState.studentId}`);
+        const studentDoc = await transaction.get(studentRef);
+  
+        if (!studentDoc.exists()) throw new Error("Student not found.");
+        
+        const studentData = studentDoc.data() as Student;
+  
+        // 1. Update student to inactive
+        transaction.update(studentRef, {
+          status: 'inactive',
+          assignedSeatId: null,
+          assignedRoomId: null,
+          assignedSeatLabel: null,
+          updatedAt: serverTimestamp(),
+          lastInteractionAt: serverTimestamp(),
+        });
+  
+        // 2. If a seat was assigned, unassign it atomically.
+        if (studentData.assignedSeatId && studentData.assignedRoomId) {
+          const seatRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/rooms/${studentData.assignedRoomId}/seats/${studentData.assignedSeatId}`);
+          transaction.update(seatRef, {
+            studentId: null,
+            studentName: null,
+            updatedAt: serverTimestamp(),
+          });
+        }
+  
+        // 3. Create activity log for the soft delete.
+        const logRef = doc(collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/activityLogs`));
+        transaction.set(logRef, {
+          libraryId: HARDCODED_LIBRARY_ID,
+          user: { id: user.uid, name: user.displayName || 'Admin' },
+          activityType: 'student_deleted',
+          details: { studentId: alertState.studentId, studentName: studentData.name },
+          timestamp: serverTimestamp(),
+        });
+      });
 
-    const result = await deleteStudent(
-      firestore,
-      HARDCODED_LIBRARY_ID,
-      alertState.studentId,
-      { id: user.uid, name: user.displayName || 'Admin' }
-    );
-
-    if (result.success) {
       toast({
         title: 'Student Set to Inactive',
         description: `${alertState.studentName} has been marked as inactive.`,
       });
-    } else {
+
+    } catch (error) {
+      console.error("DELETE STUDENT ERROR:", error);
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: result.error || 'Could not update the student status.',
+        description: error instanceof Error ? error.message : 'Could not update the student status.',
       });
+    } finally {
+      closeDeleteAlert();
     }
-    closeDeleteAlert();
   };
 
   const memoizedColumns = React.useMemo(() => studentColumns({ openModal, openDeleteAlert }), []);

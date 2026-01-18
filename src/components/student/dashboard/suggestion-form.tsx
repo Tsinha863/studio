@@ -2,6 +2,12 @@
 
 import * as React from 'react';
 import { z } from 'zod';
+import {
+  doc,
+  collection,
+  serverTimestamp,
+  writeBatch,
+} from 'firebase/firestore';
 import { useFirebase } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
 
@@ -16,7 +22,6 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/spinner';
-import { addSuggestion } from '@/lib/actions/suggestions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Label } from '@/components/ui/label';
 
@@ -56,33 +61,36 @@ export function SuggestionForm({ studentId, libraryId, isLoading: isLoadingStude
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: 'Cannot submit suggestion. Please make sure you are logged in.',
+        description: 'Cannot submit suggestion. Please make sure you are logged in and your student profile is loaded.',
       });
       return;
     }
     
     setIsSubmitting(true);
     try {
-        const result = await addSuggestion(firestore, libraryId, studentId, content);
-        if (result.success) {
-          toast({
-            title: 'Suggestion Submitted',
-            description: 'Thank you for your feedback!',
-          });
-          setContent('');
-        } else {
-          toast({
-            variant: 'destructive',
-            title: 'Submission Failed',
-            description: result.error || 'An unexpected error occurred.',
-          });
-        }
+        const batch = writeBatch(firestore);
+        const suggestionRef = doc(collection(firestore, `libraries/${libraryId}/suggestions`));
+        batch.set(suggestionRef, {
+            libraryId,
+            studentId,
+            content,
+            status: 'new',
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        });
+        await batch.commit();
+
+        toast({
+          title: 'Suggestion Submitted',
+          description: 'Thank you for your feedback!',
+        });
+        setContent('');
     } catch (error) {
         console.error("Suggestion form submission error:", error);
         toast({
             variant: "destructive",
-            title: "An unexpected error occurred",
-            description: error instanceof Error ? error.message : "Please check the console for details."
+            title: "Submission Failed",
+            description: error instanceof Error ? error.message : "An unexpected error occurred."
         });
     } finally {
         setIsSubmitting(false);

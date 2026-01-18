@@ -1,5 +1,10 @@
 'use server';
 
+/**
+ * @deprecated All business logic has been moved to client components for improved error handling and debugging.
+ * See `src/app/admin/expenses/page.tsx` and `src/components/admin/expenses/expense-form.tsx`.
+ */
+
 import {
   Firestore,
   doc,
@@ -20,10 +25,6 @@ type Actor = {
   name: string;
 };
 
-const expensesCol = (db: Firestore, libraryId: string) =>
-  collection(db, `libraries/${libraryId}/expenses`);
-const activityLogsCol = (db: Firestore, libraryId: string) =>
-  collection(db, `libraries/${libraryId}/activityLogs`);
 
 export async function addExpense(
   db: Firestore,
@@ -31,45 +32,7 @@ export async function addExpense(
   data: ExpenseFormValues,
   actor: Actor
 ): Promise<ActionResponse> {
-  const validation = expenseFormSchema.safeParse(data);
-  if (!validation.success) {
-    return { success: false, error: 'Invalid data provided.' };
-  }
-
-  const { expenseDate, ...expenseData } = validation.data;
-
-  try {
-    const batch = writeBatch(db);
-
-    // 1. Create expense document
-    const expenseRef = doc(expensesCol(db, libraryId));
-    batch.set(expenseRef, {
-      ...expenseData,
-      libraryId,
-      expenseDate: Timestamp.fromDate(expenseDate),
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-
-    // 2. Create activity log
-    const logRef = doc(activityLogsCol(db, libraryId));
-    batch.set(logRef, {
-      libraryId,
-      user: actor,
-      activityType: 'expense_created',
-      details: {
-        amount: expenseData.amount,
-        category: expenseData.category,
-      },
-      timestamp: serverTimestamp(),
-    });
-
-    await batch.commit();
-    return { success: true };
-  } catch (e: any) {
-    console.error('Error adding expense:', e);
-    return { success: false, error: e.message || 'An unknown error occurred.' };
-  }
+  throw new Error('This function is deprecated. Use client-side logic instead.');
 }
 
 export async function updateExpense(
@@ -79,44 +42,7 @@ export async function updateExpense(
   data: ExpenseFormValues,
   actor: Actor
 ): Promise<ActionResponse> {
-  const validation = expenseFormSchema.safeParse(data);
-
-  if (!validation.success) {
-    return { success: false, error: 'Invalid data provided.' };
-  }
-
-  const { expenseDate, ...expenseData } = validation.data;
-
-  try {
-    const batch = writeBatch(db);
-
-    // 1. Update expense document
-    const expenseRef = doc(db, `libraries/${libraryId}/expenses/${docId}`);
-    batch.update(expenseRef, {
-      ...expenseData,
-      expenseDate: Timestamp.fromDate(expenseDate),
-      updatedAt: serverTimestamp(),
-    });
-
-    // 2. Create activity log
-    const logRef = doc(activityLogsCol(db, libraryId));
-    batch.set(logRef, {
-      libraryId,
-      user: actor,
-      activityType: 'expense_updated',
-      details: {
-        expenseId: docId,
-        newAmount: expenseData.amount,
-      },
-      timestamp: serverTimestamp(),
-    });
-
-    await batch.commit();
-    return { success: true };
-  } catch (e: any) {
-    console.error('Error updating expense:', e);
-    return { success: false, error: e.message || 'An unknown error occurred.' };
-  }
+  throw new Error('This function is deprecated. Use client-side logic instead.');
 }
 
 export async function deleteExpense(
@@ -125,27 +51,5 @@ export async function deleteExpense(
   docId: string,
   actor: Actor
 ): Promise<ActionResponse> {
-  try {
-    const batch = writeBatch(db);
-
-    // 1. Delete expense document
-    const expenseRef = doc(db, `libraries/${libraryId}/expenses/${docId}`);
-    batch.delete(expenseRef);
-
-    // 2. Create activity log
-    const logRef = doc(activityLogsCol(db, libraryId));
-    batch.set(logRef, {
-      libraryId,
-      user: actor,
-      activityType: 'expense_deleted',
-      details: { expenseId: docId },
-      timestamp: serverTimestamp(),
-    });
-
-    await batch.commit();
-    return { success: true };
-  } catch (e: any) {
-    console.error('Error deleting expense:', e);
-    return { success: false, error: e.message || 'An unknown error occurred.' };
-  }
+  throw new Error('This function is deprecated. Use client-side logic instead.');
 }
