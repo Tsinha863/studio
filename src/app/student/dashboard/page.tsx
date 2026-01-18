@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -81,9 +82,11 @@ export default function StudentDashboardPage() {
             <PaymentHistoryTable payments={payments || []} isLoading={isLoadingPayments} />
         </div>
         <div className="lg:col-span-2">
-            <SuggestionForm studentId={student?.id} libraryId={HARDCODED_LIBRARY_ID} isLoading={isLoadingStudent}/>
+            <SuggestionForm student={student} libraryId={HARDCODED_LIBRARY_ID} isLoading={isLoadingStudent}/>
         </div>
       </div>
     </div>
   );
 }
+
+    

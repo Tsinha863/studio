@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Timestamp } from "firebase/firestore";
@@ -46,6 +47,7 @@ export interface Payment {
   dueDate: Timestamp;
   status: 'paid' | 'pending' | 'overdue';
   method: 'Online' | 'Cash';
+  assignments?: Student['assignments'];
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -98,6 +100,7 @@ export interface Announcement {
 export interface Suggestion {
   libraryId: string;
   studentId: string;
+  studentName?: string;
   content: string;
   status: 'new' | 'viewed' | 'in-progress' | 'resolved' | 'closed';
   createdAt: Timestamp;
@@ -130,3 +133,5 @@ export interface PrintRequest {
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
+
+    

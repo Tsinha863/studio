@@ -23,7 +23,7 @@ import {
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
-import type { Suggestion, Student } from '@/lib/types';
+import type { Suggestion } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { DataTable } from '@/components/ui/data-table';
 import { DataTablePagination } from '@/components/ui/data-table-pagination';
@@ -66,23 +66,17 @@ export default function SuggestionsPage() {
     );
   }, [firestore, user]);
 
-  const studentsQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students`);
-  }, [firestore, user]);
-
   const { data: suggestions, isLoading: isLoadingSuggestions } = useCollection<Suggestion>(suggestionsQuery);
-  const { data: students, isLoading: isLoadingStudents } = useCollection<Student>(studentsQuery);
-
+  
   // --- Data Processing ---
   const suggestionsWithDetails = React.useMemo(() => {
-    if (!suggestions || !students) return [];
-    const studentMap = new Map(students.map((s) => [s.id, s.name]));
+    if (!suggestions) return [];
     return suggestions.map((s) => ({
       ...s,
-      studentName: studentMap.get(s.studentId) || 'Unknown Student',
+      // studentName is now denormalized on the suggestion document.
+      studentName: s.studentName || 'Unknown Student',
     }));
-  }, [suggestions, students]);
+  }, [suggestions]);
 
   const memoizedColumns = React.useMemo(
     () => suggestionColumns({ onStatusChange: handleStatusChange, onDelete: openDeleteAlert }),
@@ -220,7 +214,7 @@ export default function SuggestionsPage() {
               table={table}
               columns={memoizedColumns}
               data={suggestionsWithDetails}
-              isLoading={isLoadingSuggestions || isLoadingStudents}
+              isLoading={isLoadingSuggestions}
               noResultsMessage="No suggestions found."
             />
           </div>
@@ -250,3 +244,5 @@ export default function SuggestionsPage() {
     </div>
   );
 }
+
+    

@@ -16,6 +16,7 @@ import {
   getDocs,
   runTransaction,
   increment,
+  getDoc,
 } from 'firebase/firestore';
 import {
   useReactTable,
@@ -83,24 +84,17 @@ export default function PaymentsPage() {
     );
   }, [firestore, user]);
 
-  const studentsQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students`);
-  }, [firestore, user]);
-
   const { data: payments, isLoading: isLoadingPayments } = useCollection<Payment>(paymentsQuery);
-  const { data: students, isLoading: isLoadingStudents } = useCollection<Student>(studentsQuery);
   
   const paymentsWithDetails: PaymentWithDetails[] = React.useMemo(() => {
-    if (!payments || !students) return [];
-    const studentMap = new Map(students.map(s => [s.id, { 
-        assignments: s.assignments || []
-    }]));
+    if (!payments) return [];
+    // The 'assignments' property is now denormalized onto the payment document.
     return payments.map(p => ({
         ...p,
-        assignments: studentMap.get(p.studentId)?.assignments || [],
+        studentId: p.studentId, // Ensure studentId is present
+        assignments: p.assignments || [],
     }));
-  }, [payments, students]);
+  }, [payments]);
 
   const memoizedColumns = React.useMemo(() => paymentColumns({ handleMarkAsPaid, isPaying }), [isPaying]);
   
@@ -177,6 +171,7 @@ export default function PaymentsPage() {
             dueDate: Timestamp.fromDate(dueDate),
             paymentDate: null,
             method: 'Online',
+            assignments: student.assignments || [], // Denormalize assignments for cost savings
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           });
@@ -289,14 +284,17 @@ export default function PaymentsPage() {
         description: `${payment.studentName}'s payment of ${new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(payment.amount)} has been recorded.`,
       });
 
-      // Generate receipt after successful transaction
-      const student = students?.find(s => s.id === payment.studentId);
-      if (student) {
+      // Generate receipt after successful transaction by fetching only the required student.
+      const studentRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students/${payment.studentId}`);
+      const studentDoc = await getDoc(studentRef);
+
+      if (studentDoc.exists()) {
+          const student = studentDoc.data() as Student;
           const receiptInput = {
               studentName: student.name,
               paymentAmount: payment.amount,
               paymentDate: new Date().toISOString().split('T')[0],
-              fibonacciStreak: (student.fibonacciStreak || 0) + 1,
+              fibonacciStreak: student.fibonacciStreak || 0,
               studentStatus: 'active',
               paymentId: payment.id,
           };
@@ -431,7 +429,7 @@ export default function PaymentsPage() {
             <DataTable
               table={table}
               columns={memoizedColumns}
-              isLoading={isLoadingPayments || isLoadingStudents}
+              isLoading={isLoadingPayments}
             />
           </div>
           <DataTablePagination table={table} />
@@ -447,3 +445,5 @@ export default function PaymentsPage() {
     </div>
   );
 }
+
+    

@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -24,9 +25,12 @@ import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/spinner';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Label } from '@/components/ui/label';
+import { Student } from '@/lib/types';
+
+type StudentWithId = Student & { id: string };
 
 interface SuggestionFormProps {
-  studentId?: string;
+  student: StudentWithId | null;
   libraryId: string;
   isLoading: boolean;
 }
@@ -39,9 +43,7 @@ const formSchema = z.object({
   }),
 });
 
-type FormValues = z.infer<typeof formSchema>;
-
-export function SuggestionForm({ studentId, libraryId, isLoading: isLoadingStudent }: SuggestionFormProps) {
+export function SuggestionForm({ student, libraryId, isLoading: isLoadingStudent }: SuggestionFormProps) {
   const { firestore, user, isUserLoading } = useFirebase();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
@@ -57,7 +59,7 @@ export function SuggestionForm({ studentId, libraryId, isLoading: isLoadingStude
       return;
     }
 
-    if (!firestore || !studentId || !user) {
+    if (!firestore || !student || !user) {
       toast({
         variant: 'destructive',
         title: 'Error',
@@ -72,7 +74,8 @@ export function SuggestionForm({ studentId, libraryId, isLoading: isLoadingStude
         const suggestionRef = doc(collection(firestore, `libraries/${libraryId}/suggestions`));
         batch.set(suggestionRef, {
             libraryId,
-            studentId,
+            studentId: student.id,
+            studentName: student.name,
             content,
             status: 'new',
             createdAt: serverTimestamp(),
@@ -135,3 +138,5 @@ export function SuggestionForm({ studentId, libraryId, isLoading: isLoadingStude
     </Card>
   );
 }
+
+    
