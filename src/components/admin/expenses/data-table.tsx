@@ -60,14 +60,14 @@ export function ExpensesDataTable<TData, TValue>({
 
   return (
     <div className="space-y-4 p-4">
-      <div className="flex items-center">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <Input
           placeholder="Filter by description..."
           value={(table.getColumn('description')?.getFilterValue() as string) ?? ''}
           onChange={(event) =>
             table.getColumn('description')?.setFilterValue(event.target.value)
           }
-          className="max-w-sm"
+          className="w-full sm:max-w-sm"
         />
       </div>
       <div className="rounded-md border">

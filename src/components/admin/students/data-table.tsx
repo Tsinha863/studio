@@ -69,7 +69,7 @@ export function StudentDataTable<TData, TValue>({
           onChange={(event) =>
             table.getColumn('name')?.setFilterValue(event.target.value)
           }
-          className="max-w-sm"
+          className="w-full sm:max-w-sm"
         />
         {toolbarContent}
       </div>
