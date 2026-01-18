@@ -53,8 +53,7 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
     }
   }, [student]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async () => {
     setErrors({});
 
     const data = {
@@ -112,7 +111,7 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <div className="space-y-4">
       {!student && (
         <div className="space-y-2">
           <Label htmlFor="studentId">Student ID</Label>
@@ -182,7 +181,7 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
         <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
           Cancel
         </Button>
-        <Button type="submit" disabled={isSubmitting || !user}>
+        <Button type="button" onClick={handleSubmit} disabled={isSubmitting || !user}>
           {isSubmitting ? (
             <>
               <Spinner className="mr-2 h-4 w-4" />
@@ -191,6 +190,6 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
           ) : student ? 'Save Changes' : 'Add Student'}
         </Button>
       </div>
-    </form>
+    </div>
   );
 }
