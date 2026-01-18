@@ -29,7 +29,7 @@ export function UpcomingPaymentCard({ payment, isLoading }: UpcomingPaymentCardP
         ) : payment ? (
           <>
             <div className="text-2xl font-bold">
-              ₹{payment.amount.toFixed(2)}
+              {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(payment.amount)}
               <Badge variant={payment.status === 'overdue' ? 'destructive' : 'secondary'} className="ml-2 capitalize">
                 {payment.status}
               </Badge>

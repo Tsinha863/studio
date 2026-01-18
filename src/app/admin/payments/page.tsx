@@ -246,7 +246,7 @@ export default function PaymentsPage() {
 
       toast({
         title: 'Payment Confirmed',
-        description: `${payment.studentName}'s payment of ₹${payment.amount} has been recorded.`,
+        description: `${payment.studentName}'s payment of ${new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(payment.amount)} has been recorded.`,
       });
 
       // Generate receipt after successful transaction

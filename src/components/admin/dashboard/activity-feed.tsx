@@ -9,6 +9,8 @@ interface ActivityFeedProps {
 
 function formatActivity(log: ActivityLog): string {
     const userName = `<span class="font-semibold">${log.user.name}</span>`;
+    const formatCurrency = (amount: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(amount);
+
     switch (log.activityType) {
         case 'student_created':
             return `${userName} created student ${log.details.studentName}.`;
@@ -17,11 +19,11 @@ function formatActivity(log: ActivityLog): string {
         case 'student_deleted':
             return `${userName} deleted student with ID ${log.details.studentId}.`;
         case 'payment_processed':
-            return `${userName} processed a payment of ₹${log.details.amount} for ${log.details.studentName}.`;
+            return `${userName} processed a payment of ${formatCurrency(log.details.amount)} for ${log.details.studentName}.`;
         case 'monthly_payments_created':
             return `${userName} created ${log.details.count} monthly invoices.`;
         case 'expense_created':
-            return `${userName} recorded an expense of ₹${log.details.amount} for ${log.details.category}.`;
+            return `${userName} recorded an expense of ${formatCurrency(log.details.amount)} for ${log.details.category}.`;
         case 'expense_updated':
             return `${userName} updated an expense record (ID: ${log.details.expenseId}).`;
         case 'expense_deleted':

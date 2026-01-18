@@ -158,13 +158,13 @@ export default function DashboardPage() {
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <KpiCard
           title="Total Revenue"
-          value={`₹${totalRevenue.toLocaleString()}`}
+          value={new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(totalRevenue)}
           change="last 6 months"
           icon={<IndianRupee />}
         />
         <KpiCard
           title="Total Expenses"
-          value={`₹${totalExpenses.toLocaleString()}`}
+          value={new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(totalExpenses)}
           change="last 6 months"
           icon={<CreditCard />}
         />
