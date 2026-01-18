@@ -33,7 +33,7 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
   const [studentId, setStudentId] = React.useState('');
   const [name, setName] = React.useState('');
   const [email, setEmail] = React.useState('');
-  const [paymentStatus, setPaymentStatus] = React.useState<'paid' | 'pending' | 'overdue'>('pending');
+  const [status, setStatus] = React.useState<'active' | 'at-risk' | 'inactive'>('active');
   const [assignedSeatId, setAssignedSeatId] = React.useState('');
   const [errors, setErrors] = React.useState<Partial<Record<keyof StudentFormValues, string>>>({});
 
@@ -42,13 +42,13 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
       setStudentId(student.id || '');
       setName(student.name || '');
       setEmail(student.email || '');
-      setPaymentStatus(student.paymentStatus || 'pending');
+      setStatus(student.status || 'active');
       setAssignedSeatId(student.assignedSeatId || '');
     } else {
       setStudentId('');
       setName('');
       setEmail('');
-      setPaymentStatus('pending');
+      setStatus('active');
       setAssignedSeatId('');
     }
   }, [student]);
@@ -60,7 +60,7 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
       id: studentId,
       name,
       email,
-      paymentStatus,
+      status,
       assignedSeatId,
     };
 
@@ -157,22 +157,22 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
         {errors.email && <p className="text-sm font-medium text-destructive">{errors.email}</p>}
       </div>
       <div className="space-y-2">
-        <Label htmlFor="paymentStatus">Payment Status</Label>
+        <Label htmlFor="status">Status</Label>
         <Select
-          onValueChange={(value: 'paid' | 'pending' | 'overdue') => setPaymentStatus(value)}
-          value={paymentStatus}
+          onValueChange={(value: 'active' | 'at-risk' | 'inactive') => setStatus(value)}
+          value={status}
           disabled={isSubmitting}
         >
-          <SelectTrigger id="paymentStatus">
-            <SelectValue placeholder="Select payment status" />
+          <SelectTrigger id="status">
+            <SelectValue placeholder="Select status" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="paid">Paid</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="overdue">Overdue</SelectItem>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="at-risk">At-Risk</SelectItem>
+            <SelectItem value="inactive">Inactive</SelectItem>
           </SelectContent>
         </Select>
-        {errors.paymentStatus && <p className="text-sm font-medium text-destructive">{errors.paymentStatus}</p>}
+        {errors.status && <p className="text-sm font-medium text-destructive">{errors.status}</p>}
       </div>
       <div className="space-y-2">
         <Label htmlFor="assignedSeatId">Assigned Seat ID (Optional)</Label>

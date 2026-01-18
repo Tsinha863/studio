@@ -47,6 +47,10 @@ export async function addStudent(
       ...studentData,
       id: studentId, // denormalize custom ID into the document
       libraryId,
+      fibonacciStreak: 0,
+      notes: [],
+      tags: [],
+      lastInteractionAt: serverTimestamp(),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -73,11 +77,11 @@ export async function updateStudent(
   db: Firestore,
   libraryId: string,
   docId: string,
-  data: StudentFormValues,
+  data: Partial<StudentFormValues>,
   actor: Actor
 ): Promise<ActionResponse> {
   // For updates, the student ID (id) is not part of the editable form.
-  const updateSchema = studentFormSchema.omit({ id: true });
+  const updateSchema = studentFormSchema.omit({ id: true }).partial();
   const validation = updateSchema.safeParse(data);
 
   if (!validation.success) {
@@ -93,6 +97,7 @@ export async function updateStudent(
     const studentRef = doc(db, `libraries/${libraryId}/students/${docId}`);
     batch.update(studentRef, {
       ...studentData,
+      lastInteractionAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
 
@@ -102,7 +107,7 @@ export async function updateStudent(
       libraryId,
       user: actor,
       activityType: 'student_updated',
-      details: { studentId: docId, studentName: studentData.name },
+      details: { studentId: docId, studentName: studentData.name || 'N/A' },
       timestamp: serverTimestamp(),
     });
 
@@ -120,12 +125,18 @@ export async function deleteStudent(
   docId: string,
   actor: Actor
 ): Promise<ActionResponse> {
+  // This is a soft delete. It sets the student's status to 'inactive'.
   try {
     const batch = writeBatch(db);
 
-    // 1. Delete student document
+    // 1. "Delete" student document by setting status to inactive
     const studentRef = doc(db, `libraries/${libraryId}/students/${docId}`);
-    batch.delete(studentRef);
+    batch.update(studentRef, {
+      status: 'inactive',
+      assignedSeatId: null, // Unassign seat
+      updatedAt: serverTimestamp(),
+      lastInteractionAt: serverTimestamp(),
+    });
 
     // 2. Create activity log
     const logRef = doc(activityLogsCol(db, libraryId));
@@ -136,6 +147,9 @@ export async function deleteStudent(
       details: { studentId: docId },
       timestamp: serverTimestamp(),
     });
+    
+    // TODO: Also unassign seat if one is assigned. This requires a transaction to be safe.
+    // For now, we assume this is handled separately or the impact is low.
 
     await batch.commit();
     return { success: true };

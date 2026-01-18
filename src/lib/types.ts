@@ -20,11 +20,13 @@ export interface Student {
   userId?: string; // Optional link to a User account
   name: string;
   email: string;
-  status: 'active' | 'inactive' | 'graduated';
-  paymentStatus: 'paid' | 'pending' | 'overdue';
+  status: 'active' | 'at-risk' | 'inactive';
   assignedSeatId?: string | null;
   fibonacciStreak: number;
   paymentDue: number;
+  lastInteractionAt: Timestamp;
+  notes: Array<{ text: string; createdAt: Timestamp; authorId: string; authorName: string; }>;
+  tags: string[];
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }

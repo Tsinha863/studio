@@ -11,8 +11,9 @@ import {
   where,
   getDocs,
   Timestamp,
+  increment,
 } from 'firebase/firestore';
-import type { Student } from '../types';
+import type { Student, Payment } from '../types';
 
 type ActionResponse = {
   success: boolean;
@@ -42,39 +43,59 @@ export async function createMonthlyPayments(
   try {
     const batch = writeBatch(db);
 
-    // 1. Get all active students
-    const q = query(studentsCol(db, libraryId), where('status', '==', 'active'));
+    // Get all students who are currently active or at risk.
+    const q = query(studentsCol(db, libraryId), where('status', 'in', ['active', 'at-risk']));
     const studentsSnapshot = await getDocs(q);
-    const activeStudents = studentsSnapshot.docs.map(doc => ({ docId: doc.id, ...doc.data() } as Student));
-
-    // 2. For each student, create a new 'pending' payment for the current month
+    
     const now = new Date();
     const dueDate = new Date(now.getFullYear(), now.getMonth() + 1, 0); // Last day of current month
+    let createdCount = 0;
 
-    for (const student of activeStudents) {
-      const paymentRef = doc(paymentsCol(db, libraryId)); // Auto-generate ID
-      batch.set(paymentRef, {
-        libraryId,
-        studentId: student.id,
-        studentName: student.name,
-        amount: MONTHLY_FEE,
-        status: 'pending',
-        dueDate: Timestamp.fromDate(dueDate),
-        paymentDate: null,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+    for (const studentDoc of studentsSnapshot.docs) {
+      const student = { docId: studentDoc.id, ...studentDoc.data() } as Student;
+      
+      // Check if student already has a pending or overdue payment
+      const unpaidPaymentsQuery = query(paymentsCol(db, libraryId), 
+        where('studentId', '==', student.id),
+        where('status', 'in', ['pending', 'overdue'])
+      );
+      const unpaidPaymentsSnapshot = await getDocs(unpaidPaymentsQuery);
+
+      if (unpaidPaymentsSnapshot.empty) {
+        // No unpaid bills, create a new one
+        const paymentRef = doc(paymentsCol(db, libraryId));
+        batch.set(paymentRef, {
+          libraryId,
+          studentId: student.id,
+          studentName: student.name,
+          amount: MONTHLY_FEE,
+          status: 'pending',
+          dueDate: Timestamp.fromDate(dueDate),
+          paymentDate: null,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+        createdCount++;
+      } else {
+        // Student has unpaid bills, mark them as 'at-risk'
+        if (student.status !== 'at-risk') {
+          const studentRef = doc(db, `libraries/${libraryId}/students/${student.docId}`);
+          batch.update(studentRef, { status: 'at-risk', updatedAt: serverTimestamp() });
+        }
+      }
     }
 
-    // 3. Create activity log
-    const logRef = doc(activityLogsCol(db, libraryId));
-    batch.set(logRef, {
-      libraryId,
-      user: actor,
-      activityType: 'monthly_payments_created',
-      details: { count: activeStudents.length },
-      timestamp: serverTimestamp(),
-    });
+    // Create activity log
+    if (createdCount > 0) {
+        const logRef = doc(activityLogsCol(db, libraryId));
+        batch.set(logRef, {
+          libraryId,
+          user: actor,
+          activityType: 'monthly_payments_created',
+          details: { count: createdCount },
+          timestamp: serverTimestamp(),
+        });
+    }
 
     await batch.commit();
     return { success: true };
@@ -96,22 +117,23 @@ export async function markPaymentAsPaid(
       // 1. Get references
       const paymentRef = doc(db, `libraries/${libraryId}/payments/${paymentId}`);
       
-      // Note: We query for the student by their custom ID field, not the document ID.
       const studentQuery = query(studentsCol(db, libraryId), where('id', '==', studentCustomId));
-      const studentSnapshot = await getDocs(studentQuery);
+      const studentSnapshot = await getDocs(studentQuery); // Use getDocs within transaction
       if (studentSnapshot.empty) {
         throw new Error(`Student with ID ${studentCustomId} not found.`);
       }
-      const studentDoc = studentSnapshot.docs[0];
-      const studentRef = studentDoc.ref;
+      const studentDocSnapshot = studentSnapshot.docs[0];
+      const studentRef = studentDocSnapshot.ref;
       
       // 2. Read documents
       const paymentDoc = await transaction.get(paymentRef);
-      const studentData = studentDoc.data() as Student;
+      const studentDoc = await transaction.get(studentRef);
 
-      if (!paymentDoc.exists()) {
-        throw new Error('Payment document not found.');
-      }
+      if (!paymentDoc.exists()) throw new Error('Payment document not found.');
+      if (!studentDoc.exists()) throw new Error('Student document not found.');
+      
+      const paymentData = paymentDoc.data() as Payment;
+      const wasOverdue = paymentData.status === 'overdue';
 
       // 3. Perform writes
       // Update payment
@@ -121,12 +143,24 @@ export async function markPaymentAsPaid(
         updatedAt: serverTimestamp(),
       });
 
-      // Update student
-      transaction.update(studentRef, {
-        paymentStatus: 'paid',
-        fibonacciStreak: (studentData.fibonacciStreak || 0) + 1,
+      // Check for other outstanding payments for this student
+      const otherUnpaidQuery = query(paymentsCol(db, libraryId),
+          where('studentId', '==', studentCustomId),
+          where('status', 'in', ['pending', 'overdue']),
+          where('__name__', '!=', paymentId) // Exclude the current payment
+      );
+      const otherUnpaidSnapshot = await getDocs(otherUnpaidQuery);
+
+      const hasOtherUnpaid = !otherUnpaidSnapshot.empty;
+
+      // Update student record
+      const studentUpdateData: any = {
+        fibonacciStreak: wasOverdue ? 0 : increment(1),
+        status: hasOtherUnpaid ? 'at-risk' : 'active',
+        lastInteractionAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      });
+      };
+      transaction.update(studentRef, studentUpdateData);
 
       // Create activity log
       const logRef = doc(activityLogsCol(db, libraryId));
@@ -135,8 +169,8 @@ export async function markPaymentAsPaid(
         user: actor,
         activityType: 'payment_processed',
         details: {
-          studentName: studentData.name,
-          amount: paymentDoc.data().amount,
+          studentName: studentDoc.data().name,
+          amount: paymentData.amount,
           paymentId: paymentId,
         },
         timestamp: serverTimestamp(),

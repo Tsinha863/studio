@@ -111,13 +111,13 @@
           "type": "string",
           "description": "The ID of the seat assigned to the student."
         },
-        "paymentStatus": {
+        "status": {
           "type": "string",
-          "description": "The current payment status of the student.",
+          "description": "The lifecycle status of the student, derived from payment history and activity.",
           "enum": [
-            "paid",
-            "pending",
-            "overdue"
+            "active",
+            "at-risk",
+            "inactive"
           ]
         },
         "paymentDue": {
@@ -126,7 +126,31 @@
         },
         "fibonacciStreak": {
           "type": "number",
-          "description": "Fibonacci streak for payment."
+          "description": "Consecutive on-time payment streak."
+        },
+        "lastInteractionAt": {
+          "type": "string",
+          "description": "Timestamp of the last meaningful interaction with the student record for CRM purposes.",
+          "format": "date-time"
+        },
+        "notes": {
+          "type": "array",
+          "description": "CRM notes related to the student.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "text": { "type": "string" },
+              "createdAt": { "type": "string", "format": "date-time" },
+              "authorId": { "type": "string" },
+              "authorName": { "type": "string" }
+            },
+            "required": ["text", "createdAt", "authorId", "authorName"]
+          }
+        },
+        "tags": {
+          "type": "array",
+          "description": "CRM tags for categorizing students.",
+          "items": { "type": "string" }
         },
         "createdAt": {
           "type": "string",
@@ -144,7 +168,7 @@
         "libraryId",
         "name",
         "email",
-        "paymentStatus",
+        "status",
         "createdAt",
         "updatedAt"
       ]

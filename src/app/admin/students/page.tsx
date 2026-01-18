@@ -105,14 +105,14 @@ export default function StudentsPage() {
 
     if (result.success) {
       toast({
-        title: 'Student Deleted',
-        description: `${alertState.studentName} has been removed from the system.`,
+        title: 'Student Set to Inactive',
+        description: `${alertState.studentName} has been marked as inactive.`,
       });
     } else {
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: result.error || 'Could not delete the student.',
+        description: result.error || 'Could not update the student status.',
       });
     }
     closeDeleteAlert();
@@ -180,8 +180,8 @@ export default function StudentsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the
-              student record for <span className="font-semibold">{alertState.studentName}</span>.
+              This action cannot be undone. This will set the student{' '}
+              <span className="font-semibold">{alertState.studentName}</span> to inactive and unassign them from any seats.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

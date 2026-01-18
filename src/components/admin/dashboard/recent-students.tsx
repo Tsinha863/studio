@@ -33,6 +33,13 @@ export function RecentStudents({ students }: RecentStudentsProps) {
       <TableBody>
         {students.map((student, index) => {
           const avatar = studentAvatars[index % studentAvatars.length];
+          const status = student.status;
+          const variant =
+            status === 'active'
+              ? 'success'
+              : status === 'at-risk'
+              ? 'destructive'
+              : 'secondary';
           return (
             <TableRow key={student.id}>
               <TableCell>
@@ -54,8 +61,8 @@ export function RecentStudents({ students }: RecentStudentsProps) {
                 </div>
               </TableCell>
               <TableCell>
-                <Badge variant={student.paymentStatus === 'paid' ? 'success' : student.paymentStatus === 'pending' ? 'secondary' : 'destructive'}>
-                  {student.paymentStatus}
+                <Badge variant={variant} className='capitalize'>
+                  {student.status}
                 </Badge>
               </TableCell>
               <TableCell className="text-right">

@@ -44,18 +44,18 @@ export const columns = ({ openModal, openDeleteAlert }: ColumnsConfig): ColumnDe
     },
   },
   {
-    accessorKey: 'paymentStatus',
+    accessorKey: 'status',
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Payment Status" />
+      <DataTableColumnHeader column={column} title="Status" />
     ),
     cell: ({ row }) => {
-      const status = row.original.paymentStatus;
+      const status = row.original.status;
       const variant =
-        status === 'paid'
+        status === 'active'
           ? 'success'
-          : status === 'pending'
-          ? 'secondary'
-          : 'destructive';
+          : status === 'at-risk'
+          ? 'destructive'
+          : 'secondary';
       return <Badge variant={variant} className="capitalize">{status}</Badge>;
     },
     filterFn: (row, id, value) => {
@@ -105,7 +105,7 @@ export const columns = ({ openModal, openDeleteAlert }: ColumnsConfig): ColumnDe
               className="text-destructive"
               onClick={() => openDeleteAlert(student)}
             >
-              Delete Student
+              Set Inactive
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

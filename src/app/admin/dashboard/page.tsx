@@ -48,7 +48,14 @@ export default function DashboardPage() {
   const { firestore, user } = useFirebase();
 
   // --- Data Fetching ---
-  const studentsQuery = useMemoFirebase(() => {
+  const allStudentsQuery = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return query(
+      collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students`)
+    );
+  }, [firestore, user]);
+
+  const recentStudentsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(
       collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students`),
@@ -74,7 +81,7 @@ export default function DashboardPage() {
     if (!firestore || !user) return null;
     return query(
         collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/payments`),
-        where('createdAt', '>=', sixMonthsAgoTimestamp)
+        where('paymentDate', '>=', sixMonthsAgoTimestamp)
     );
   }, [firestore, user]);
 
@@ -82,17 +89,17 @@ export default function DashboardPage() {
       if (!firestore || !user) return null;
       return query(
           collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/expenses`),
-          where('createdAt', '>=', sixMonthsAgoTimestamp)
+          where('expenseDate', '>=', sixMonthsAgoTimestamp)
       );
   }, [firestore, user]);
 
-
-  const { data: recentStudents } = useCollection<Omit<Student, 'docId'>>(studentsQuery);
+  const { data: allStudents } = useCollection<Student>(allStudentsQuery);
+  const { data: recentStudents } = useCollection<Student>(recentStudentsQuery);
   const { data: activityLogs } = useCollection<ActivityLog>(activityQuery);
   const { data: payments } = useCollection<Payment>(paymentsQuery);
   const { data: expenses } = useCollection<Expense>(expensesQuery);
 
-  // --- Data Processing for Charts ---
+  // --- Data Processing for Charts & KPIs ---
   const incomeExpenseData = React.useMemo(() => {
     const months = Array.from({ length: 6 }, (_, i) => {
         const d = new Date();
@@ -101,15 +108,19 @@ export default function DashboardPage() {
     }).reverse();
 
     payments?.forEach(p => {
-        const month = p.createdAt.toDate().toLocaleString('default', { month: 'short' });
-        const monthData = months.find(m => m.month === month);
-        if (monthData && p.status === 'paid') {
-            monthData.income += p.amount;
+        const paymentDate = p.paymentDate?.toDate();
+        if (paymentDate) {
+            const month = paymentDate.toLocaleString('default', { month: 'short' });
+            const monthData = months.find(m => m.month === month);
+            if (monthData && p.status === 'paid') {
+                monthData.income += p.amount;
+            }
         }
     });
 
     expenses?.forEach(e => {
-        const month = e.createdAt.toDate().toLocaleString('default', { month: 'short' });
+        const expenseDate = e.expenseDate.toDate();
+        const month = expenseDate.toLocaleString('default', { month: 'short' });
         const monthData = months.find(m => m.month === month);
         if (monthData) {
             monthData.expenses += e.amount;
@@ -121,6 +132,15 @@ export default function DashboardPage() {
 
   const totalRevenue = React.useMemo(() => payments?.filter(p => p.status === 'paid').reduce((acc, p) => acc + p.amount, 0) || 0, [payments]);
   const totalExpenses = React.useMemo(() => expenses?.reduce((acc, e) => acc + e.amount, 0) || 0, [expenses]);
+  const activeStudentCount = React.useMemo(() => allStudents?.filter(s => s.status === 'active').length || 0, [allStudents]);
+  
+  const newStudentsThisMonth = React.useMemo(() => {
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+    return allStudents?.filter(s => s.createdAt.toDate() >= startOfMonth).length || 0;
+  }, [allStudents]);
+
 
   return (
     <div className="flex flex-col gap-6">
@@ -150,14 +170,14 @@ export default function DashboardPage() {
         />
         <KpiCard
           title="Active Students"
-          value={`+${staticKpiData.activeStudents.toLocaleString()}`}
-          change="+2 since last month"
+          value={`${activeStudentCount}`}
+          change={`${allStudents?.filter(s => s.status === 'at-risk').length || 0} at-risk`}
           icon={<Users />}
         />
         <KpiCard
-          title="New Students (Month)"
-          value={`+${staticKpiData.newStudents.toLocaleString()}`}
-          change="5 this month"
+          title="New Students"
+          value={`+${newStudentsThisMonth}`}
+          change="this month"
           icon={<Activity />}
         />
       </div>
