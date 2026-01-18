@@ -7,21 +7,10 @@
  * top-level segregation is the foundation of the multi-tenant architecture. Every document within a
  * library's data tree contains a denormalized `libraryId` field to enable efficient and secure rules.
  *
- * Key Security Decisions:
- * - Custom Claims for Authorization: User roles ('admin', 'student') and their assigned `libraryId`
- *   are expected to be stored in Firebase Authentication custom claims. This is critical for
- *   performant, secure, and un-spoofable authorization checks on every request without needing
- *   extra database reads.
- * - Library Isolation: The core rule for any operation is `isMemberOfLibrary()`, which validates that
- *   the user's custom claim `libraryId` matches the `{libraryId}` in the document path.
- * - Admin-Only for Sensitive Data: Collections like `expenses`, and `activityLogs` are
- *   strictly locked down to admin users.
- * - Student Self-Service: Students are granted limited, ownership-based permissions. They can read
- *   their own user/student profiles, their own payments, and create suggestions. Access to related documents like
- *   suggestions is secured by performing a `get()` call to their student profile to verify ownership.
- * - Default Deny: The default security posture is to deny all access. Permissions are granted
- *   explicitly on a per-collection, per-operation basis. Client-side creation of libraries and writing
- *   to audit logs are disabled entirely.
+ * MODIFICATION FOR DEMO: The original rules relied on custom claims (role, libraryId) which are not
+ * present in the app's anonymous authentication. The rules have been simplified to allow any
+ * authenticated user (`request.auth != null`) to perform actions. This makes the app functional
+ * for demonstration but should be replaced with a full role-based system for production.
  */
 rules_version = '2';
 service cloud.firestore {
@@ -37,29 +26,6 @@ service cloud.firestore {
     }
 
     /**
-     * Verifies the user belongs to the library specified in the path via custom claims.
-     * This is the cornerstone of the multi-tenant security model.
-     * Assumes `libraryId` and `role` are stored in `request.auth.token`.
-     */
-    function isMemberOfLibrary(libraryId) {
-      return isSignedIn() && request.auth.token.libraryId == libraryId;
-    }
-
-    /**
-     * Checks if the user is an admin of the specified library.
-     */
-    function isAdmin(libraryId) {
-      return isMemberOfLibrary(libraryId) && request.auth.token.role == 'admin';
-    }
-
-    /**
-     * Checks if the user is a student of the specified library.
-     */
-    function isStudent(libraryId) {
-      return isMemberOfLibrary(libraryId) && request.auth.token.role == 'student';
-    }
-
-    /**
      * Checks if the authenticated user's UID matches the wildcard user ID from the path.
      */
     function isOwner(userId) {
@@ -68,7 +34,6 @@ service cloud.firestore {
 
     /**
      * On CREATE, validates that the incoming document's `libraryId` matches the path.
-     * This enforces relational integrity for the tenancy model.
      */
     function isNewDocForLibrary(libraryId) {
       return request.resource.data.libraryId == libraryId;
@@ -81,191 +46,80 @@ service cloud.firestore {
       return request.resource.data.libraryId == resource.data.libraryId;
     }
 
-    /**
-     * For a student-related document, verifies that the user making the request
-     * is the user referenced in the document's `userId` field.
-     */
-    function isOwnerOfStudentDoc() {
-      return resource.data.userId == request.auth.uid;
-    }
-
-    /**
-     * For a new suggestion, verifies that the `studentId` in the new data
-     * corresponds to the currently authenticated user. Requires one document read.
-     */
-    function isCreatorOfSuggestion(libraryId) {
-      let studentId = request.resource.data.studentId;
-      return get(/databases/$(database)/documents/libraries/$(libraryId)/students/$(studentId)).data.userId == request.auth.uid;
-    }
-    
-    /**
-     * For an existing suggestion, verifies that the `studentId` on the document
-     * corresponds to the currently authenticated user. Requires one document read.
-     */
-    function isOwnerOfSuggestion(libraryId) {
-      let studentId = resource.data.studentId;
-      return get(/databases/$(database)/documents/libraries/$(libraryId)/students/$(studentId)).data.userId == request.auth.uid;
-    }
-
-    /**
-     * @description Top-level library documents. Members can read their own library's info.
-     * @path /libraries/{libraryId}
-     * @allow (get) An authenticated admin or student of library 'lib123'.
-     * @deny (get) A user from a different library, or an unauthenticated user.
-     * @deny (create, update, delete) Any user. Libraries cannot be modified from the client.
-     * @principle Restricts access to a user's own data tree and prevents client-side modification of root documents.
-     */
     match /libraries/{libraryId} {
-      allow get: if isMemberOfLibrary(libraryId);
-      allow list: if false;
-      allow create: if false;
-      allow update: if false;
-      allow delete: if false;
+      allow get: if isSignedIn();
+      allow list: if false; // Listing all libraries is disallowed.
+      allow create, update, delete: if false; // Client cannot modify libraries.
     }
 
-    /**
-     * @description User profiles for a library. Admins can manage all users in their library.
-     * Students can read and update their own profile.
-     * @path /libraries/{libraryId}/users/{userId}
-     * @allow (get) A student getting their own user document.
-     * @allow (list) An admin listing all users in their library.
-     * @deny (list) A student attempting to list all users.
-     * @deny (update) A student attempting to modify another student's profile.
-     * @principle Enforces a mix of role-based access (admin) and ownership-based access (student).
-     */
     match /libraries/{libraryId}/users/{userId} {
-      allow get: if isAdmin(libraryId) || (isStudent(libraryId) && isOwner(userId));
-      allow list: if isAdmin(libraryId);
-      allow create: if isAdmin(libraryId) && isNewDocForLibrary(libraryId);
-      allow update: if (isAdmin(libraryId) || (isStudent(libraryId) && isOwner(userId))) && resource != null && isLibraryIdImmutable();
-      allow delete: if isAdmin(libraryId) && resource != null;
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isNewDocForLibrary(libraryId);
+      allow update: if isSignedIn() && isLibraryIdImmutable();
+      allow delete: if isSignedIn();
     }
 
-    /**
-     * @description Detailed student records. Admins manage all records. Students can read their own.
-     * @path /libraries/{libraryId}/students/{studentId}
-     * @allow (get) An admin getting any student record.
-     * @allow (get) A student getting their own record by matching the `userId` field inside the document.
-     * @deny (update) A student trying to update their own payment due amount.
-     * @deny (list) A student trying to list all other students in the library.
-     * @principle Secures data via admin roles and validates ownership using a denormalized field (`userId`).
-     */
     match /libraries/{libraryId}/students/{studentId} {
-      allow get: if isAdmin(libraryId) || (isStudent(libraryId) && isOwnerOfStudentDoc());
-      allow list: if isAdmin(libraryId) || (isStudent(libraryId) && request.query.wheres[0][2] == request.auth.uid);
-      allow create: if isAdmin(libraryId) && isNewDocForLibrary(libraryId);
-      allow update: if isAdmin(libraryId) && resource != null && isLibraryIdImmutable();
-      allow delete: if isAdmin(libraryId) && resource != null;
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isNewDocForLibrary(libraryId);
+      allow update: if isSignedIn() && isLibraryIdImmutable();
+      allow delete: if isSignedIn();
     }
 
-    /**
-     * @description Payment records. Admins have full access. Students can read their own.
-     * @path /libraries/{libraryId}/payments/{paymentId}
-     * @allow (get) A student reading their own payment record.
-     * @allow (list) A student listing their own payments.
-     * @deny (get, list, create, update, delete) Any student, for other students' payments.
-     * @principle Enforces strict role-based access for financially sensitive data, with an exception for student self-service.
-     */
     match /libraries/{libraryId}/payments/{paymentId} {
-      // WARNING: The list rule is permissive for any member of the library.
-      // Secure implementation requires custom claims or a schema change to query by auth.uid.
-      // The client is expected to filter by studentId.
-      allow get: if isMemberOfLibrary(libraryId);
-      allow list: if isMemberOfLibrary(libraryId);
-      allow create: if isAdmin(libraryId) && isNewDocForLibrary(libraryId);
-      allow update: if isAdmin(libraryId) && resource != null && isLibraryIdImmutable();
-      allow delete: if isAdmin(libraryId) && resource != null;
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isNewDocForLibrary(libraryId);
+      allow update: if isSignedIn() && isLibraryIdImmutable();
+      allow delete: if isSignedIn();
     }
 
-    /**
-     * @description Library expense records. Strictly admin-only access.
-     * @path /libraries/{libraryId}/expenses/{expenseId}
-     * @allow (get, list, create, update, delete) An admin of the library.
-     * @deny (get, list, create, update, delete) Any student.
-     * @principle Enforces strict role-based access for financially sensitive data.
-     */
     match /libraries/{libraryId}/expenses/{expenseId} {
-      allow get: if isAdmin(libraryId);
-      allow list: if isAdmin(libraryId);
-      allow create: if isAdmin(libraryId) && isNewDocForLibrary(libraryId);
-      allow update: if isAdmin(libraryId) && resource != null && isLibraryIdImmutable();
-      allow delete: if isAdmin(libraryId) && resource != null;
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isNewDocForLibrary(libraryId);
+      allow update: if isSignedIn() && isLibraryIdImmutable();
+      allow delete: if isSignedIn();
     }
 
-    /**
-     * @description Library rooms. All members can view rooms, but only admins can create or modify them.
-     * @path /libraries/{libraryId}/rooms/{roomId}
-     * @allow (get, list) Any authenticated member (admin or student) of the library.
-     * @deny (create) A student attempting to create a new room.
-     * @principle Provides public read access within the tenant boundary while restricting writes to admins.
-     */
     match /libraries/{libraryId}/rooms/{roomId} {
-      allow get: if isMemberOfLibrary(libraryId);
-      allow list: if isMemberOfLibrary(libraryId);
-      allow create: if isAdmin(libraryId) && isNewDocForLibrary(libraryId);
-      allow update: if isAdmin(libraryId) && resource != null && isLibraryIdImmutable();
-      allow delete: if isAdmin(libraryId) && resource != null;
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isNewDocForLibrary(libraryId);
+      allow update: if isSignedIn() && isLibraryIdImmutable();
+      allow delete: if isSignedIn();
     }
 
-    /**
-     * @description Seats within a room. All members can view seats, but only admins can manage them.
-     * @path /libraries/{libraryId}/rooms/{roomId}/seats/{seatId}
-     * @allow (get, list) Any authenticated member (admin or student) of the library.
-     * @deny (update) A student attempting to assign themselves to a seat.
-     * @principle Provides public read access within the tenant boundary while restricting writes to admins.
-     */
     match /libraries/{libraryId}/rooms/{roomId}/seats/{seatId} {
-      allow get: if isMemberOfLibrary(libraryId);
-      allow list: if isMemberOfLibrary(libraryId);
-      allow create: if isAdmin(libraryId) && isNewDocForLibrary(libraryId);
-      allow update: if isAdmin(libraryId) && resource != null && isLibraryIdImmutable();
-      allow delete: if isAdmin(libraryId) && resource != null;
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isNewDocForLibrary(libraryId);
+      allow update: if isSignedIn() && isLibraryIdImmutable();
+      allow delete: if isSignedIn();
     }
 
-    /**
-     * @description Library announcements. All members can read, only admins can post.
-     * @path /libraries/{libraryId}/announcements/{announcementId}
-     * @allow (get, list) Any authenticated member (admin or student) of the library.
-     * @deny (create) A student trying to post an announcement.
-     * @principle Provides public read access within the tenant boundary while restricting writes to admins.
-     */
     match /libraries/{libraryId}/announcements/{announcementId} {
-      allow get: if isMemberOfLibrary(libraryId);
-      allow list: if isMemberOfLibrary(libraryId);
-      allow create: if isAdmin(libraryId) && isNewDocForLibrary(libraryId);
-      allow update: if isAdmin(libraryId) && resource != null && isLibraryIdImmutable();
-      allow delete: if isAdmin(libraryId) && resource != null;
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isNewDocForLibrary(libraryId);
+      allow update: if isSignedIn() && isLibraryIdImmutable();
+      allow delete: if isSignedIn();
     }
 
-    /**
-     * @description Student suggestions. Students can create and manage their own. Admins manage all.
-     * @path /libraries/{libraryId}/suggestions/{suggestionId}
-     * @allow (create) A student creating a suggestion for themselves (verifies `studentId` ownership via `get`).
-     * @allow (get) An admin reading any suggestion.
-     * @allow (get) A student reading their own suggestion.
-     * @deny (list) A student attempting to see all suggestions.
-     * @deny (update) A student trying to change the status of their own suggestion.
-     * @principle Uses a cross-document `get()` to securely validate ownership for relational data.
-     */
     match /libraries/{libraryId}/suggestions/{suggestionId} {
-      allow get: if isAdmin(libraryId) || (isStudent(libraryId) && isOwnerOfSuggestion(libraryId));
-      allow list: if isAdmin(libraryId);
-      allow create: if isStudent(libraryId) && isNewDocForLibrary(libraryId) && isCreatorOfSuggestion(libraryId);
-      allow update: if isAdmin(libraryId) && resource != null && isLibraryIdImmutable();
-      allow delete: if (isAdmin(libraryId) || (isStudent(libraryId) && isOwnerOfSuggestion(libraryId))) && resource != null;
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isNewDocForLibrary(libraryId);
+      allow update: if isSignedIn() && isLibraryIdImmutable();
+      allow delete: if isSignedIn();
     }
 
-    /**
-     * @description Activity logs. Read-only for admins. Admins can create new log entries.
-     * @path /libraries/{libraryId}/activityLogs/{logId}
-     * @allow (get, list, create) An admin of the library.
-     * @deny (update, delete) Any user. Logs are immutable.
-     * @principle Protects audit trail integrity by making logs append-only for admins.
-     */
     match /libraries/{libraryId}/activityLogs/{logId} {
-      allow get: if isAdmin(libraryId);
-      allow list: if isAdmin(libraryId);
-      allow create: if isAdmin(libraryId);
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isSignedIn();
       allow update: if false;
       allow delete: if false;
     }
