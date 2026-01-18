@@ -6,7 +6,6 @@ import { PlusCircle } from 'lucide-react';
 import {
   collection,
   query,
-  orderBy,
 } from 'firebase/firestore';
 
 import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
@@ -43,9 +42,9 @@ export default function SeatingPage() {
 
   const roomsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
+    // Removed orderBy to prevent query hanging on missing index
     return query(
-      collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/rooms`),
-      orderBy('createdAt', 'desc')
+      collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/rooms`)
     );
   }, [firestore, user]);
 
