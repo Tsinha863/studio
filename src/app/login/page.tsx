@@ -2,11 +2,12 @@
 
 import * as React from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { signInAnonymously } from 'firebase/auth';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -27,50 +28,111 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
+import { useFirebase } from '@/firebase';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Logo } from '@/components/logo';
 
-const signupSchema = z.object({
-  name: z.string().min(2, { message: 'Name must be at least 2 characters long.' }),
+const loginSchema = z.object({
   email: z.string().email({ message: 'Please enter a valid email address.' }),
   password: z
     .string()
     .min(8, { message: 'Password must be at least 8 characters long.' }),
-  confirmPassword: z.string()
-}).refine(data => data.password === data.confirmPassword, {
-  message: "Passwords don't match",
-  path: ["confirmPassword"],
 });
 
-type SignupFormValues = z.infer<typeof signupSchema>;
+type LoginFormValues = z.infer<typeof loginSchema>;
 
-function SignupForm() {
+function LoginForm() {
   const router = useRouter();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = React.useState(false);
+  const { auth } = useFirebase();
 
-  const form = useForm<SignupFormValues>({
-    resolver: zodResolver(signupSchema),
+  const form = useForm<LoginFormValues>({
+    resolver: zodResolver(loginSchema),
     defaultValues: {
-      name: '',
       email: '',
       password: '',
-      confirmPassword: '',
     },
   });
 
-  const onSubmit = (data: SignupFormValues) => {
+  const onSubmit = (data: LoginFormValues) => {
     setIsLoading(true);
-    // Mock signup logic
-    setTimeout(() => {
-      setIsLoading(false);
+
+    const successfulLogin =
+      (data.email === 'admin@campushub.com' && data.password === 'password123') ||
+      (data.email === 'student@campushub.com' && data.password === 'password123');
+
+    if (!successfulLogin) {
       toast({
-        title: 'Account Created',
-        description: "Welcome! Redirecting to your dashboard.",
+        variant: 'destructive',
+        title: 'Login Failed',
+        description: 'Invalid email or password. Please try again.',
       });
-      router.push('/admin/dashboard');
-    }, 1500);
+      setIsLoading(false);
+      return;
+    }
+
+    const performLogin = () => {
+      const isAdmin = data.email === 'admin@campushub.com';
+      toast({
+        title: 'Login Successful',
+        description: `Welcome back, ${isAdmin ? 'Admin' : 'Student'}! Redirecting to your dashboard.`,
+      });
+      // Store the email for the student dashboard to use
+      if (!isAdmin) {
+          sessionStorage.setItem('demoStudentEmail', data.email);
+      } else {
+          sessionStorage.removeItem('demoStudentEmail');
+      }
+      router.push(isAdmin ? '/admin/dashboard' : '/student/dashboard');
+    };
+
+    // This is a mock login flow. For the forms to be enabled on the next pages,
+    // we need a Firebase user. We'll sign in anonymously here to ensure
+    // that the `useFirebase` hook provides a user object.
+    if (auth?.currentUser) {
+      performLogin();
+    } else if (auth) {
+      signInAnonymously(auth)
+        .then(() => {
+          performLogin();
+        })
+        .catch((error) => {
+          console.error('Anonymous sign-in failed:', error);
+          toast({
+            variant: 'destructive',
+            title: 'Firebase Auth Error',
+            description: 'Could not sign in anonymously. ' + error.message,
+          });
+          setIsLoading(false);
+        });
+    } else {
+        toast({
+            variant: 'destructive',
+            title: 'Initialization Error',
+            description: 'Firebase is not ready. Please try again in a moment.',
+        });
+        setIsLoading(false);
+    }
   };
+  
+  const handleAdminDemo = () => {
+    form.setValue('email', 'admin@campushub.com');
+    form.setValue('password', 'password123');
+    toast({
+        title: 'Demo Mode',
+        description: 'Admin credentials filled. Click "Sign In" to continue.',
+    });
+  }
+
+  const handleStudentDemo = () => {
+    form.setValue('email', 'student@campushub.com');
+    form.setValue('password', 'password123');
+    toast({
+        title: 'Demo Mode',
+        description: 'Student credentials filled. Click "Sign In" to continue.',
+    });
+  }
 
   return (
     <Form {...form}>
@@ -80,29 +142,12 @@ function SignupForm() {
             <Link href="/" className="mx-auto mb-4">
               <Logo />
             </Link>
-            <CardTitle className="font-headline text-2xl">Create an Account</CardTitle>
+            <CardTitle className="font-headline text-2xl">CampusHub</CardTitle>
             <CardDescription>
-              Enter your details below to create your account
+              Sign in to access your dashboard
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Name</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="John Doe"
-                      {...field}
-                      disabled={isLoading}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
             <FormField
               control={form.control}
               name="email"
@@ -138,24 +183,6 @@ function SignupForm() {
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="confirmPassword"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Confirm Password</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="password"
-                      placeholder="••••••••"
-                      {...field}
-                      disabled={isLoading}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
           </CardContent>
           <CardFooter className="flex flex-col gap-4">
             <Button
@@ -163,12 +190,20 @@ function SignupForm() {
               className="w-full"
               disabled={isLoading}
             >
-              {isLoading ? 'Creating Account...' : 'Create Account'}
+              {isLoading ? 'Signing In...' : 'Sign In'}
             </Button>
+            <div className='flex w-full gap-2'>
+              <Button type="button" variant="outline" className="w-full" onClick={handleAdminDemo}>
+                Admin Demo
+              </Button>
+              <Button type="button" variant="outline" className="w-full" onClick={handleStudentDemo}>
+                Student Demo
+              </Button>
+            </div>
             <div className="text-center text-sm text-muted-foreground">
-              Already have an account?{' '}
-              <Link href="/login" className="text-primary hover:underline">
-                Sign In
+              Don&apos;t have an account?{' '}
+              <Link href="/signup" className="text-primary hover:underline">
+                Sign up
               </Link>
             </div>
           </CardFooter>
@@ -178,13 +213,13 @@ function SignupForm() {
   );
 }
 
-export default function SignupPage() {
+export default function LoginPage() {
   const heroImage = PlaceHolderImages.find(p => p.id === 'login-hero');
 
   return (
     <main className="flex min-h-screen w-full">
       <div className="flex w-full flex-col items-center justify-center p-4 lg:w-1/2">
-        <SignupForm />
+        <LoginForm />
       </div>
       <div className="relative hidden w-1/2 flex-col justify-between bg-primary p-12 text-primary-foreground lg:flex">
         {heroImage && (
@@ -197,7 +232,7 @@ export default function SignupPage() {
             />
         )}
         <div className="relative z-10">
-           <Link href="/">
+          <Link href="/">
             <Logo className="h-10 w-10 text-primary-foreground" />
           </Link>
           <h1 className="mt-4 font-headline text-4xl font-bold">CampusHub</h1>

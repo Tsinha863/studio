@@ -1,241 +1,132 @@
 'use client';
 
-import * as React from 'react';
+import React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm } from 'react-hook-form';
-import { z } from 'zod';
-import { useRouter } from 'next/navigation';
-import {
-  Activity,
-  ArrowRight,
-  Book,
-  CreditCard,
-  Users,
-} from 'lucide-react';
-import { signInAnonymously } from 'firebase/auth';
-
+import { ArrowRight, BookOpen, Users, BarChart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
-import { useToast } from '@/hooks/use-toast';
-import { useFirebase } from '@/firebase';
-import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Logo } from '@/components/logo';
+import { PlaceHolderImages } from '@/lib/placeholder-images';
 
-const loginSchema = z.object({
-  email: z.string().email({ message: 'Please enter a valid email address.' }),
-  password: z
-    .string()
-    .min(8, { message: 'Password must be at least 8 characters long.' }),
-});
-
-type LoginFormValues = z.infer<typeof loginSchema>;
-
-function LoginForm() {
-  const router = useRouter();
-  const { toast } = useToast();
-  const [isLoading, setIsLoading] = React.useState(false);
-  const { auth } = useFirebase();
-
-  const form = useForm<LoginFormValues>({
-    resolver: zodResolver(loginSchema),
-    defaultValues: {
-      email: '',
-      password: '',
-    },
-  });
-
-  const onSubmit = (data: LoginFormValues) => {
-    setIsLoading(true);
-
-    const successfulLogin =
-      (data.email === 'admin@campushub.com' && data.password === 'password123') ||
-      (data.email === 'student@campushub.com' && data.password === 'password123');
-
-    if (!successfulLogin) {
-      toast({
-        variant: 'destructive',
-        title: 'Login Failed',
-        description: 'Invalid email or password. Please try again.',
-      });
-      setIsLoading(false);
-      return;
-    }
-
-    const performLogin = () => {
-      const isAdmin = data.email === 'admin@campushub.com';
-      toast({
-        title: 'Login Successful',
-        description: `Welcome back, ${isAdmin ? 'Admin' : 'Student'}! Redirecting to your dashboard.`,
-      });
-      // Store the email for the student dashboard to use
-      if (!isAdmin) {
-          sessionStorage.setItem('demoStudentEmail', data.email);
-      } else {
-          sessionStorage.removeItem('demoStudentEmail');
-      }
-      router.push(isAdmin ? '/admin/dashboard' : '/student/dashboard');
-    };
-
-    // This is a mock login flow. For the forms to be enabled on the next pages,
-    // we need a Firebase user. We'll sign in anonymously here to ensure
-    // that the `useFirebase` hook provides a user object.
-    if (auth.currentUser) {
-      performLogin();
-    } else {
-      signInAnonymously(auth)
-        .then(() => {
-          performLogin();
-        })
-        .catch((error) => {
-          console.error('Anonymous sign-in failed:', error);
-          toast({
-            variant: 'destructive',
-            title: 'Firebase Auth Error',
-            description: 'Could not sign in anonymously. ' + error.message,
-          });
-          setIsLoading(false);
-        });
-    }
-  };
-  
-  const handleDemo = () => {
-    form.setValue('email', 'admin@campushub.com');
-    form.setValue('password', 'password123');
-    toast({
-        title: 'Demo Mode',
-        description: 'Admin credentials filled. Click "Sign In" to continue.',
-    });
-  }
-
+function FeatureCard({ icon, title, description }: { icon: React.ReactNode, title: string, description: string }) {
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)}>
-        <Card className="w-full max-w-sm border-0 shadow-none sm:border sm:shadow-lg">
-          <CardHeader className="text-center">
-            <div className="mx-auto mb-4">
-              <Logo />
-            </div>
-            <CardTitle className="font-headline text-2xl">CampusHub</CardTitle>
-            <CardDescription>
-              Sign in to access your dashboard
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4">
-            <FormField
-              control={form.control}
-              name="email"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Email</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="name@example.com"
-                      {...field}
-                      disabled={isLoading}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="password"
-              render={({ field }) => (
-                <FormItem>
-                  <div className="flex items-center justify-between">
-                    <FormLabel>Password</FormLabel>
-                  </div>
-                  <FormControl>
-                    <Input
-                      type="password"
-                      placeholder="••••••••"
-                      {...field}
-                      disabled={isLoading}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </CardContent>
-          <CardFooter className="flex flex-col gap-4">
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={isLoading}
-            >
-              {isLoading ? 'Signing In...' : 'Sign In'}
-            </Button>
-            <Button type="button" variant="outline" className="w-full" onClick={handleDemo}>
-              View Demo
-            </Button>
-            <div className="text-center text-sm text-muted-foreground">
-              Don&apos;t have an account?{' '}
-              <Link href="/signup" className="text-primary hover:underline">
-                Sign up
-              </Link>
-            </div>
-          </CardFooter>
-        </Card>
-      </form>
-    </Form>
+    <div className="flex flex-col items-center p-6 text-center bg-card rounded-lg shadow-md">
+      <div className="mb-4 text-primary">{icon}</div>
+      <h3 className="mb-2 text-xl font-bold">{title}</h3>
+      <p className="text-muted-foreground">{description}</p>
+    </div>
   );
 }
 
-export default function Home() {
+
+export default function WelcomePage() {
   const heroImage = PlaceHolderImages.find(p => p.id === 'login-hero');
 
   return (
-    <main className="flex min-h-screen w-full">
-      <div className="flex w-full flex-col items-center justify-center p-4 lg:w-1/2">
-        <LoginForm />
-      </div>
-      <div className="relative hidden w-1/2 flex-col justify-between bg-primary p-12 text-primary-foreground lg:flex">
-        {heroImage && (
-            <Image
-                src={heroImage.imageUrl}
-                alt={heroImage.description}
-                fill
-                className="absolute inset-0 h-full w-full object-cover opacity-20"
-                data-ai-hint={heroImage.imageHint}
-            />
-        )}
-        <div className="relative z-10">
-          <Logo className="h-10 w-10 text-primary-foreground" />
-          <h1 className="mt-4 font-headline text-4xl font-bold">CampusHub</h1>
-          <p className="mt-2 text-lg opacity-80">
-            The all-in-one solution for modern student management.
-          </p>
+    <div className="flex flex-col min-h-screen bg-background">
+      <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="container flex h-14 items-center">
+          <div className="mr-4 flex">
+            <Link href="/" className="mr-6 flex items-center space-x-2">
+              <Logo className="h-6 w-6" />
+              <span className="font-bold">CampusHub</span>
+            </Link>
+          </div>
+          <nav className="flex flex-1 items-center justify-end space-x-2">
+            <Button asChild>
+              <Link href="/login">
+                Get Started <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
+          </nav>
         </div>
-        <div className="relative z-10 mt-auto">
-          <p className="text-base font-medium">
-            &ldquo;This platform has revolutionized how we manage our student facilities. It's intuitive, powerful, and has saved us countless hours.&rdquo;
-          </p>
-          <footer className="mt-4 text-sm opacity-80">
-            - Jane Doe, Library Administrator
-          </footer>
+      </header>
+      <main className="flex-1">
+        {/* Hero Section */}
+        <section className="relative py-20 md:py-32">
+            {heroImage && (
+                <Image
+                    src={heroImage.imageUrl}
+                    alt={heroImage.description}
+                    fill
+                    priority
+                    className="absolute inset-0 h-full w-full object-cover opacity-10"
+                    data-ai-hint={heroImage.imageHint}
+                />
+            )}
+            <div className="container relative z-10 text-center">
+                <h1 className="text-4xl font-extrabold tracking-tight font-headline lg:text-5xl">
+                    The All-in-One Solution for Modern Student Management
+                </h1>
+                <p className="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground">
+                    Streamline your library operations, manage students, track payments, and gain valuable insights with one intuitive platform.
+                </p>
+                <div className="mt-8 flex justify-center">
+                    <Button asChild size="lg">
+                    <Link href="/login">
+                        Get Started for Free
+                        <ArrowRight className="ml-2 h-5 w-5" />
+                    </Link>
+                    </Button>
+                </div>
+            </div>
+        </section>
+
+        {/* Features Section */}
+        <section className="py-20 bg-card">
+            <div className="container">
+                <div className="text-center mb-12">
+                    <h2 className="text-3xl font-bold tracking-tight">Powerful Features, Simple Interface</h2>
+                    <p className="mt-4 max-w-2xl mx-auto text-muted-foreground">
+                        Everything you need to run your student library efficiently.
+                    </p>
+                </div>
+                <div className="grid gap-8 md:grid-cols-3">
+                    <FeatureCard
+                        icon={<Users className="h-10 w-10" />}
+                        title="Student Management"
+                        description="Easily add, edit, and manage student profiles, track their status, and handle seat assignments across multiple rooms and time slots."
+                    />
+                    <FeatureCard
+                        icon={<BookOpen className="h-10 w-10" />}
+                        title="Seat & Room Planning"
+                        description="Visualize your library layout, create rooms with customizable seat tiers, and assign students to specific seats for different time slots."
+                    />
+                    <FeatureCard
+                        icon={<BarChart className="h-10 w-10" />}
+                        title="Financial Tracking"
+                        description="Generate monthly payment invoices, track payments, manage expenses, and view insightful dashboards on your revenue and costs."
+                    />
+                </div>
+            </div>
+        </section>
+
+         {/* Call to Action Section */}
+        <section className="py-20">
+            <div className="container text-center">
+                 <h2 className="text-3xl font-bold tracking-tight">Ready to Transform Your Library Management?</h2>
+                <p className="mx-auto mt-4 max-w-xl text-lg text-muted-foreground">
+                    Join other institutions simplifying their daily operations with CampusHub.
+                </p>
+                 <div className="mt-8">
+                    <Button asChild size="lg">
+                    <Link href="/login">
+                        Sign In & Explore the Demo
+                    </Link>
+                    </Button>
+                </div>
+            </div>
+        </section>
+      </main>
+
+      <footer className="py-6 md:px-8 md:py-0 border-t">
+        <div className="container flex flex-col items-center justify-between gap-4 md:h-24 md:flex-row">
+            <p className="text-center text-sm leading-loose text-muted-foreground md:text-left">
+                Built by <a href="https://firebase.google.com/studio" target="_blank" rel="noreferrer" className="font-medium underline underline-offset-4">Firebase Studio</a>. 
+                Powered by Firebase and Next.js.
+            </p>
         </div>
-      </div>
-    </main>
+      </footer>
+    </div>
   );
 }
