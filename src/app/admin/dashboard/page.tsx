@@ -1,6 +1,6 @@
 import {
   Activity,
-  Rupee,
+  IndianRupee,
   Users,
   CreditCard,
   Plus,
@@ -51,7 +51,7 @@ export default function DashboardPage() {
           title="Total Revenue"
           value={`₹${kpiData.totalRevenue.toLocaleString()}`}
           change="+20.1% from last month"
-          icon={<Rupee />}
+          icon={<IndianRupee />}
         />
         <KpiCard
           title="Total Expenses"
