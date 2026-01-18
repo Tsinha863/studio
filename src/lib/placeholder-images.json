@@ -7,6 +7,12 @@
       "imageHint": "modern library"
     },
     {
+      "id": "welcome-hero",
+      "description": "A team of people collaborating around a table with laptops in a modern office.",
+      "imageUrl": "https://images.unsplash.com/photo-1521737604893-d14cc237f11d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw1fHxjb2xsYWJvcmF0aXZlJTIwd29ya3xlbnwwfHx8fDE3Njg2NDk5ODV8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "collaborative work"
+    },
+    {
       "id": "student-avatar-1",
       "description": "Avatar for a student",
       "imageUrl": "https://images.unsplash.com/photo-1540569014015-19a7be504e3a?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwyfHxwZXJzb24lMjBwb3J0cmFpdHxlbnwwfHx8fDE3Njg2NzM0NjV8MA&ixlib=rb-4.1.0&q=80&w=1080",
