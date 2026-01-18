@@ -30,11 +30,10 @@ export function CreateRoomForm({ libraryId, onSuccess, onCancel }: CreateRoomFor
   const [capacity, setCapacity] = React.useState<number | string>(10);
   const [errors, setErrors] = React.useState<Partial<Record<keyof RoomFormValues, string>>>({});
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    console.log("CREATE ROOM CLICKED"); // STEP 1: Confirm click fires
-    e.preventDefault(); // STEP 2: Prevent form auto-submit
+  const handleSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    console.log("CREATE ROOM CLICKED"); 
 
-    // STEP 4: Verify auth & library at click time
     console.log("USER:", user);
     console.log("LIBRARY ID:", libraryId);
 
@@ -118,7 +117,6 @@ export function CreateRoomForm({ libraryId, onSuccess, onCancel }: CreateRoomFor
       onSuccess();
 
     } catch (error) {
-      // STEP 3: Log the real Firebase error
       console.error("CREATE ROOM ERROR:", error);
       toast({
         variant: 'destructive',
@@ -131,7 +129,7 @@ export function CreateRoomForm({ libraryId, onSuccess, onCancel }: CreateRoomFor
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <div className="space-y-4">
       <div className="space-y-2">
         <Label htmlFor="roomName">Room Name</Label>
         <Input
@@ -162,7 +160,7 @@ export function CreateRoomForm({ libraryId, onSuccess, onCancel }: CreateRoomFor
         <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
           Cancel
         </Button>
-        <Button type="submit" disabled={isSubmitting || isUserLoading || !user}>
+        <Button type="button" onClick={handleSubmit} disabled={isSubmitting || isUserLoading || !user}>
           {isSubmitting ? (
             <>
               <Spinner className="mr-2 h-4 w-4" />
@@ -171,6 +169,6 @@ export function CreateRoomForm({ libraryId, onSuccess, onCancel }: CreateRoomFor
           ) : 'Create Room'}
         </Button>
       </div>
-    </form>
+    </div>
   );
 }
