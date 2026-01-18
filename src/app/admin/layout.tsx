@@ -30,6 +30,7 @@ import {
   SidebarTrigger,
   SidebarInset,
   useSidebar,
+  SidebarFooter,
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import {
