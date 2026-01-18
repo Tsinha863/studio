@@ -2,18 +2,11 @@
 
 import * as React from 'react';
 import Image from 'next/image';
-import Link from 'next/link';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { useRouter } from 'next/navigation';
-import {
-  Activity,
-  ArrowRight,
-  Book,
-  CreditCard,
-  Users,
-} from 'lucide-react';
+import Link from 'next/link';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -25,7 +18,6 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
   Form,
   FormControl,
@@ -38,57 +30,47 @@ import { useToast } from '@/hooks/use-toast';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Logo } from '@/components/logo';
 
-const loginSchema = z.object({
+const signupSchema = z.object({
+  name: z.string().min(2, { message: 'Name must be at least 2 characters long.' }),
   email: z.string().email({ message: 'Please enter a valid email address.' }),
   password: z
     .string()
     .min(8, { message: 'Password must be at least 8 characters long.' }),
+  confirmPassword: z.string()
+}).refine(data => data.password === data.confirmPassword, {
+  message: "Passwords don't match",
+  path: ["confirmPassword"],
 });
 
-type LoginFormValues = z.infer<typeof loginSchema>;
+type SignupFormValues = z.infer<typeof signupSchema>;
 
-function LoginForm() {
+function SignupForm() {
   const router = useRouter();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = React.useState(false);
 
-  const form = useForm<LoginFormValues>({
-    resolver: zodResolver(loginSchema),
+  const form = useForm<SignupFormValues>({
+    resolver: zodResolver(signupSchema),
     defaultValues: {
+      name: '',
       email: '',
       password: '',
+      confirmPassword: '',
     },
   });
 
-  const onSubmit = (data: LoginFormValues) => {
+  const onSubmit = (data: SignupFormValues) => {
     setIsLoading(true);
-    // Mock login logic
+    // Mock signup logic
     setTimeout(() => {
       setIsLoading(false);
-      if (data.email === 'admin@campushub.com' && data.password === 'password123') {
-        toast({
-          title: 'Login Successful',
-          description: "Welcome back, Admin! Redirecting to your dashboard.",
-        });
-        router.push('/admin/dashboard');
-      } else {
-        toast({
-          variant: 'destructive',
-          title: 'Login Failed',
-          description: 'Invalid email or password. Please try again.',
-        });
-      }
+      toast({
+        title: 'Account Created',
+        description: "Welcome! Redirecting to your dashboard.",
+      });
+      router.push('/admin/dashboard');
     }, 1500);
   };
-  
-  const handleDemo = () => {
-    form.setValue('email', 'admin@campushub.com');
-    form.setValue('password', 'password123');
-    toast({
-        title: 'Demo Mode',
-        description: 'Credentials filled. Click "Sign In" to continue.',
-    });
-  }
 
   return (
     <Form {...form}>
@@ -98,12 +80,29 @@ function LoginForm() {
             <div className="mx-auto mb-4">
               <Logo />
             </div>
-            <CardTitle className="font-headline text-2xl">CampusHub</CardTitle>
+            <CardTitle className="font-headline text-2xl">Create an Account</CardTitle>
             <CardDescription>
-              Sign in to access your dashboard
+              Enter your details below to create your account
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Name</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="John Doe"
+                      {...field}
+                      disabled={isLoading}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <FormField
               control={form.control}
               name="email"
@@ -126,15 +125,25 @@ function LoginForm() {
               name="password"
               render={({ field }) => (
                 <FormItem>
-                  <div className="flex items-center justify-between">
-                    <FormLabel>Password</FormLabel>
-                    <a
-                      href="#"
-                      className="text-sm font-medium text-primary hover:underline"
-                    >
-                      Forgot password?
-                    </a>
-                  </div>
+                  <FormLabel>Password</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="password"
+                      placeholder="••••••••"
+                      {...field}
+                      disabled={isLoading}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="confirmPassword"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Confirm Password</FormLabel>
                   <FormControl>
                     <Input
                       type="password"
@@ -154,15 +163,12 @@ function LoginForm() {
               className="w-full"
               disabled={isLoading}
             >
-              {isLoading ? 'Signing In...' : 'Sign In'}
-            </Button>
-            <Button type="button" variant="outline" className="w-full" onClick={handleDemo}>
-              View Demo
+              {isLoading ? 'Creating Account...' : 'Create Account'}
             </Button>
             <div className="text-center text-sm text-muted-foreground">
-              Don&apos;t have an account?{' '}
-              <Link href="/signup" className="text-primary hover:underline">
-                Sign up
+              Already have an account?{' '}
+              <Link href="/" className="text-primary hover:underline">
+                Sign In
               </Link>
             </div>
           </CardFooter>
@@ -172,13 +178,13 @@ function LoginForm() {
   );
 }
 
-export default function Home() {
+export default function SignupPage() {
   const heroImage = PlaceHolderImages.find(p => p.id === 'login-hero');
 
   return (
     <main className="flex min-h-screen w-full">
       <div className="flex w-full flex-col items-center justify-center p-4 lg:w-1/2">
-        <LoginForm />
+        <SignupForm />
       </div>
       <div className="relative hidden w-1/2 flex-col justify-between bg-primary p-12 text-primary-foreground lg:flex">
         {heroImage && (
