@@ -30,8 +30,7 @@ export function CreateRoomForm({ libraryId, onSuccess }: CreateRoomFormProps) {
   const [capacity, setCapacity] = React.useState<number | string>(20);
   const [errors, setErrors] = React.useState<Partial<Record<keyof Omit<RoomFormValues, 'tier'>, string>>>({});
 
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const handleSubmit = async () => {
     if (!user || !firestore) {
       toast({
         variant: 'destructive',
@@ -74,7 +73,7 @@ export function CreateRoomForm({ libraryId, onSuccess }: CreateRoomFormProps) {
         batch.set(seatRef, {
           roomId: roomRef.id,
           libraryId,
-          tier: 'standard', // Tier is defaulted to standard for simplicity
+          tier: 'standard',
           assignments: {},
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
@@ -115,7 +114,7 @@ export function CreateRoomForm({ libraryId, onSuccess }: CreateRoomFormProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-4">
+    <form onSubmit={(e) => e.preventDefault()} className="flex flex-wrap items-end gap-4">
         <div className="flex-grow space-y-2" style={{minWidth: '200px'}}>
             <Label htmlFor="roomName" className="sr-only">Room Name</Label>
             <Input
@@ -142,7 +141,7 @@ export function CreateRoomForm({ libraryId, onSuccess }: CreateRoomFormProps) {
             />
         </div>
         
-        <Button type="submit" disabled={isSubmitting || !user}>
+        <Button type="button" onClick={handleSubmit} disabled={isSubmitting || !user}>
           {isSubmitting ? (
             <>
               <Spinner className="mr-2 h-4 w-4" />
