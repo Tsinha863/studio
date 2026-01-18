@@ -1,11 +1,14 @@
 'use client';
 import * as React from 'react';
 import dynamic from 'next/dynamic';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 import {
   Activity,
   IndianRupee,
   Users,
   CreditCard,
+  Download,
 } from 'lucide-react';
 import {
   collection,
@@ -27,6 +30,9 @@ import {
 } from '@/components/ui/card';
 import type { Payment, Student, Expense, ActivityLog } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/spinner';
+import { useToast } from '@/hooks/use-toast';
 
 const IncomeExpenseChart = dynamic(() => import('@/components/admin/dashboard/income-expense-chart').then(mod => mod.IncomeExpenseChart), { 
     ssr: false,
@@ -45,6 +51,9 @@ const HARDCODED_LIBRARY_ID = 'library1';
 
 export default function DashboardPage() {
   const { firestore, user } = useFirebase();
+  const { toast } = useToast();
+  const reportRef = React.useRef<HTMLDivElement>(null);
+  const [isExporting, setIsExporting] = React.useState(false);
 
   // --- Data Fetching ---
   const allStudentsQuery = useMemoFirebase(() => {
@@ -142,9 +151,37 @@ export default function DashboardPage() {
     return allStudents?.filter(s => s.createdAt.toDate() >= startOfMonth).length || 0;
   }, [allStudents]);
 
+  const handleExportReport = async () => {
+    if (!reportRef.current) return;
+    setIsExporting(true);
+
+    try {
+        const canvas = await html2canvas(reportRef.current, {
+            scale: 2,
+        });
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF({
+            orientation: 'landscape',
+            unit: 'px',
+            format: [canvas.width, canvas.height]
+        });
+        pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+        pdf.save(`dashboard-report-${Date.now()}.pdf`);
+    } catch (error) {
+        console.error('Failed to export report:', error);
+        toast({
+            variant: 'destructive',
+            title: 'Export Failed',
+            description: 'Could not generate the report PDF.',
+        });
+    } finally {
+        setIsExporting(false);
+    }
+  };
+
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6" ref={reportRef}>
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
           <h1 className="text-2xl font-bold tracking-tight font-headline">
@@ -154,6 +191,10 @@ export default function DashboardPage() {
             Here&apos;s a summary of your library&apos;s activity.
           </p>
         </div>
+        <Button type="button" onClick={handleExportReport} disabled={isExporting}>
+            {isExporting ? <Spinner className="mr-2"/> : <Download className="mr-2" />}
+            {isExporting ? 'Exporting...' : 'Export Report'}
+        </Button>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
