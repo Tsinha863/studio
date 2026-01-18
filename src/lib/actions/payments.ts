@@ -35,6 +35,15 @@ const activityLogsCol = (db: Firestore, libraryId: string) =>
 const MONTHLY_FEE = 50.00;
 const INACTIVITY_THRESHOLD_DAYS = 90;
 
+/**
+ * Creates monthly payment obligations for active students and reconciles student/payment statuses.
+ * This function is idempotent and safe to run multiple times.
+ *
+ * 1. Transitions any 'pending' payments with a past due date to 'overdue'.
+ * 2. Identifies students who have become 'at-risk' due to inactivity.
+ * 3. Creates new 'pending' payments for students who have no outstanding obligations.
+ * 4. Transitions students with newly overdue payments to 'at-risk'.
+ */
 export async function createMonthlyPayments(
   db: Firestore,
   libraryId: string,
@@ -44,37 +53,36 @@ export async function createMonthlyPayments(
     const batch = writeBatch(db);
     const today = new Date();
     const ninetyDaysAgo = new Date(today.getFullYear(), today.getMonth(), today.getDate() - INACTIVITY_THRESHOLD_DAYS);
-    
-    // 1. Transition `pending` payments to `overdue` if their due date has passed
-    const pendingPaymentsQuery = query(
+    const dueDate = new Date(today.getFullYear(), today.getMonth() + 1, 0); // Last day of current month
+
+    // Step 1: Transition 'pending' payments to 'overdue' if their due date has passed.
+    const pendingToOverdueQuery = query(
         paymentsCol(db, libraryId), 
         where('status', '==', 'pending'),
         where('dueDate', '<', Timestamp.fromDate(today))
     );
-    const pendingPaymentsSnapshot = await getDocs(pendingPaymentsQuery);
-    pendingPaymentsSnapshot.forEach(paymentDoc => {
+    const pendingToOverdueSnapshot = await getDocs(pendingToOverdueQuery);
+    const newlyOverdueStudentIds = new Set<string>();
+    pendingToOverdueSnapshot.forEach(paymentDoc => {
         batch.update(paymentDoc.ref, { status: 'overdue', updatedAt: serverTimestamp() });
+        newlyOverdueStudentIds.add(paymentDoc.data().studentId);
     });
 
-    // 2. Query all students who are not inactive
-    const studentsQuery = query(studentsCol(db, libraryId), where('status', '!=', 'inactive'));
-    const studentsSnapshot = await getDocs(studentsQuery);
+    // Step 2: Query all students who are not 'inactive'.
+    const activeStudentsQuery = query(studentsCol(db, libraryId), where('status', 'in', ['active', 'at-risk']));
+    const studentsSnapshot = await getDocs(activeStudentsQuery);
     
-    const dueDate = new Date(today.getFullYear(), today.getMonth() + 1, 0); // Last day of current month
+    const allUnpaidPaymentsQuery = query(paymentsCol(db, libraryId), where('status', 'in', ['pending', 'overdue']));
+    const allUnpaidPaymentsSnapshot = await getDocs(allUnpaidPaymentsQuery);
+    const studentsWithUnpaidBills = new Set(allUnpaidPaymentsSnapshot.docs.map(doc => doc.data().studentId));
+
     let createdCount = 0;
 
     for (const studentDoc of studentsSnapshot.docs) {
       const student = { docId: studentDoc.id, ...studentDoc.data() } as Student;
-      const studentRef = studentDoc.ref;
       
-      const unpaidPaymentsQuery = query(paymentsCol(db, libraryId), 
-        where('studentId', '==', student.id),
-        where('status', 'in', ['pending', 'overdue'])
-      );
-      const unpaidPaymentsSnapshot = await getDocs(unpaidPaymentsQuery);
-
-      if (unpaidPaymentsSnapshot.empty) {
-        // This student has no unpaid bills, so we can create a new one.
+      // Step 3: Create new payments for students with no unpaid bills.
+      if (!studentsWithUnpaidBills.has(student.id)) {
         const paymentRef = doc(paymentsCol(db, libraryId));
         batch.set(paymentRef, {
           libraryId,
@@ -88,22 +96,19 @@ export async function createMonthlyPayments(
           updatedAt: serverTimestamp(),
         });
         createdCount++;
-
-        // If student was at-risk but has no unpaid bills, check for inactivity.
-        // If inactive, they become active again. Otherwise, they stay at-risk.
-        if (student.status === 'at-risk' && student.lastInteractionAt.toDate() >= ninetyDaysAgo) {
-            batch.update(studentRef, { status: 'active', updatedAt: serverTimestamp() });
-        } else if (student.status === 'active' && student.lastInteractionAt.toDate() < ninetyDaysAgo) {
-            // Student is active but hasn't interacted in a while, move to at-risk
-            batch.update(studentRef, { status: 'at-risk', updatedAt: serverTimestamp() });
-        }
-
-      } else {
-        // Student has unpaid bills, ensure their status is 'at-risk'.
-        if (student.status !== 'at-risk') {
-          batch.update(studentRef, { status: 'at-risk', updatedAt: serverTimestamp() });
-        }
       }
+
+      // Step 4: Check for inactivity and update status to 'at-risk'.
+      if (student.status === 'active' && student.lastInteractionAt.toDate() < ninetyDaysAgo) {
+        batch.update(studentDoc.ref, { status: 'at-risk', updatedAt: serverTimestamp() });
+      }
+    }
+
+    // Step 5: Transition students with newly overdue payments to 'at-risk'.
+    for (const studentId of newlyOverdueStudentIds) {
+      // We need to find the main student document ID, which is the custom ID itself in our case.
+      const studentRef = doc(db, `libraries/${libraryId}/students/${studentId}`);
+      batch.update(studentRef, { status: 'at-risk', updatedAt: serverTimestamp() });
     }
 
     if (createdCount > 0) {
@@ -125,6 +130,16 @@ export async function createMonthlyPayments(
   }
 }
 
+/**
+ * Marks a payment as 'paid' and updates the corresponding student's status and streak.
+ * This is a fully atomic transaction.
+ *
+ * 1. Reads the Payment and Student documents.
+ * 2. Updates the Payment status to 'paid'.
+ * 3. Updates the Student's fibonacciStreak (resets if payment was overdue) and status to 'active'.
+ * 4. Updates the Student's lastInteractionAt timestamp.
+ * 5. Creates an activity log entry.
+ */
 export async function markPaymentAsPaid(
   db: Firestore,
   libraryId: string,
@@ -157,22 +172,11 @@ export async function markPaymentAsPaid(
         updatedAt: serverTimestamp(),
       });
 
-      // This query needs to run outside the transaction or be re-architected.
-      // For now, we query it before the transaction starts to determine student status.
-      const otherUnpaidQuery = query(
-        paymentsCol(db, libraryId),
-        where('studentId', '==', studentDoc.data().id),
-        where('status', 'in', ['pending', 'overdue']),
-      );
-      const otherUnpaidSnapshot = await getDocs(otherUnpaidQuery);
-      
-      // We check if the number of unpaid docs is exactly 1 (the one we're currently paying)
-      const hasOtherUnpaid = otherUnpaidSnapshot.docs.length > 1;
-
-      // Update student record
+      // Update student record. Student becomes active on payment.
+      // The reconciliation job (`createMonthlyPayments`) will set them back to 'at-risk' if other payments are due.
       transaction.update(studentRef, {
         fibonacciStreak: wasOverdue ? 0 : increment(1),
-        status: hasOtherUnpaid ? 'at-risk' : 'active',
+        status: 'active',
         lastInteractionAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });

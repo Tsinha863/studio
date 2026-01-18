@@ -52,15 +52,10 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
 
   const handleSubmit = async () => {
     setErrors({});
+    setIsSubmitting(true);
 
-    const data = {
-      id: studentId,
-      name,
-      email,
-      status,
-    };
+    const data = { id: studentId, name, email, status };
     
-    // The student ID cannot be changed after creation.
     const schema = student ? studentFormSchema.omit({ id: true }) : studentFormSchema;
     const validation = schema.safeParse(data);
 
@@ -71,6 +66,7 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
         newErrors[path] = err.message;
       });
       setErrors(newErrors);
+      setIsSubmitting(false);
       return;
     }
 
@@ -80,20 +76,18 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
         title: 'Authentication Error',
         description: 'You must be logged in to manage students.',
       });
+      setIsSubmitting(false);
       return;
     }
 
-    setIsSubmitting(true);
     try {
         const actor = { id: user.uid, name: user.displayName || 'Admin' };
         let result;
         const validatedData = validation.data;
 
         if (student?.docId) {
-            // For updates, docId is the student's custom ID.
             result = await updateStudent(firestore, libraryId, student.docId, validatedData, actor);
         } else {
-            // This is a new student
             result = await addStudent(firestore, libraryId, validatedData as StudentFormValues, actor);
         }
 

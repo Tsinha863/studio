@@ -52,7 +52,7 @@ export function AssignSeatDialog({
   const [isComboboxOpen, setIsComboboxOpen] = React.useState(false);
 
   const availableStudents = React.useMemo(() => {
-    return students.filter(s => !s.assignedSeatId);
+    return students.filter(s => !s.assignedSeatId && s.status !== 'inactive');
   }, [students]);
 
   const handleAssign = async () => {
@@ -67,8 +67,6 @@ export function AssignSeatDialog({
     setIsSubmitting(true);
 
     try {
-      const actor = { id: user.uid, name: user.displayName || 'Admin' };
-
       await runTransaction(firestore, async (transaction) => {
         const studentDocRef = doc(firestore, `libraries/${libraryId}/students/${selectedStudentDocId}`);
         const seatDocRef = doc(firestore, `libraries/${libraryId}/rooms/${seat.roomId}/seats/${seat.id}`);
@@ -95,19 +93,21 @@ export function AssignSeatDialog({
           assignedRoomId: seat.roomId,
           assignedSeatLabel: seat.seatNumber,
           updatedAt: serverTimestamp(),
+          lastInteractionAt: serverTimestamp(),
         });
         
         // Update seat with student info
         transaction.update(seatDocRef, {
-          studentId: studentDoc.id, // Store student's Firestore document ID
+          studentId: studentDoc.id,
           studentName: studentData.name,
           updatedAt: serverTimestamp(),
         });
 
+        // Create activity log
         const logRef = doc(collection(firestore, `libraries/${libraryId}/activityLogs`));
         transaction.set(logRef, {
           libraryId,
-          user: actor,
+          user: { id: user.uid, name: user.displayName || 'Admin' },
           activityType: 'seat_assigned',
           details: {
             studentName: studentData.name,
@@ -141,8 +141,6 @@ export function AssignSeatDialog({
     setIsSubmitting(true);
     
     try {
-      const actor = { id: user.uid, name: user.displayName || 'Admin' };
-      
       await runTransaction(firestore, async (transaction) => {
         const seatRef = doc(firestore, `libraries/${libraryId}/rooms/${seat.roomId}/seats/${seat.id}`);
         const seatDoc = await transaction.get(seatRef);
@@ -150,32 +148,36 @@ export function AssignSeatDialog({
         if (!seatDoc.exists()) throw new Error('Seat not found.');
         
         const seatData = seatDoc.data() as Seat;
-        const studentDocId = seatData.studentId;
+        const studentDocIdToUnassign = seatData.studentId;
 
-        if (!studentDocId) return; // Seat is already unassigned
+        if (!studentDocIdToUnassign) return; // Seat is already unassigned
         
-        const studentRef = doc(firestore, `libraries/${libraryId}/students`, studentDocId);
+        const studentRef = doc(firestore, `libraries/${libraryId}/students`, studentDocIdToUnassign);
         const studentDoc = await transaction.get(studentRef);
 
+        // Update student record only if they exist
         if (studentDoc.exists()) {
           transaction.update(studentRef, {
             assignedSeatId: null,
             assignedRoomId: null,
             assignedSeatLabel: null,
             updatedAt: serverTimestamp(),
+            lastInteractionAt: serverTimestamp(),
           });
         }
 
+        // Always unassign the seat
         transaction.update(seatRef, {
           studentId: null,
           studentName: null,
           updatedAt: serverTimestamp(),
         });
 
+        // Create activity log
         const logRef = doc(collection(firestore, `libraries/${libraryId}/activityLogs`));
         transaction.set(logRef, {
           libraryId,
-          user: actor,
+          user: { id: user.uid, name: user.displayName || 'Admin' },
           activityType: 'seat_unassigned',
           details: {
             studentName: seatData.studentName,
@@ -218,7 +220,7 @@ export function AssignSeatDialog({
           <DialogDescription>
             {seat.studentId
               ? `This seat is currently assigned to ${seat.studentName}.`
-              : 'Assign this seat to a student.'}
+              : 'Assign this seat to an active student.'}
           </DialogDescription>
         </DialogHeader>
         
@@ -246,7 +248,7 @@ export function AssignSeatDialog({
                 <Command>
                   <CommandInput placeholder="Search student..." />
                   <CommandList>
-                    <CommandEmpty>No student found.</CommandEmpty>
+                    <CommandEmpty>No available students found.</CommandEmpty>
                     <CommandGroup>
                       {availableStudents.map((student) => (
                         <CommandItem

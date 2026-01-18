@@ -7,6 +7,7 @@ import {
   serverTimestamp,
   writeBatch,
   runTransaction,
+  getDoc,
 } from 'firebase/firestore';
 import { studentFormSchema, type StudentFormValues } from '../schemas';
 import type { Student } from '../types';
@@ -21,12 +22,15 @@ type Actor = {
   name: string;
 };
 
-// Firestore collections
 const studentsCol = (db: Firestore, libraryId: string) =>
   collection(db, `libraries/${libraryId}/students`);
 const activityLogsCol = (db: Firestore, libraryId: string) =>
   collection(db, `libraries/${libraryId}/activityLogs`);
 
+/**
+ * Creates a new student record. The student's custom ID is used as the document ID
+ * to enforce uniqueness.
+ */
 export async function addStudent(
   db: Firestore,
   libraryId: string,
@@ -39,12 +43,16 @@ export async function addStudent(
   }
 
   const { id: studentId, ...studentData } = validation.data;
+  const studentRef = doc(db, `libraries/${libraryId}/students`, studentId);
 
   try {
-    const batch = writeBatch(db);
+    // Check if a student with this ID already exists before creating.
+    const existingDoc = await getDoc(studentRef);
+    if (existingDoc.exists()) {
+      return { success: false, error: `A student with ID ${studentId} already exists.` };
+    }
 
-    // Use the custom student ID as the document ID for simplicity and uniqueness
-    const studentRef = doc(db, `libraries/${libraryId}/students`, studentId);
+    const batch = writeBatch(db);
 
     batch.set(studentRef, {
       ...studentData,
@@ -75,25 +83,20 @@ export async function addStudent(
     return { success: true };
   } catch (e: any) {
     console.error('Error adding student:', e);
-    // Provide a more specific error if it's a known issue
-    if (e.code === 'permission-denied') {
-        return { success: false, error: 'Permission denied. You might need to sign in again.'}
-    }
-    if (e.message.includes('exists')) {
-        return { success: false, error: `A student with ID ${studentId} already exists.` };
-    }
     return { success: false, error: e.message || 'An unknown error occurred.' };
   }
 }
 
+/**
+ * Updates an existing student record.
+ */
 export async function updateStudent(
   db: Firestore,
   libraryId: string,
-  docId: string, // Firestore document ID
+  docId: string, // This is the student's custom ID, which is also the document ID.
   data: Partial<Omit<StudentFormValues, 'id'>>,
   actor: Actor
 ): Promise<ActionResponse> {
-  // For updates, the student ID (id) is not part of the editable form.
   const updateSchema = studentFormSchema.omit({ id: true }).partial();
   const validation = updateSchema.safeParse(data);
 
@@ -131,13 +134,12 @@ export async function updateStudent(
 }
 
 /**
- * Soft-deletes a student by setting their status to 'inactive' and unassigning their seat.
- * This is an atomic transaction.
+ * Soft-deletes a student by setting their status to 'inactive' and atomically unassigning their seat.
  */
 export async function deleteStudent(
   db: Firestore,
   libraryId: string,
-  docId: string,
+  docId: string, // The student's custom ID / document ID
   actor: Actor
 ): Promise<ActionResponse> {
   try {
@@ -160,7 +162,7 @@ export async function deleteStudent(
         lastInteractionAt: serverTimestamp(),
       });
 
-      // 2. If a seat was assigned, unassign it atomically
+      // 2. If a seat was assigned, unassign it atomically.
       if (studentData.assignedSeatId && studentData.assignedRoomId) {
         const seatRef = doc(db, `libraries/${libraryId}/rooms/${studentData.assignedRoomId}/seats/${studentData.assignedSeatId}`);
         transaction.update(seatRef, {
@@ -170,7 +172,7 @@ export async function deleteStudent(
         });
       }
 
-      // 3. Create activity log
+      // 3. Create activity log for the soft delete.
       const logRef = doc(activityLogsCol(db, libraryId));
       transaction.set(logRef, {
         libraryId,
