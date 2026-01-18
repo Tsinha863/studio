@@ -37,25 +37,22 @@ export function SeatingPlan({ libraryId, roomId }: SeatingPlanProps) {
 
   const seatsQuery = useMemoFirebase(() => {
     if (!firestore || !user || !roomId) return null;
+    // We order by document ID, which requires a manual index but is possible.
+    // For now, we sort client-side to avoid index configuration.
     return query(
-      collection(firestore, `libraries/${libraryId}/rooms/${roomId}/seats`),
-      orderBy('seatNumber', 'asc')
+      collection(firestore, `libraries/${libraryId}/rooms/${roomId}/seats`)
     );
   }, [firestore, user, libraryId, roomId]);
 
-  const { data: seats, isLoading: isLoadingSeats } = useCollection<Omit<Seat, 'docId'>>(seatsQuery);
+  const { data: seats, isLoading: isLoadingSeats } = useCollection<Omit<Seat, 'id'>>(seatsQuery);
 
   const studentsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return collection(firestore, `libraries/${libraryId}/students`);
   }, [firestore, user, libraryId]);
 
-  const { data: students, isLoading: isLoadingStudents } = useCollection<Omit<Student, 'docId'>>(studentsQuery);
+  const { data: students, isLoading: isLoadingStudents } = useCollection<Omit<Student, 'id' | 'docId'>>(studentsQuery);
   
-  const studentsWithDocId = React.useMemo(() => {
-    return students?.map(s => ({ ...s, docId: s.id })) ?? [];
-  }, [students]);
-
   const handleSeatClick = (seat: Seat) => {
     setSelectedSeat(seat);
     setIsAssignDialogOpen(true);
@@ -68,12 +65,12 @@ export function SeatingPlan({ libraryId, roomId }: SeatingPlanProps) {
 
   const sortedSeats = React.useMemo(() => {
     return seats?.sort((a, b) => {
-      const numA = parseInt(a.seatNumber, 10);
-      const numB = parseInt(b.seatNumber, 10);
+      const numA = parseInt(a.id, 10);
+      const numB = parseInt(b.id, 10);
       if (!isNaN(numA) && !isNaN(numB)) {
         return numA - numB;
       }
-      return a.seatNumber.localeCompare(b.seatNumber);
+      return a.id.localeCompare(b.id);
     }) ?? [];
   }, [seats]);
 
@@ -98,7 +95,7 @@ export function SeatingPlan({ libraryId, roomId }: SeatingPlanProps) {
           <Tooltip key={seat.id}>
             <TooltipTrigger asChild>
               <button
-                onClick={() => handleSeatClick({ ...seat, docId: seat.id })}
+                onClick={() => handleSeatClick(seat)}
                 className={cn(
                   'flex h-14 w-14 flex-col items-center justify-center rounded-md border text-xs font-semibold transition-colors',
                   seat.studentId
@@ -109,12 +106,12 @@ export function SeatingPlan({ libraryId, roomId }: SeatingPlanProps) {
                 {seat.studentId ? (
                   <UserIcon className="h-5 w-5" />
                 ) : (
-                  <span className="text-lg font-bold">{seat.seatNumber}</span>
+                  <span className="text-lg font-bold">{seat.id}</span>
                 )}
               </button>
             </TooltipTrigger>
             <TooltipContent>
-              <p className="font-bold">Seat {seat.seatNumber}</p>
+              <p className="font-bold">Seat {seat.id}</p>
               {seat.studentName ? (
                 <p>Assigned to: {seat.studentName}</p>
               ) : (
@@ -130,7 +127,7 @@ export function SeatingPlan({ libraryId, roomId }: SeatingPlanProps) {
           isOpen={isAssignDialogOpen}
           onOpenChange={setIsAssignDialogOpen}
           seat={selectedSeat}
-          students={studentsWithDocId}
+          students={students || []}
           libraryId={libraryId}
           onSuccess={onDialogSuccess}
         />
@@ -138,3 +135,5 @@ export function SeatingPlan({ libraryId, roomId }: SeatingPlanProps) {
     </TooltipProvider>
   );
 }
+
+    

@@ -80,9 +80,10 @@ export function CreateRoomForm({ libraryId, onSuccess, onCancel }: CreateRoomFor
 
       const seatsColRef = collection(firestore, `libraries/${libraryId}/rooms/${roomRef.id}/seats`);
       for (let i = 1; i <= validation.data.capacity; i++) {
-        const seatRef = doc(seatsColRef, i.toString()); // Use sequential IDs for seats
+        // The document ID is the seat number.
+        const seatRef = doc(seatsColRef, i.toString());
+        // We do not store seatNumber in the document, as it's redundant.
         batch.set(seatRef, {
-          seatNumber: i.toString(),
           roomId: roomRef.id,
           libraryId,
           tier: validation.data.tier,
@@ -184,3 +185,5 @@ export function CreateRoomForm({ libraryId, onSuccess, onCancel }: CreateRoomFor
     </div>
   );
 }
+
+    

@@ -16,7 +16,7 @@ export interface User {
 }
 
 export interface Student {
-  id: string; // Custom ID, immutable after creation
+  id: string; // Custom ID, used as Firestore document ID. Immutable.
   docId: string; // Firestore document ID
   libraryId: string;
   userId?: string; // Optional link to a User account
@@ -72,15 +72,17 @@ export interface Room {
   updatedAt: Timestamp;
 }
 
+/**
+ * Represents a single seat within a room.
+ * The document ID itself is the canonical, human-readable seat number (e.g., '1', '25').
+ */
 export interface Seat {
-  id: string; // Firestore document ID
-  docId?: string; // Firestore document ID
+  id: string; // The document ID, which is the seat number.
   libraryId: string;
   roomId: string;
-  seatNumber: string;
   tier: 'basic' | 'standard' | 'premium';
   studentId?: string | null; // This is the Student's Firestore Document ID
-  studentName?: string | null;
+  studentName?: string | null; // Denormalized for quick display
   timeSlot?: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
@@ -116,3 +118,5 @@ export interface ActivityLog {
   timestamp: Timestamp;
   details: Record<string, any>;
 }
+
+    

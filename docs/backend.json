@@ -340,11 +340,11 @@
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Seat",
       "type": "object",
-      "description": "Represents a seat within a room.",
+      "description": "Represents a seat within a room. The document ID serves as the human-readable seat number.",
       "properties": {
         "id": {
           "type": "string",
-          "description": "Unique identifier for the Seat entity."
+          "description": "Unique identifier for the Seat entity, which also serves as the human-readable seat number (e.g., '1', '12'). This is the Firestore document ID."
         },
         "libraryId": {
           "type": "string",
@@ -353,10 +353,6 @@
         "roomId": {
           "type": "string",
           "description": "Reference to Room. (Relationship: Room 1:N Seat). Identifies the room to which the seat belongs."
-        },
-        "seatNumber": {
-          "type": "string",
-          "description": "The identifier for the seat within the room (e.g., 'A1', '12')."
         },
         "tier": {
           "type": "string",
@@ -389,7 +385,6 @@
         "id",
         "libraryId",
         "roomId",
-        "seatNumber",
         "tier",
         "createdAt",
         "updatedAt"
@@ -759,3 +754,5 @@
     "reasoning": "The Firestore structure is designed for a multi-tenant library system, prioritizing strict library isolation and role-based access control. The core principle is Authorization Independence achieved through the denormalization of the `libraryId` in every document. This eliminates the need for `get()` calls in security rules, simplifying the rules and ensuring atomic operations. The structure uses structural segregation by storing data with different access requirements in separate collections, which also helps with list operation QAPs. Access is modeled based on path-based ownership for user-specific data and a global role-based access control (DBAC) with dedicated collections for admin users. The explicit state modeling utilizes the status filed (e.g., for suggestions)."
   }
 }
+
+    

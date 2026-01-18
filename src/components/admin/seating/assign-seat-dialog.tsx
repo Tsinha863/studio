@@ -32,7 +32,7 @@ interface AssignSeatDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   seat: Seat;
-  students: Student[];
+  students: (Student & { id: string })[];
   libraryId: string;
   onSuccess: () => void;
 }
@@ -47,7 +47,7 @@ export function AssignSeatDialog({
 }: AssignSeatDialogProps) {
   const { firestore, user, isUserLoading } = useFirebase();
   const { toast } = useToast();
-  const [selectedStudentDocId, setSelectedStudentDocId] = React.useState<string | undefined>();
+  const [selectedStudentId, setSelectedStudentId] = React.useState<string | undefined>();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isComboboxOpen, setIsComboboxOpen] = React.useState(false);
 
@@ -56,7 +56,7 @@ export function AssignSeatDialog({
   }, [students]);
 
   const handleAssign = async () => {
-    if (!firestore || !user || !selectedStudentDocId) {
+    if (!firestore || !user || !selectedStudentId) {
       toast({
         variant: 'destructive',
         title: 'Action Failed',
@@ -68,7 +68,7 @@ export function AssignSeatDialog({
 
     try {
       await runTransaction(firestore, async (transaction) => {
-        const studentDocRef = doc(firestore, `libraries/${libraryId}/students/${selectedStudentDocId}`);
+        const studentDocRef = doc(firestore, `libraries/${libraryId}/students/${selectedStudentId}`);
         const seatDocRef = doc(firestore, `libraries/${libraryId}/rooms/${seat.roomId}/seats/${seat.id}`);
         
         const [studentDoc, seatDoc] = await Promise.all([
@@ -91,7 +91,7 @@ export function AssignSeatDialog({
         transaction.update(studentDocRef, {
           assignedSeatId: seat.id,
           assignedRoomId: seat.roomId,
-          assignedSeatLabel: seat.seatNumber,
+          assignedSeatLabel: seat.id, // The seat ID is the label
           updatedAt: serverTimestamp(),
           lastInteractionAt: serverTimestamp(),
         });
@@ -111,14 +111,14 @@ export function AssignSeatDialog({
           activityType: 'seat_assigned',
           details: {
             studentName: studentData.name,
-            seatNumber: seatData.seatNumber,
+            seatNumber: seat.id,
             roomId: seat.roomId,
           },
           timestamp: serverTimestamp(),
         });
       });
 
-      toast({ title: 'Seat Assigned', description: `Seat ${seat.seatNumber} has been assigned.` });
+      toast({ title: 'Seat Assigned', description: `Seat ${seat.id} has been assigned.` });
       onSuccess();
 
     } catch (error) {
@@ -148,11 +148,11 @@ export function AssignSeatDialog({
         if (!seatDoc.exists()) throw new Error('Seat not found.');
         
         const seatData = seatDoc.data() as Seat;
-        const studentDocIdToUnassign = seatData.studentId;
+        const studentIdToUnassign = seatData.studentId;
 
-        if (!studentDocIdToUnassign) return; // Seat is already unassigned
+        if (!studentIdToUnassign) return; // Seat is already unassigned
         
-        const studentRef = doc(firestore, `libraries/${libraryId}/students`, studentDocIdToUnassign);
+        const studentRef = doc(firestore, `libraries/${libraryId}/students`, studentIdToUnassign);
         const studentDoc = await transaction.get(studentRef);
 
         // Update student record only if they exist
@@ -181,14 +181,14 @@ export function AssignSeatDialog({
           activityType: 'seat_unassigned',
           details: {
             studentName: seatData.studentName,
-            seatNumber: seatData.seatNumber,
+            seatNumber: seat.id,
             roomId: seat.roomId,
           },
           timestamp: serverTimestamp(),
         });
       });
       
-      toast({ title: 'Seat Unassigned', description: `Seat ${seat.seatNumber} is now available.` });
+      toast({ title: 'Seat Unassigned', description: `Seat ${seat.id} is now available.` });
       onSuccess();
     } catch (error) {
       console.error("UNASSIGN SEAT ERROR:", error);
@@ -204,19 +204,19 @@ export function AssignSeatDialog({
   
   React.useEffect(() => {
     if (!isOpen) {
-        setSelectedStudentDocId(undefined);
+        setSelectedStudentId(undefined);
         setIsSubmitting(false);
     }
   }, [isOpen]);
 
   const isActionDisabled = isSubmitting || isUserLoading || !user;
-  const selectedStudentName = students.find(s => s.docId === selectedStudentDocId)?.name;
+  const selectedStudentName = students.find(s => s.id === selectedStudentId)?.name;
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Manage Seat {seat.seatNumber}</DialogTitle>
+          <DialogTitle>Manage Seat {seat.id}</DialogTitle>
           <DialogDescription>
             {seat.studentId
               ? `This seat is currently assigned to ${seat.studentName}.`
@@ -240,7 +240,7 @@ export function AssignSeatDialog({
                   className="w-full justify-between"
                   disabled={isActionDisabled}
                 >
-                  {selectedStudentDocId ? selectedStudentName : "Select a student..."}
+                  {selectedStudentId ? selectedStudentName : "Select a student..."}
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
@@ -252,17 +252,17 @@ export function AssignSeatDialog({
                     <CommandGroup>
                       {availableStudents.map((student) => (
                         <CommandItem
-                          key={student.docId}
+                          key={student.id}
                           value={student.name}
                           onSelect={() => {
-                            setSelectedStudentDocId(student.docId);
+                            setSelectedStudentId(student.id);
                             setIsComboboxOpen(false);
                           }}
                         >
                           <Check
                             className={cn(
                               "mr-2 h-4 w-4",
-                              selectedStudentDocId === student.docId ? "opacity-100" : "opacity-0"
+                              selectedStudentId === student.id ? "opacity-100" : "opacity-0"
                             )}
                           />
                           {student.name} ({student.id})
@@ -283,7 +283,7 @@ export function AssignSeatDialog({
               {isSubmitting ? 'Unassigning...' : 'Unassign Seat'}
             </Button>
           ) : (
-            <Button type="button" onClick={handleAssign} disabled={isActionDisabled || !selectedStudentDocId}>
+            <Button type="button" onClick={handleAssign} disabled={isActionDisabled || !selectedStudentId}>
               {isSubmitting && <Spinner className="mr-2" />}
               {isSubmitting ? 'Assigning...' : 'Assign Seat'}
             </Button>
@@ -293,3 +293,5 @@ export function AssignSeatDialog({
     </Dialog>
   );
 }
+
+    
