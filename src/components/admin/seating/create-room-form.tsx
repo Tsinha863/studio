@@ -30,8 +30,7 @@ export function CreateRoomForm({ libraryId, onSuccess, onCancel }: CreateRoomFor
   const [capacity, setCapacity] = React.useState<number | string>(10);
   const [errors, setErrors] = React.useState<Partial<Record<keyof RoomFormValues, string>>>({});
 
-  const handleSubmit = async (e?: React.FormEvent) => {
-    e?.preventDefault();
+  const handleSubmit = async () => {
     console.log("CREATE ROOM CLICKED"); 
 
     console.log("USER:", user);
