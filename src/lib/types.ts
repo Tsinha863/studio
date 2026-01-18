@@ -18,7 +18,6 @@ export interface User {
 export type TimeSlot = 'morning' | 'afternoon' | 'night';
 
 export interface Student {
-  id: string; // Custom ID, used as Firestore document ID.
   libraryId: string;
   userId?: string; // Optional link to a User account
   name: string;
@@ -39,7 +38,6 @@ export interface Student {
 }
 
 export interface Payment {
-  id: string; // Firestore document ID
   libraryId: string;
   studentId: string; // The custom student ID
   studentName: string;
@@ -55,7 +53,6 @@ export interface Payment {
 export type ExpenseCategory = 'rent' | 'utilities' | 'supplies' | 'salaries' | 'other';
 
 export interface Expense {
-  id: string; // Firestore document ID
   libraryId: string;
   description: string;
   amount: number;
@@ -66,7 +63,6 @@ export interface Expense {
 }
 
 export interface Room {
-  id: string;
   libraryId: string;
   name: string;
   capacity: number;
@@ -79,7 +75,6 @@ export interface Room {
  * The document ID itself is the canonical, human-readable seat number (e.g., '1', '25').
  */
 export interface Seat {
-  id: string; // The document ID, which is the seat number.
   libraryId: string;
   roomId: string;
   tier: 'basic' | 'standard' | 'premium';
@@ -93,7 +88,6 @@ export interface Seat {
 }
 
 export interface Announcement {
-  id: string;
   libraryId: string;
   title: string;
   content: string;
@@ -102,7 +96,6 @@ export interface Announcement {
 }
 
 export interface Suggestion {
-  id: string;
   libraryId: string;
   studentId: string;
   content: string;
@@ -112,7 +105,6 @@ export interface Suggestion {
 }
 
 export interface ActivityLog {
-  id: string;
   libraryId: string;
   activityType: string;
   user: {
@@ -126,7 +118,6 @@ export interface ActivityLog {
 export type PrintRequestStatus = 'Pending' | 'Approved' | 'Rejected';
 
 export interface PrintRequest {
-  id: string;
   libraryId: string;
   studentId: string;
   studentName: string;

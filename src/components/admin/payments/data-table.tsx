@@ -137,7 +137,7 @@ export function PaymentsDataTable<TData, TValue>({
         <Select
             value={(table.getColumn('status')?.getFilterValue() as string) ?? 'all'}
             onValueChange={(value) => {
-                const filterValue = value === 'all' ? null : value;
+                const filterValue = value === 'all' ? null : [value];
                 table.getColumn('status')?.setFilterValue(filterValue);
             }}
         >
@@ -152,7 +152,7 @@ export function PaymentsDataTable<TData, TValue>({
             </SelectContent>
         </Select>
         {isFiltered && (
-          <Button variant="ghost" onClick={resetFilters} className="h-10">
+          <Button variant="ghost" onClick={resetFilters} className="h-10" type="button">
             <ClearIcon className="mr-2 h-4 w-4" />
             Reset
           </Button>
@@ -220,6 +220,7 @@ export function PaymentsDataTable<TData, TValue>({
       </div>
       <div className="flex items-center justify-end space-x-2 py-4">
         <Button
+          type="button"
           variant="outline"
           size="sm"
           onClick={() => table.previousPage()}
@@ -228,6 +229,7 @@ export function PaymentsDataTable<TData, TValue>({
           Previous
         </Button>
         <Button
+          type="button"
           variant="outline"
           size="sm"
           onClick={() => table.nextPage()}

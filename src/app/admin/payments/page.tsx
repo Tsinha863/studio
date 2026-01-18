@@ -38,13 +38,16 @@ const HARDCODED_LIBRARY_ID = 'library1';
 const MONTHLY_FEE = 50.00;
 const INACTIVITY_THRESHOLD_DAYS = 90;
 
+type StudentWithId = Student & { id: string };
+type PaymentWithId = Payment & { id: string };
+
 type ReceiptState = {
   isOpen: boolean;
   receiptText?: string;
   studentName?: string;
 };
 
-export type PaymentWithDetails = Payment & { studentId: string, assignments: Student['assignments'] };
+export type PaymentWithDetails = PaymentWithId & { studentId: string, assignments: Student['assignments'] };
 
 export default function PaymentsPage() {
   const { toast } = useToast();
@@ -118,7 +121,7 @@ export default function PaymentsPage() {
       let createdCount = 0;
   
       for (const studentDoc of studentsSnapshot.docs) {
-        const student = { id: studentDoc.id, ...studentDoc.data() } as Student;
+        const student = { id: studentDoc.id, ...studentDoc.data() } as StudentWithId;
         
         // 3. Create new payments for students with no unpaid bills
         if (!studentsWithUnpaidBills.has(student.id)) {

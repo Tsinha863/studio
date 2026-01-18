@@ -42,6 +42,8 @@ const AnnouncementsDataTable = dynamic(
   { ssr: false }
 );
 
+type AnnouncementWithId = Announcement & { id: string };
+
 type ModalState = {
   isOpen: boolean;
 };
@@ -69,12 +71,12 @@ export default function AnnouncementsPage() {
     );
   }, [firestore, user]);
 
-  const { data: announcements, isLoading } = useCollection<Omit<Announcement, 'id'>>(announcementsQuery);
+  const { data: announcements, isLoading } = useCollection<Announcement>(announcementsQuery);
 
   const openModal = () => setModalState({ isOpen: true });
   const closeModal = () => setModalState({ isOpen: false });
 
-  const openDeleteAlert = (announcement: Announcement) =>
+  const openDeleteAlert = (announcement: AnnouncementWithId) =>
     setAlertState({ isOpen: true, announcementId: announcement.id });
   const closeDeleteAlert = () =>
     setAlertState({ isOpen: false, announcementId: undefined });

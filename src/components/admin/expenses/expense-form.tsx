@@ -30,8 +30,10 @@ import { expenseFormSchema, type ExpenseFormValues } from '@/lib/schemas';
 import { Spinner } from '@/components/spinner';
 import { Label } from '@/components/ui/label';
 
+type ExpenseWithId = Expense & { id: string };
+
 interface ExpenseFormProps {
-  expense?: Expense;
+  expense?: ExpenseWithId;
   libraryId: string;
   onSuccess: () => void;
   onCancel: () => void;

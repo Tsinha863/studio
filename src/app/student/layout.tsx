@@ -40,22 +40,33 @@ import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
 import { Student } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 
-// TODO: Replace with actual logged-in user's library and email
+// TODO: Replace with actual logged-in user's library
 const HARDCODED_LIBRARY_ID = 'library1';
-const HARDCODED_STUDENT_EMAIL = 'student@campushub.com'; 
 
 function UserMenu() {
   const { firestore, user } = useFirebase();
   const userAvatar = PlaceHolderImages.find((p) => p.id === 'user-avatar');
+  const [studentEmail, setStudentEmail] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    // Since this is a demo with anonymous auth, we retrieve the student's email from session storage.
+    // In a production app, this would come from the authenticated user object (`user?.email`).
+    const demoEmail = sessionStorage.getItem('demoStudentEmail');
+    if (demoEmail) {
+      setStudentEmail(demoEmail);
+    } else if (user?.email) {
+      setStudentEmail(user.email);
+    }
+  }, [user]);
 
   const studentQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
+    if (!firestore || !user || !studentEmail) return null;
     return query(
       collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students`),
-      where('email', '==', HARDCODED_STUDENT_EMAIL),
+      where('email', '==', studentEmail),
       limit(1)
     );
-  }, [firestore, user]);
+  }, [firestore, user, studentEmail]);
 
   const { data: studentData, isLoading: isLoadingStudent } = useCollection<Student>(studentQuery);
   const student = React.useMemo(() => (studentData && studentData[0]) ? studentData[0] : null, [studentData]);

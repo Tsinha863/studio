@@ -17,12 +17,14 @@ import { Badge } from '@/components/ui/badge';
 import type { Student } from '@/lib/types';
 import { DataTableColumnHeader } from './data-table-header';
 
+type StudentWithId = Student & { id: string };
+
 type ColumnsConfig = {
-  openModal: (student: Student) => void;
-  openDeleteAlert: (student: Student) => void;
+  openModal: (student: StudentWithId) => void;
+  openDeleteAlert: (student: StudentWithId) => void;
 };
 
-export const columns = ({ openModal, openDeleteAlert }: ColumnsConfig): ColumnDef<Student>[] => [
+export const columns = ({ openModal, openDeleteAlert }: ColumnsConfig): ColumnDef<StudentWithId>[] => [
   {
     accessorKey: 'id',
     header: ({ column }) => (

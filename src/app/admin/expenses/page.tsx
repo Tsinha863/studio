@@ -45,9 +45,11 @@ const ExpensesDataTable = dynamic(
   { ssr: false }
 );
 
+type ExpenseWithId = Expense & { id: string };
+
 type ModalState = {
   isOpen: boolean;
-  expense?: Expense;
+  expense?: ExpenseWithId;
 };
 
 type AlertState = {
@@ -75,10 +77,10 @@ export default function ExpensesPage() {
 
   const { data: expenses, isLoading } = useCollection<Expense>(expensesQuery);
   
-  const openModal = (expense?: Expense) => setModalState({ isOpen: true, expense });
+  const openModal = (expense?: ExpenseWithId) => setModalState({ isOpen: true, expense });
   const closeModal = () => setModalState({ isOpen: false, expense: undefined });
 
-  const openDeleteAlert = (expense: Expense) =>
+  const openDeleteAlert = (expense: ExpenseWithId) =>
     setAlertState({ isOpen: true, expenseId: expense.id });
   const closeDeleteAlert = () =>
     setAlertState({ isOpen: false, expenseId: undefined });

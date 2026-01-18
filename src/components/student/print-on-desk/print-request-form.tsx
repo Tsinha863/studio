@@ -26,8 +26,10 @@ import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/spinner';
 import { Skeleton } from '@/components/ui/skeleton';
 
+type StudentWithId = Student & { id: string };
+
 interface PrintRequestFormProps {
-  student: Student | null;
+  student: StudentWithId | null;
   libraryId: string;
   isLoading: boolean;
 }

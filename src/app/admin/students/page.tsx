@@ -10,6 +10,7 @@ import {
   doc,
   serverTimestamp,
   deleteField,
+  where,
 } from 'firebase/firestore';
 
 import { Button } from '@/components/ui/button';
@@ -47,9 +48,11 @@ const StudentDataTable = dynamic(
   { ssr: false }
 );
 
+type StudentWithId = Student & { id: string };
+
 type ModalState = {
   isOpen: boolean;
-  student?: Student;
+  student?: StudentWithId;
 };
 
 type AlertState = {
@@ -71,23 +74,22 @@ export default function StudentsPage() {
 
   const studentsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
+    const constraints = [];
+    if (!showInactive) {
+        constraints.push(where('status', 'in', ['active', 'at-risk']));
+    }
     return query(
-      collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students`)
+      collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students`),
+      ...constraints
     );
-  }, [firestore, user]);
+  }, [firestore, user, showInactive]);
 
   const { data: students, isLoading } = useCollection<Student>(studentsQuery);
-  
-  const filteredStudents = React.useMemo(() => {
-    if (!students) return [];
-    if (showInactive) return students;
-    return students.filter(s => s.status !== 'inactive');
-  }, [students, showInactive]);
 
-  const openModal = (student?: Student) => setModalState({ isOpen: true, student });
+  const openModal = (student?: StudentWithId) => setModalState({ isOpen: true, student });
   const closeModal = () => setModalState({ isOpen: false, student: undefined });
 
-  const openDeleteAlert = (student: Student) =>
+  const openDeleteAlert = (student: StudentWithId) =>
     setAlertState({ isOpen: true, studentId: student.id, studentName: student.name });
   const closeDeleteAlert = () =>
     setAlertState({ isOpen: false, studentId: undefined, studentName: undefined });
@@ -179,7 +181,7 @@ export default function StudentsPage() {
         <CardContent className="p-0">
           <StudentDataTable
             columns={memoizedColumns}
-            data={filteredStudents}
+            data={students || []}
             isLoading={isLoading}
             toolbarContent={
                 <div className="flex items-center space-x-2">

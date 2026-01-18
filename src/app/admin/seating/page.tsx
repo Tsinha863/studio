@@ -39,7 +39,7 @@ export default function SeatingPage() {
     );
   }, [firestore, user]);
 
-  const { data: rooms, isLoading: isLoadingRooms } = useCollection<Omit<Room, 'docId'>>(roomsQuery);
+  const { data: rooms, isLoading: isLoadingRooms } = useCollection<Room>(roomsQuery);
 
   const onRoomCreated = () => {
     toast({ title: 'Room Created', description: 'The new room has been added.' });

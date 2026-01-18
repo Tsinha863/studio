@@ -24,14 +24,14 @@ export function AssignedSeatCard({ assignments, isLoading }: AssignedSeatCardPro
             <Skeleton className="mt-2 h-4 w-1/4" />
           </div>
         ) : assignments && assignments.length > 0 ? (
-            <div className="space-y-2">
+            <ul className="space-y-3">
                 {assignments.map((assignment, index) => (
-                    <div key={`${assignment.seatId}-${assignment.timeSlot}-${index}`}>
+                    <li key={`${assignment.seatId}-${assignment.timeSlot}-${index}`}>
                         <div className="text-2xl font-bold">{assignment.seatId}</div>
                         <p className="text-xs text-muted-foreground capitalize">{assignment.timeSlot} Slot</p>
-                    </div>
+                    </li>
                 ))}
-            </div>
+            </ul>
         ) : (
           <>
             <div className="text-2xl font-bold">Not Assigned</div>

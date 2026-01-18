@@ -86,6 +86,12 @@ function LoginForm() {
         title: 'Login Successful',
         description: `Welcome back, ${isAdmin ? 'Admin' : 'Student'}! Redirecting to your dashboard.`,
       });
+      // Store the email for the student dashboard to use
+      if (!isAdmin) {
+          sessionStorage.setItem('demoStudentEmail', data.email);
+      } else {
+          sessionStorage.removeItem('demoStudentEmail');
+      }
       router.push(isAdmin ? '/admin/dashboard' : '/student/dashboard');
     };
 

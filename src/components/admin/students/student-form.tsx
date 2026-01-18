@@ -24,8 +24,10 @@ import { studentFormSchema, type StudentFormValues } from '@/lib/schemas';
 import { Spinner } from '@/components/spinner';
 import { Label } from '@/components/ui/label';
 
+type StudentWithId = Student & { id: string };
+
 interface StudentFormProps {
-  student?: Student;
+  student?: StudentWithId;
   libraryId: string;
   onSuccess: () => void;
   onCancel: () => void;
@@ -90,8 +92,9 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
         
         if (student?.id) { // This is an existing student
             const studentRef = doc(firestore, `libraries/${libraryId}/students/${student.id}`);
+            const { id, ...dataToUpdate } = validation.data;
             batch.update(studentRef, {
-              ...validation.data,
+              ...dataToUpdate,
               lastInteractionAt: serverTimestamp(),
               updatedAt: serverTimestamp(),
             });
@@ -114,9 +117,9 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
               throw new Error(`A student with ID ${validatedData.id} already exists.`);
             }
 
+            const { id, ...dataToSave } = validatedData;
             batch.set(newStudentRef, {
-                ...validatedData,
-                id: validatedData.id,
+                ...dataToSave,
                 libraryId,
                 fibonacciStreak: 0,
                 paymentDue: 0,

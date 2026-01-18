@@ -40,7 +40,7 @@ type AlertState = {
   suggestionId?: string;
 };
 
-type SuggestionWithStudent = Suggestion & { studentName: string };
+type SuggestionWithId = Suggestion & { id: string };
 
 export default function SuggestionsPage() {
   const { toast } = useToast();
@@ -61,8 +61,8 @@ export default function SuggestionsPage() {
     return collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students`);
   }, [firestore, user]);
 
-  const { data: suggestions, isLoading: isLoadingSuggestions } = useCollection<Omit<Suggestion, 'id'>>(suggestionsQuery);
-  const { data: students, isLoading: isLoadingStudents } = useCollection<Omit<Student, 'id'>>(studentsQuery);
+  const { data: suggestions, isLoading: isLoadingSuggestions } = useCollection<Suggestion>(suggestionsQuery);
+  const { data: students, isLoading: isLoadingStudents } = useCollection<Student>(studentsQuery);
 
   // --- Data Processing ---
   const suggestionsWithDetails = React.useMemo(() => {

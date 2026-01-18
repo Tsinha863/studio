@@ -28,11 +28,14 @@ import {
 import type { Seat, Student, TimeSlot } from '@/lib/types';
 import { Spinner } from '@/components/spinner';
 
+type SeatWithId = Seat & { id: string };
+type StudentWithId = Student & { id: string };
+
 interface AssignSeatDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  seat: Seat;
-  students: (Student & { id: string })[];
+  seat: SeatWithId;
+  students: StudentWithId[];
   libraryId: string;
   timeSlot: TimeSlot;
   onSuccess: () => void;
@@ -270,7 +273,7 @@ export function AssignSeatDialog({
                               selectedStudentId === student.id ? "opacity-100" : "opacity-0"
                             )}
                           />
-                          {student.name} ({student.id})
+                          {student.name}
                         </CommandItem>
                       ))}
                     </CommandGroup>

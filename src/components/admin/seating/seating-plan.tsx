@@ -18,13 +18,15 @@ interface SeatingPlanProps {
   roomId: string;
 }
 
+type SeatWithId = Seat & { id: string };
+
 type DisplayMode = TimeSlot | 'fullDay';
 
 const tierStyles = {
   available: {
-    basic: 'bg-gray-100 hover:bg-gray-200 border-gray-300 text-gray-600',
+    basic: 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-600',
     standard: 'bg-background hover:bg-accent/50 border-border',
-    premium: 'bg-purple-100 hover:bg-purple-200 border-purple-300 text-purple-800',
+    premium: 'bg-amber-100 hover:bg-amber-200 border-amber-300 text-amber-800',
   },
   assigned: 'bg-primary text-primary-foreground hover:bg-primary/90',
 }
@@ -34,7 +36,7 @@ export function SeatingPlan({ libraryId, roomId }: SeatingPlanProps) {
   const { toast } = useToast();
   
   const [displayMode, setDisplayMode] = React.useState<DisplayMode>('fullDay');
-  const [selectedSeat, setSelectedSeat] = React.useState<Seat | null>(null);
+  const [selectedSeat, setSelectedSeat] = React.useState<SeatWithId | null>(null);
   const [isAssignDialogOpen, setIsAssignDialogOpen] = React.useState(false);
 
   const seatsQuery = useMemoFirebase(() => {
@@ -44,16 +46,16 @@ export function SeatingPlan({ libraryId, roomId }: SeatingPlanProps) {
     );
   }, [firestore, user, libraryId, roomId]);
 
-  const { data: seats, isLoading: isLoadingSeats } = useCollection<Omit<Seat, 'id'>>(seatsQuery);
+  const { data: seats, isLoading: isLoadingSeats } = useCollection<Seat>(seatsQuery);
 
   const studentsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return collection(firestore, `libraries/${libraryId}/students`);
   }, [firestore, user, libraryId]);
 
-  const { data: students, isLoading: isLoadingStudents } = useCollection<Omit<Student, 'id' | 'docId'>>(studentsQuery);
+  const { data: students, isLoading: isLoadingStudents } = useCollection<Student>(studentsQuery);
   
-  const handleSeatClick = (seat: Seat) => {
+  const handleSeatClick = (seat: SeatWithId) => {
     if (displayMode === 'fullDay') {
         const assignmentInfo = [
             seat.assignments?.morning && `Morning: ${seat.assignments.morning.studentName}`,

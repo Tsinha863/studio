@@ -15,11 +15,13 @@ import {
 import type { Announcement } from '@/lib/types';
 import { DataTableColumnHeader } from '../students/data-table-header';
 
+type AnnouncementWithId = Announcement & { id: string };
+
 type ColumnsConfig = {
-  openDeleteAlert: (announcement: Announcement) => void;
+  openDeleteAlert: (announcement: AnnouncementWithId) => void;
 };
 
-export const columns = ({ openDeleteAlert }: ColumnsConfig): ColumnDef<Announcement>[] => [
+export const columns = ({ openDeleteAlert }: ColumnsConfig): ColumnDef<AnnouncementWithId>[] => [
   {
     accessorKey: 'createdAt',
     header: ({ column }) => (

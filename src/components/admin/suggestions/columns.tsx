@@ -24,7 +24,8 @@ import { Badge } from '@/components/ui/badge';
 import type { Suggestion } from '@/lib/types';
 import { DataTableColumnHeader } from '../students/data-table-header';
 
-type SuggestionWithStudent = Suggestion & { studentName: string };
+type SuggestionWithId = Suggestion & { id: string };
+type SuggestionWithStudent = SuggestionWithId & { studentName: string };
 type SuggestionStatus = Suggestion['status'];
 
 const statusColors: Record<SuggestionStatus, 'default' | 'secondary' | 'destructive' | 'success'> = {
