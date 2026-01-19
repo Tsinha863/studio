@@ -8,9 +8,10 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { useRouter } from 'next/navigation';
-import { signInAnonymously, signInWithEmailAndPassword } from 'firebase/auth';
+import { signInAnonymously, signInWithEmailAndPassword, type User } from 'firebase/auth';
 import { FirebaseError } from 'firebase/app';
 import { ArrowLeft } from 'lucide-react';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -45,11 +46,14 @@ const loginSchema = z.object({
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 
+// TODO: Replace with actual logged-in user's library
+const HARDCODED_LIBRARY_ID = 'library1';
+
 function LoginForm() {
   const router = useRouter();
   const { toast } = useToast();
   const [isDemoLoading, setIsDemoLoading] = React.useState(false);
-  const { auth } = useFirebase();
+  const { auth, firestore } = useFirebase();
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -61,23 +65,37 @@ function LoginForm() {
   
   const { formState: { isSubmitting } } = form;
 
-  const performAppLogin = async (role: 'admin' | 'student', email?: string) => {
-    const isAdmin = role === 'admin';
-    toast({
+  const ensureUserDocument = async (uid: string, role: 'libraryOwner' | 'student') => {
+    if (!firestore) return;
+    const userDocRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/users`, uid);
+    
+    // Set the document. If it exists, this will merge by default without overwriting.
+    // If it's a new user, it will be created.
+    await setDoc(userDocRef, {
+      uid: uid,
+      role: role,
+      libraryId: HARDCODED_LIBRARY_ID,
+    }, { merge: true });
+  };
+
+  const navigateToDashboard = (role: 'admin' | 'student', emailForSession?: string) => {
+     toast({
       title: 'Login Successful',
       description: `Welcome back! Redirecting to your dashboard.`,
     });
     
-    if (isAdmin) {
+    if (role === 'admin') {
       sessionStorage.removeItem('demoStudentEmail');
-    } else if (email) {
-      sessionStorage.setItem('demoStudentEmail', email);
+      router.push('/admin/dashboard');
+    } else {
+      if (emailForSession) {
+        sessionStorage.setItem('demoStudentEmail', emailForSession);
+      }
+      router.push('/student/dashboard');
     }
-    
-    router.push(isAdmin ? '/admin/dashboard' : '/student/dashboard');
   };
 
-  const ensureFirebaseUser = async () => {
+  const ensureFirebaseUser = async (): Promise<User> => {
     if (!auth) {
       toast({ variant: 'destructive', title: 'Initialization Error', description: 'Firebase is not ready.' });
       throw new Error("Firebase auth not ready");
@@ -102,11 +120,11 @@ function LoginForm() {
   const handleAdminDemo = async () => {
     setIsDemoLoading(true);
     try {
-      await ensureFirebaseUser();
-      // Hardcoded demo admin login
-      await performAppLogin('admin');
+      const user = await ensureFirebaseUser();
+      await ensureUserDocument(user.uid, 'libraryOwner');
+      navigateToDashboard('admin');
     } catch (e) {
-      // Error toast is handled in ensureFirebaseUser or performAppLogin
+      // Error toast is handled in ensureFirebaseUser
     } finally {
       setIsDemoLoading(false);
     }
@@ -115,11 +133,11 @@ function LoginForm() {
   const handleStudentDemo = async () => {
     setIsDemoLoading(true);
     try {
-      await ensureFirebaseUser();
-      // Hardcoded demo student login
-      await performAppLogin('student', 'student@campushub.com');
+      const user = await ensureFirebaseUser();
+      await ensureUserDocument(user.uid, 'student');
+      navigateToDashboard('student', 'student@campushub.com');
     } catch (e) {
-      // Error toast is handled in ensureFirebaseUser or performAppLogin
+      // Error toast is handled in ensureFirebaseUser
     } finally {
       setIsDemoLoading(false);
     }
@@ -133,14 +151,15 @@ function LoginForm() {
 
     try {
       const userCredential = await signInWithEmailAndPassword(auth, data.email, data.password);
-      // For any user signing in with email/pass, assume student role.
-      await performAppLogin('student', userCredential.user.email!);
+      // The user document should already exist from signup, but this is a safe fallback.
+      await ensureUserDocument(userCredential.user.uid, 'student');
+      navigateToDashboard('student', userCredential.user.email!);
     } catch (error) {
       let title = 'Login Failed';
-      let description = 'Invalid credentials. Please check your email and password.';
+      let description = 'Invalid credentials. Please use the demo buttons or sign up.';
       if (error instanceof FirebaseError) {
         if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
-           // Keep the generic message for security
+           // Keep the clear message for demo purposes
         } else {
             description = 'An unexpected error occurred. Please try again.';
         }

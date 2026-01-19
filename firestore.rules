@@ -1,116 +1,88 @@
-/**
- * Core Philosophy: This ruleset enforces a strict multi-tenant security model for a library system.
- * The primary goal is data isolation, ensuring that users (admins and students) from one library
- * can never see or modify data from another library. Access control within a library is role-based.
- *
- * MODIFICATION FOR DEMO: The original rules relied on custom claims (role, libraryId) which are not
- * present in the app's anonymous authentication. The rules have been simplified to allow any
- * authenticated user (`request.auth != null`) to perform actions. This makes the app functional
- * for demonstration but should be replaced with a full role-based system for production.
- */
+
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper Functions for Reusable Logic
-
-    /**
-     * Checks if a user is authenticated.
-     */
-    function isSignedIn() {
-      return request.auth != null;
+    // --- HELPER FUNCTIONS ---
+    function isLibraryUser(libraryId) {
+      return request.auth != null &&
+        exists(/databases/$(database)/documents/libraries/$(libraryId)/users/$(request.auth.uid));
     }
 
-    /**
-     * Checks if the authenticated user's UID matches the wildcard user ID from the path.
-     */
+    function isAdmin(libraryId) {
+      return isLibraryUser(libraryId) &&
+        get(/databases/$(database)/documents/libraries/$(libraryId)/users/$(request.auth.uid)).data.role == "libraryOwner";
+    }
+
     function isOwner(userId) {
-      return request.auth.uid == userId;
+      return request.auth != null && request.auth.uid == userId;
     }
 
+    // --- COLLECTIONS ---
+
+    // Libraries: Read-only for clients
     match /libraries/{libraryId} {
-      allow get: if isSignedIn();
-      allow list: if false; // Listing all libraries is disallowed.
-      allow create, update, delete: if false; // Client cannot modify libraries.
+      allow get: if isLibraryUser(libraryId);
+      allow list, create, update, delete: if false;
     }
 
-    // Users
-    match /libraries/{libraryId}/users {
-      allow list: if isSignedIn();
-    }
+    // Users: Can read/write their own user object
     match /libraries/{libraryId}/users/{userId} {
-      allow get, create, update, delete: if isSignedIn();
+      allow read, write: if isOwner(userId);
     }
 
-    // Students
-    match /libraries/{libraryId}/students {
-      allow list: if isSignedIn();
-    }
+    // Students: Admins manage, all library users can read
     match /libraries/{libraryId}/students/{studentId} {
-      allow get, create, update, delete: if isSignedIn();
+      allow read: if isLibraryUser(libraryId);
+      allow create, update, delete: if isAdmin(libraryId);
     }
 
-    // Payments
-    match /libraries/{libraryId}/payments {
-      allow list: if isSignedIn();
-    }
+    // Payments: Admins manage, all library users can read
     match /libraries/{libraryId}/payments/{paymentId} {
-      allow get, create, update, delete: if isSignedIn();
+      allow read: if isLibraryUser(libraryId);
+      allow create, update, delete: if isAdmin(libraryId);
     }
 
-    // Expenses
-    match /libraries/{libraryId}/expenses {
-      allow list: if isSignedIn();
-    }
+    // Expenses: Admins manage, all library users can read
     match /libraries/{libraryId}/expenses/{expenseId} {
-      allow get, create, update, delete: if isSignedIn();
+      allow read: if isLibraryUser(libraryId);
+      allow create, update, delete: if isAdmin(libraryId);
     }
 
-    // Rooms and Seats
-    match /libraries/{libraryId}/rooms {
-      allow list: if isSignedIn();
-    }
+    // Rooms & Seats: Admins manage, all library users can read
     match /libraries/{libraryId}/rooms/{roomId} {
-      allow get, create, update, delete: if isSignedIn();
+      allow read: if isLibraryUser(libraryId);
+      allow create, update, delete: if isAdmin(libraryId);
 
-      match /seats {
-        allow list: if isSignedIn();
-      }
       match /seats/{seatId} {
-        allow get, create, update, delete: if isSignedIn();
+        allow read: if isLibraryUser(libraryId);
+        allow create, update, delete: if isAdmin(libraryId);
       }
     }
 
-    // Announcements
-    match /libraries/{libraryId}/announcements {
-      allow list: if isSignedIn();
-    }
+    // Announcements: Admins manage, all library users can read
     match /libraries/{libraryId}/announcements/{announcementId} {
-      allow get, create, update, delete: if isSignedIn();
+      allow read: if isLibraryUser(libraryId);
+      allow create, update, delete: if isAdmin(libraryId);
     }
 
-    // Suggestions
-    match /libraries/{libraryId}/suggestions {
-      allow list: if isSignedIn();
-    }
+    // Suggestions: Students create their own, Admins manage all
     match /libraries/{libraryId}/suggestions/{suggestionId} {
-      allow get, create, update, delete: if isSignedIn();
+      allow read: if isLibraryUser(libraryId);
+      allow create: if isLibraryUser(libraryId) && request.auth.uid == request.resource.data.studentId;
+      allow update, delete: if isAdmin(libraryId);
     }
 
-    // Print Requests
-    match /libraries/{libraryId}/printRequests {
-      allow list: if isSignedIn();
-    }
+    // Print Requests: Students create their own, Admins manage all
     match /libraries/{libraryId}/printRequests/{printRequestId} {
-      allow get, create, update, delete: if isSignedIn();
+      allow read: if isLibraryUser(libraryId);
+      allow create: if isLibraryUser(libraryId) && request.auth.uid == request.resource.data.studentId;
+      allow update, delete: if isAdmin(libraryId);
     }
     
-    // Activity Logs
-    match /libraries/{libraryId}/activityLogs {
-      allow list: if isSignedIn();
-    }
+    // Activity Logs: Write-only for admins, read-only for admins
     match /libraries/{libraryId}/activityLogs/{logId} {
-      allow get, create: if isSignedIn();
+      allow read, create: if isAdmin(libraryId);
       allow update, delete: if false;
     }
   }

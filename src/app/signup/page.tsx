@@ -85,8 +85,16 @@ function SignupForm() {
       // 1. Create user in Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
       const user = userCredential.user;
+      
+      // 2. Create the user document for security rule checks
+      const userRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/users`, user.uid);
+      await setDoc(userRef, {
+        uid: user.uid,
+        role: 'student',
+        libraryId: HARDCODED_LIBRARY_ID,
+      });
 
-      // 2. Create corresponding Student document in Firestore using UID as the document ID
+      // 3. Create corresponding Student document in Firestore using UID as the document ID
       const studentRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students`, user.uid);
       await setDoc(studentRef, {
         libraryId: HARDCODED_LIBRARY_ID,
@@ -104,14 +112,12 @@ function SignupForm() {
         updatedAt: serverTimestamp(),
       });
 
-      // 3. Show success and redirect
+      // 4. Show success and redirect
       toast({
         title: 'Account Created',
         description: "Welcome! Redirecting to your dashboard.",
       });
       
-      // Since the user is now fully authenticated, their email will be in the auth state.
-      // We no longer strictly need sessionStorage, but it can act as a fallback.
       if (user.email) {
         sessionStorage.setItem('demoStudentEmail', user.email);
       }
