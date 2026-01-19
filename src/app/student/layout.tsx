@@ -1,17 +1,15 @@
+
 'use client';
 
 import * as React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { collection, query, where, limit } from 'firebase/firestore';
+import { collection, query, where, limit, doc, getDocs } from 'firebase/firestore';
 import {
   Bell,
   Home,
   LogOut,
-  Settings,
-  User,
-  Lightbulb,
   Printer,
 } from 'lucide-react';
 import {
@@ -36,7 +34,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Logo } from '@/components/logo';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
-import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
+import { useDoc, useFirebase, useMemoFirebase } from '@/firebase';
 import { Student } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -46,30 +44,41 @@ const HARDCODED_LIBRARY_ID = 'library1';
 function UserMenu() {
   const { firestore, user } = useFirebase();
   const userAvatar = PlaceHolderImages.find((p) => p.id === 'user-avatar');
-  const [studentEmail, setStudentEmail] = React.useState<string | null>(null);
+  const [studentId, setStudentId] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    // Since this is a demo with anonymous auth, we retrieve the student's email from session storage.
-    // In a production app, this would come from the authenticated user object (`user?.email`).
-    const demoEmail = sessionStorage.getItem('demoStudentEmail');
-    if (demoEmail) {
-      setStudentEmail(demoEmail);
-    } else if (user?.email) {
-      setStudentEmail(user.email);
+    // A real user's ID is the source of truth.
+    // For the demo flow, we fall back to session storage for the email.
+    if (user?.uid) {
+      setStudentId(user.uid);
+    } else {
+      const demoEmail = sessionStorage.getItem('demoStudentEmail');
+      if (demoEmail) {
+        // This part is for the demo student, which doesn't have a real auth UID
+        // and must be looked up by email.
+        const fetchStudentIdByEmail = async () => {
+          if (!firestore) return;
+          const q = query(
+            collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students`),
+            where('email', '==', demoEmail),
+            limit(1)
+          );
+          const snapshot = await getDocs(q);
+          if (!snapshot.empty) {
+            setStudentId(snapshot.docs[0].id);
+          }
+        };
+        fetchStudentIdByEmail();
+      }
     }
-  }, [user]);
+  }, [user, firestore]);
+  
+  const studentDocRef = useMemoFirebase(() => {
+    if (!firestore || !studentId) return null;
+    return doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students`, studentId);
+  }, [firestore, studentId]);
 
-  const studentQuery = useMemoFirebase(() => {
-    if (!firestore || !user || !studentEmail) return null;
-    return query(
-      collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students`),
-      where('email', '==', studentEmail),
-      limit(1)
-    );
-  }, [firestore, user, studentEmail]);
-
-  const { data: studentData, isLoading: isLoadingStudent } = useCollection<Student>(studentQuery);
-  const student = React.useMemo(() => (studentData && studentData[0]) ? studentData[0] : null, [studentData]);
+  const { data: student, isLoading: isLoadingStudent } = useDoc<Student>(studentDocRef);
 
   return (
     <DropdownMenu>
@@ -99,7 +108,7 @@ function UserMenu() {
             <div className="flex flex-col space-y-1">
               <p className="text-sm font-medium leading-none">{student?.name || 'Student'}</p>
               <p className="text-xs leading-none text-muted-foreground">
-                {student?.email || 'No email'}
+                {student?.email || user?.email || 'No email'}
               </p>
             </div>
           )}

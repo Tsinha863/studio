@@ -1,9 +1,10 @@
+
 'use client';
 
 import * as React from 'react';
-import { collection, query, where, orderBy, limit } from 'firebase/firestore';
+import { collection, query, where, orderBy, limit, doc, getDocs } from 'firebase/firestore';
 
-import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
+import { useCollection, useDoc, useFirebase, useMemoFirebase } from '@/firebase';
 import type { Student, PrintRequest } from '@/lib/types';
 import { PrintRequestForm } from '@/components/student/print-on-desk/print-request-form';
 import { PrintHistoryTable } from '@/components/student/print-on-desk/print-history-table';
@@ -13,41 +14,52 @@ const HARDCODED_LIBRARY_ID = 'library1';
 
 export default function PrintOnDeskPage() {
   const { firestore, user } = useFirebase();
-  const [studentEmail, setStudentEmail] = React.useState<string | null>(null);
+  const [studentId, setStudentId] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    // Since this is a demo with anonymous auth, we retrieve the student's email from session storage.
-    // In a production app, this would come from the authenticated user object (`user?.email`).
-    const demoEmail = sessionStorage.getItem('demoStudentEmail');
-    if (demoEmail) {
-      setStudentEmail(demoEmail);
-    } else if (user?.email) {
-      setStudentEmail(user.email);
+    // A real user's ID is the source of truth.
+    // For the demo flow, we fall back to session storage for the email.
+    if (user?.uid) {
+      setStudentId(user.uid);
+    } else {
+      const demoEmail = sessionStorage.getItem('demoStudentEmail');
+      if (demoEmail) {
+        // This part is for the demo student, which doesn't have a real auth UID
+        // and must be looked up by email.
+        const fetchStudentIdByEmail = async () => {
+          if (!firestore) return;
+          const q = query(
+            collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students`),
+            where('email', '==', demoEmail),
+            limit(1)
+          );
+          const snapshot = await getDocs(q);
+          if (!snapshot.empty) {
+            setStudentId(snapshot.docs[0].id);
+          }
+        };
+        fetchStudentIdByEmail();
+      }
     }
-  }, [user]);
+  }, [user, firestore]);
 
   // 1. Get current student's data
-  const studentQuery = useMemoFirebase(() => {
-    if (!firestore || !user || !studentEmail) return null;
-    return query(
-      collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students`),
-      where('email', '==', studentEmail),
-      limit(1)
-    );
-  }, [firestore, user, studentEmail]);
+  const studentDocRef = useMemoFirebase(() => {
+    if (!firestore || !studentId) return null;
+    return doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students`, studentId);
+  }, [firestore, studentId]);
 
-  const { data: studentData, isLoading: isLoadingStudent } = useCollection<Student>(studentQuery);
-  const student = React.useMemo(() => (studentData && studentData[0]) ? studentData[0] : null, [studentData]);
+  const { data: student, isLoading: isLoadingStudent } = useDoc<Student>(studentDocRef);
 
   // 2. Get student's print requests
   const printRequestsQuery = useMemoFirebase(() => {
-    if (!firestore || !user || !student) return null;
+    if (!firestore || !studentId) return null;
     return query(
       collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/printRequests`),
-      where('studentId', '==', student.id),
+      where('studentId', '==', studentId),
       orderBy('createdAt', 'desc')
     );
-  }, [firestore, user, student]);
+  }, [firestore, studentId]);
 
   const { data: printRequests, isLoading: isLoadingPrintRequests } = useCollection<PrintRequest>(printRequestsQuery);
 

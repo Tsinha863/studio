@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -8,6 +9,8 @@ import { z } from 'zod';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
+import { createUserWithEmailAndPassword, FirebaseError } from 'firebase/auth';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -28,8 +31,10 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
+import { useFirebase } from '@/firebase';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Logo } from '@/components/logo';
+import { Spinner } from '@/components/spinner';
 
 const signupSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters long.' }),
@@ -45,10 +50,13 @@ const signupSchema = z.object({
 
 type SignupFormValues = z.infer<typeof signupSchema>;
 
+// TODO: Replace with actual logged-in user's library
+const HARDCODED_LIBRARY_ID = 'library1';
+
 function SignupForm() {
   const router = useRouter();
   const { toast } = useToast();
-  const [isLoading, setIsLoading] = React.useState(false);
+  const { auth, firestore } = useFirebase();
 
   const form = useForm<SignupFormValues>({
     resolver: zodResolver(signupSchema),
@@ -60,17 +68,78 @@ function SignupForm() {
     },
   });
 
-  const onSubmit = (data: SignupFormValues) => {
-    setIsLoading(true);
-    // Mock signup logic
-    setTimeout(() => {
-      setIsLoading(false);
+  const { formState: { isSubmitting } } = form;
+
+  const onSubmit = async (data: SignupFormValues) => {
+    if (!auth || !firestore) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Firebase service is not available. Please try again later.',
+      });
+      return;
+    }
+
+    try {
+      // 1. Create user in Firebase Auth
+      const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
+      const user = userCredential.user;
+
+      // 2. Create corresponding Student document in Firestore using UID as the document ID
+      const studentRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students`, user.uid);
+      await setDoc(studentRef, {
+        libraryId: HARDCODED_LIBRARY_ID,
+        userId: user.uid,
+        name: data.name,
+        email: data.email,
+        status: 'active',
+        assignments: [],
+        fibonacciStreak: 0,
+        paymentDue: 0,
+        notes: [],
+        tags: [],
+        lastInteractionAt: serverTimestamp(),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      // 3. Show success and redirect
       toast({
         title: 'Account Created',
         description: "Welcome! Redirecting to your dashboard.",
       });
-      router.push('/admin/dashboard');
-    }, 1500);
+      
+      // Since the user is now fully authenticated, their email will be in the auth state.
+      // We no longer strictly need sessionStorage, but it can act as a fallback.
+      if (user.email) {
+        sessionStorage.setItem('demoStudentEmail', user.email);
+      }
+      router.push('/student/dashboard');
+
+    } catch (error) {
+      let title = 'Sign-up failed';
+      let description = 'An unexpected error occurred. Please try again.';
+      if (error instanceof FirebaseError) {
+        switch (error.code) {
+          case 'auth/email-already-in-use':
+            title = 'Email in Use';
+            description = 'This email address is already associated with an account.';
+            break;
+          case 'auth/weak-password':
+            title = 'Weak Password';
+            description = 'The password is not strong enough. Please choose a stronger password.';
+            break;
+          default:
+            description = error.message;
+            break;
+        }
+      }
+      toast({
+        variant: 'destructive',
+        title,
+        description,
+      });
+    }
   };
 
   return (
@@ -97,7 +166,7 @@ function SignupForm() {
                     <Input
                       placeholder="John Doe"
                       {...field}
-                      disabled={isLoading}
+                      disabled={isSubmitting}
                     />
                   </FormControl>
                   <FormMessage />
@@ -114,7 +183,7 @@ function SignupForm() {
                     <Input
                       placeholder="name@example.com"
                       {...field}
-                      disabled={isLoading}
+                      disabled={isSubmitting}
                     />
                   </FormControl>
                   <FormMessage />
@@ -132,7 +201,7 @@ function SignupForm() {
                       type="password"
                       placeholder="••••••••"
                       {...field}
-                      disabled={isLoading}
+                      disabled={isSubmitting}
                     />
                   </FormControl>
                   <FormMessage />
@@ -150,7 +219,7 @@ function SignupForm() {
                       type="password"
                       placeholder="••••••••"
                       {...field}
-                      disabled={isLoading}
+                      disabled={isSubmitting}
                     />
                   </FormControl>
                   <FormMessage />
@@ -162,9 +231,10 @@ function SignupForm() {
             <Button
               type="submit"
               className="w-full"
-              disabled={isLoading}
+              disabled={isSubmitting}
             >
-              {isLoading ? 'Creating Account...' : 'Create Account'}
+              {isSubmitting ? <Spinner className="mr-2" /> : null}
+              {isSubmitting ? 'Creating Account...' : 'Create Account'}
             </Button>
             <div className="text-center text-sm text-muted-foreground">
               Already have an account?{' '}

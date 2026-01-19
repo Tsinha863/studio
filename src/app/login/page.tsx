@@ -8,7 +8,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { useRouter } from 'next/navigation';
-import { signInAnonymously } from 'firebase/auth';
+import { signInAnonymously, signInWithEmailAndPassword, FirebaseError } from 'firebase/auth';
 import { ArrowLeft } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -39,7 +39,7 @@ const loginSchema = z.object({
   email: z.string().email({ message: 'Please enter a valid email address.' }),
   password: z
     .string()
-    .min(8, { message: 'Password must be at least 8 characters long.' }),
+    .min(1, { message: 'Password is required.' }),
 });
 
 type LoginFormValues = z.infer<typeof loginSchema>;
@@ -47,7 +47,7 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 function LoginForm() {
   const router = useRouter();
   const { toast } = useToast();
-  const [isLoading, setIsLoading] = React.useState(false);
+  const [isDemoLoading, setIsDemoLoading] = React.useState(false);
   const { auth } = useFirebase();
 
   const form = useForm<LoginFormValues>({
@@ -57,19 +57,21 @@ function LoginForm() {
       password: '',
     },
   });
+  
+  const { formState: { isSubmitting } } = form;
 
-  const performAppLogin = (role: 'admin' | 'student') => {
+  const performAppLogin = (role: 'admin' | 'student', email?: string) => {
     const isAdmin = role === 'admin';
     toast({
       title: 'Login Successful',
-      description: `Welcome back, ${isAdmin ? 'Admin' : 'Student'}! Redirecting to your dashboard.`,
+      description: `Welcome back! Redirecting to your dashboard.`,
     });
     
     if (isAdmin) {
       sessionStorage.removeItem('demoStudentEmail');
     } else {
-      // Hardcode the email for the student demo
-      sessionStorage.setItem('demoStudentEmail', 'student@campushub.com');
+      // Use provided email or hardcode the demo email
+      sessionStorage.setItem('demoStudentEmail', email || 'student@campushub.com');
     }
     router.push(isAdmin ? '/admin/dashboard' : '/student/dashboard');
   };
@@ -80,10 +82,11 @@ function LoginForm() {
       throw new Error("Firebase auth not ready");
     }
     if (auth.currentUser) {
-      return;
+      return auth.currentUser;
     }
     try {
-      await signInAnonymously(auth);
+      const creds = await signInAnonymously(auth);
+      return creds.user;
     } catch (error) {
       console.error('Anonymous sign-in failed:', error);
       toast({
@@ -96,51 +99,58 @@ function LoginForm() {
   };
 
   const handleAdminDemo = async () => {
-    setIsLoading(true);
+    setIsDemoLoading(true);
     try {
       await ensureFirebaseUser();
       performAppLogin('admin');
     } catch (e) {
-      // Error toast is handled in ensureFirebaseUser, just need to stop loading
-      setIsLoading(false);
+      // Error toast is handled in ensureFirebaseUser
+    } finally {
+      setIsDemoLoading(false);
     }
   };
 
   const handleStudentDemo = async () => {
-    setIsLoading(true);
+    setIsDemoLoading(true);
     try {
       await ensureFirebaseUser();
       performAppLogin('student');
     } catch (e) {
-      // Error toast is handled in ensureFirebaseUser, just need to stop loading
-      setIsLoading(false);
+      // Error toast is handled in ensureFirebaseUser
+    } finally {
+      setIsDemoLoading(false);
     }
   };
 
   const onFormSubmit = async (data: LoginFormValues) => {
-    setIsLoading(true);
-    const { email, password } = data;
-
-    const isAdmin = email === 'admin@campushub.com' && password === 'password123';
-    const isStudent = email === 'student@campushub.com' && password === 'password123';
-
-    if (!isAdmin && !isStudent) {
-      toast({
-        variant: 'destructive',
-        title: 'Demo Login Failed',
-        description: 'Invalid credentials. Please use the "Admin Demo" or "Student Demo" buttons.',
-      });
-      setIsLoading(false);
+    if (!auth) {
+      toast({ variant: 'destructive', title: 'Initialization Error', description: 'Firebase is not ready.' });
       return;
     }
 
     try {
-      await ensureFirebaseUser();
-      performAppLogin(isAdmin ? 'admin' : 'student');
-    } catch (e) {
-      setIsLoading(false);
+      const userCredential = await signInWithEmailAndPassword(auth, data.email, data.password);
+      // For any user signing in with email/pass, assume student role.
+      performAppLogin('student', userCredential.user.email!);
+    } catch (error) {
+      let title = 'Login Failed';
+      let description = 'Invalid credentials. Please check your email and password.';
+      if (error instanceof FirebaseError) {
+        if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+           // Keep the generic message for security
+        } else {
+            description = 'An unexpected error occurred. Please try again.';
+        }
+      }
+      toast({
+        variant: 'destructive',
+        title,
+        description,
+      });
     }
   };
+
+  const isFormDisabled = isSubmitting || isDemoLoading;
 
   return (
     <Form {...form}>
@@ -166,7 +176,7 @@ function LoginForm() {
                     <Input
                       placeholder="name@example.com"
                       {...field}
-                      disabled={isLoading}
+                      disabled={isFormDisabled}
                     />
                   </FormControl>
                   <FormMessage />
@@ -184,7 +194,7 @@ function LoginForm() {
                       type="password"
                       placeholder="••••••••"
                       {...field}
-                      disabled={isLoading}
+                      disabled={isFormDisabled}
                     />
                   </FormControl>
                   <FormMessage />
@@ -196,15 +206,23 @@ function LoginForm() {
             <Button
               type="submit"
               className="w-full"
-              disabled={isLoading}
+              disabled={isFormDisabled}
             >
-              {isLoading ? <Spinner className="mr-2" /> : 'Sign In'}
+              {isSubmitting ? <Spinner className="mr-2" /> : null}
+              {isSubmitting ? 'Signing In...' : 'Sign In'}
             </Button>
+            <div className="relative flex w-full items-center">
+                <div className="flex-grow border-t border-muted"></div>
+                <span className="flex-shrink mx-4 text-xs text-muted-foreground uppercase">Or</span>
+                <div className="flex-grow border-t border-muted"></div>
+            </div>
             <div className='flex w-full gap-2'>
-              <Button type="button" variant="outline" className="w-full" onClick={handleAdminDemo} disabled={isLoading}>
+              <Button type="button" variant="outline" className="w-full" onClick={handleAdminDemo} disabled={isFormDisabled}>
+                {isDemoLoading && <Spinner className="mr-2" />}
                 Admin Demo
               </Button>
-              <Button type="button" variant="outline" className="w-full" onClick={handleStudentDemo} disabled={isLoading}>
+              <Button type="button" variant="outline" className="w-full" onClick={handleStudentDemo} disabled={isFormDisabled}>
+                {isDemoLoading && <Spinner className="mr-2" />}
                 Student Demo
               </Button>
             </div>

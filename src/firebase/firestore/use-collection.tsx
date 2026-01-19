@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -8,6 +9,7 @@ import {
   FirestoreError,
   QuerySnapshot,
   CollectionReference,
+  getDocs,
 } from 'firebase/firestore';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
@@ -114,3 +116,6 @@ export function useCollection<T = any>(
   
   return { data, isLoading, error };
 }
+
+// Add getDocs for one-time fetches where needed.
+export { getDocs };
