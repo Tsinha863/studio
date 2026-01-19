@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, deleteUser, type UserCredential } from 'firebase/auth';
 import { FirebaseError } from 'firebase/app';
 import { doc, serverTimestamp, writeBatch } from 'firebase/firestore';
 
@@ -81,9 +81,11 @@ function SignupForm() {
       return;
     }
 
+    let userCredential: UserCredential | undefined = undefined;
+
     try {
       // 1. Create user in Firebase Auth
-      const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
+      userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
       const user = userCredential.user;
       
       // 2. Create corresponding Firestore documents in a batch for atomicity
@@ -124,8 +126,22 @@ function SignupForm() {
       router.push('/loading');
 
     } catch (error) {
+      // If Firestore write fails after Auth user creation, attempt to roll back.
+      if (userCredential) {
+        await deleteUser(userCredential.user).catch(deleteError => {
+          console.error("Failed to rollback Auth user creation:", deleteError);
+          toast({
+            variant: 'destructive',
+            title: 'Incomplete Signup',
+            description: 'Your account was created but profile setup failed. Please contact support.',
+            duration: 10000,
+          });
+        });
+      }
+
       let title = 'Sign-up failed';
       let description = 'An unexpected error occurred. Please try again.';
+      
       if (error instanceof FirebaseError) {
         switch (error.code) {
           case 'auth/email-already-in-use':
@@ -140,7 +156,11 @@ function SignupForm() {
             description = error.message;
             break;
         }
+      } else {
+        // Assume it's a Firestore error from the batch commit
+        description = "Could not save your profile. Please try again.";
       }
+
       toast({
         variant: 'destructive',
         title,

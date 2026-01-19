@@ -8,10 +8,13 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { useRouter } from 'next/navigation';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword,
+} from 'firebase/auth';
 import { FirebaseError } from 'firebase/app';
+import { doc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { ArrowLeft } from 'lucide-react';
-import { doc, getDoc } from 'firebase/firestore';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -46,76 +49,136 @@ const loginSchema = z.object({
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 
-// In a real application, these credentials should be stored in secure environment variables.
-// For this demo, they are hardcoded for simplicity.
+// Demo credentials
 const DEMO_ADMIN_EMAIL = "admin@campushub.com";
 const DEMO_ADMIN_PASSWORD = "password123";
 const DEMO_STUDENT_EMAIL = "student@campushub.com";
 const DEMO_STUDENT_PASSWORD = "password123";
+const HARDCODED_LIBRARY_ID = 'library1';
+
 
 function LoginForm() {
   const router = useRouter();
   const { toast } = useToast();
-  const { auth } = useFirebase();
+  const { auth, firestore } = useFirebase();
+  const [isDemoLoading, setIsDemoLoading] = React.useState<'admin' | 'student' | null>(null);
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
-    defaultValues: {
-      email: '',
-      password: '',
-    },
+    defaultValues: { email: '', password: '' },
   });
   
-  const { formState: { isSubmitting, isSubmitted } } = form;
+  const { isSubmitting } = form.formState;
+  const isAnyLoading = isSubmitting || !!isDemoLoading;
 
-  const handleLogin = async (email: string, password: string) => {
-    if (!auth) {
-        toast({ variant: 'destructive', title: 'Initialization Error', description: 'Firebase is not ready.' });
-        return;
-    }
+  // Handler for the manual email/password form
+  const onFormSubmit = async (data: LoginFormValues) => {
+    if (!auth) return;
 
     try {
-        await signInWithEmailAndPassword(auth, email, password);
-        // On successful login, Firebase's onAuthStateChanged listener will trigger.
-        // We redirect to a loading page which will handle routing based on the user's role.
-        router.push('/loading');
+      await signInWithEmailAndPassword(auth, data.email, data.password);
+      router.push('/loading');
     } catch (error) {
-        let title = 'Login Failed';
-        let description = 'An unexpected error occurred. Please try again.';
-      
-        if (error instanceof FirebaseError) {
-            switch (error.code) {
-                case 'auth/user-not-found':
-                case 'auth/wrong-password':
-                case 'auth/invalid-credential':
-                    title = 'Invalid Credentials';
-                    description = 'The email or password you entered is incorrect.';
-                    break;
-                case 'auth/too-many-requests':
-                    title = 'Too Many Attempts';
-                    description = 'Access to this account has been temporarily disabled due to many failed login attempts. You can reset your password or try again later.';
-                    break;
-                default:
-                    description = error.message;
-                    break;
-            }
-        }
-        toast({ variant: 'destructive', title, description });
-        form.reset(); // Reset form state on error
+      handleAuthError(error);
     }
   };
 
-  const onFormSubmit = async (data: LoginFormValues) => {
-    await handleLogin(data.email, data.password);
-  };
-  
-  const onDemoLogin = async (role: 'admin' | 'student') => {
+  // Handler for both demo login buttons
+  const handleDemoLogin = async (role: 'admin' | 'student') => {
+    if (!auth || !firestore) return;
+    setIsDemoLoading(role);
+
     const email = role === 'admin' ? DEMO_ADMIN_EMAIL : DEMO_STUDENT_EMAIL;
     const password = role === 'admin' ? DEMO_ADMIN_PASSWORD : DEMO_STUDENT_PASSWORD;
-    await handleLogin(email, password);
-  }
 
-  const isFormDisabled = form.formState.isSubmitting;
+    try {
+      // 1. Attempt to sign in
+      await signInWithEmailAndPassword(auth, email, password);
+      router.push('/loading');
+
+    } catch (error) {
+      // 2. If user does not exist, create them and their necessary documents
+      if (error instanceof FirebaseError && (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential')) {
+        try {
+          const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+          const user = userCredential.user;
+
+          // Create Firestore documents in a batch
+          const batch = writeBatch(firestore);
+          
+          // User document (for role)
+          const userRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/users`, user.uid);
+          batch.set(userRef, {
+            id: user.uid,
+            email: user.email,
+            role: role === 'admin' ? 'libraryOwner' : 'student',
+            libraryId: HARDCODED_LIBRARY_ID,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+
+          // Student profile document (if student role)
+          if (role === 'student') {
+            const studentRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students`, user.uid);
+            batch.set(studentRef, {
+              libraryId: HARDCODED_LIBRARY_ID,
+              userId: user.uid,
+              name: 'Demo Student',
+              email: user.email,
+              status: 'active',
+              assignments: [],
+              fibonacciStreak: 5,
+              paymentDue: 0,
+              notes: [],
+              tags: [],
+              lastInteractionAt: serverTimestamp(),
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            });
+          }
+          
+          await batch.commit();
+          router.push('/loading'); // Now route to loading page
+
+        } catch (creationError) {
+          handleAuthError(creationError, 'Could not set up demo account.');
+        }
+      } else {
+        // Handle other sign-in errors
+        handleAuthError(error);
+      }
+    } finally {
+      setIsDemoLoading(null);
+    }
+  };
+
+  const handleAuthError = (error: unknown, defaultMessage?: string) => {
+    let title = 'Login Failed';
+    let description = defaultMessage || 'An unexpected error occurred. Please try again.';
+  
+    if (error instanceof FirebaseError) {
+        switch (error.code) {
+            case 'auth/user-not-found':
+            case 'auth/wrong-password':
+            case 'auth/invalid-credential':
+                title = 'Invalid Credentials';
+                description = 'Please check your email and password, or use the demo buttons.';
+                break;
+            case 'auth/too-many-requests':
+                title = 'Too Many Attempts';
+                description = 'Access to this account has been temporarily disabled. Please try again later.';
+                break;
+            case 'auth/email-already-in-use':
+                title = 'Email in Use';
+                description = 'This should not happen for demo accounts. Please contact support.';
+                break;
+            default:
+                description = error.message;
+                break;
+        }
+    }
+    toast({ variant: 'destructive', title, description });
+  };
 
   return (
     <Form {...form}>
@@ -127,7 +190,7 @@ function LoginForm() {
             </Link>
             <CardTitle className="font-headline text-2xl">CampusHub</CardTitle>
             <CardDescription>
-              Sign in to access your dashboard
+              Sign in or use a demo account
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
@@ -141,7 +204,7 @@ function LoginForm() {
                     <Input
                       placeholder="name@example.com"
                       {...field}
-                      disabled={isFormDisabled}
+                      disabled={isAnyLoading}
                     />
                   </FormControl>
                   <FormMessage />
@@ -159,7 +222,7 @@ function LoginForm() {
                       type="password"
                       placeholder="••••••••"
                       {...field}
-                      disabled={isFormDisabled}
+                      disabled={isAnyLoading}
                     />
                   </FormControl>
                   <FormMessage />
@@ -171,24 +234,24 @@ function LoginForm() {
             <Button
               type="submit"
               className="w-full"
-              disabled={isFormDisabled}
+              disabled={isAnyLoading}
             >
-              {isSubmitting && !isSubmitted ? <Spinner className="mr-2" /> : null}
-              {isSubmitting && !isSubmitted ? 'Signing In...' : 'Sign In'}
+              {isSubmitting ? <Spinner className="mr-2" /> : null}
+              {isSubmitting ? 'Signing In...' : 'Sign In'}
             </Button>
             <div className="relative flex w-full items-center">
                 <div className="flex-grow border-t border-muted"></div>
-                <span className="flex-shrink mx-4 text-xs text-muted-foreground uppercase">Or Continue With</span>
+                <span className="flex-shrink mx-4 text-xs text-muted-foreground uppercase">Or Use a Demo</span>
                 <div className="flex-grow border-t border-muted"></div>
             </div>
             <div className='flex w-full gap-2'>
-              <Button type="button" variant="outline" className="w-full" onClick={() => onDemoLogin('admin')} disabled={isFormDisabled}>
-                {isSubmitting ? <Spinner className="mr-2" /> : null}
-                Admin Demo
+              <Button type="button" variant="outline" className="w-full" onClick={() => handleDemoLogin('admin')} disabled={isAnyLoading}>
+                {isDemoLoading === 'admin' ? <Spinner className="mr-2" /> : null}
+                {isDemoLoading === 'admin' ? 'Loading...' : 'Admin Demo'}
               </Button>
-              <Button type="button" variant="outline" className="w-full" onClick={() => onDemoLogin('student')} disabled={isFormDisabled}>
-                {isSubmitting ? <Spinner className="mr-2" /> : null}
-                Student Demo
+              <Button type="button" variant="outline" className="w-full" onClick={() => handleDemoLogin('student')} disabled={isAnyLoading}>
+                 {isDemoLoading === 'student' ? <Spinner className="mr-2" /> : null}
+                 {isDemoLoading === 'student' ? 'Loading...' : 'Student Demo'}
               </Button>
             </div>
             <div className="text-center text-sm text-muted-foreground">
