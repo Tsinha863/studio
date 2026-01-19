@@ -58,79 +58,93 @@ function LoginForm() {
     },
   });
 
-  const handleLogin = (email: string, password: string) => {
+  const performAppLogin = (role: 'admin' | 'student') => {
+    const isAdmin = role === 'admin';
+    toast({
+      title: 'Login Successful',
+      description: `Welcome back, ${isAdmin ? 'Admin' : 'Student'}! Redirecting to your dashboard.`,
+    });
+    
+    if (isAdmin) {
+      sessionStorage.removeItem('demoStudentEmail');
+    } else {
+      // Hardcode the email for the student demo
+      sessionStorage.setItem('demoStudentEmail', 'student@campushub.com');
+    }
+    router.push(isAdmin ? '/admin/dashboard' : '/student/dashboard');
+  };
+
+  const ensureFirebaseUser = async () => {
+    if (!auth) {
+      toast({ variant: 'destructive', title: 'Initialization Error', description: 'Firebase is not ready.' });
+      throw new Error("Firebase auth not ready");
+    }
+    if (auth.currentUser) {
+      return;
+    }
+    try {
+      await signInAnonymously(auth);
+    } catch (error) {
+      console.error('Anonymous sign-in failed:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Firebase Auth Error',
+        description: 'Could not sign in anonymously. ' + (error as Error).message,
+      });
+      throw error;
+    }
+  };
+
+  const handleAdminDemo = async () => {
     setIsLoading(true);
+    try {
+      await ensureFirebaseUser();
+      performAppLogin('admin');
+    } catch (e) {
+      // Error toast is handled in ensureFirebaseUser, just need to stop loading
+      setIsLoading(false);
+    }
+  };
 
-    const successfulLogin =
-      (email === 'admin@campushub.com' && password === 'password123') ||
-      (email === 'student@campushub.com' && password === 'password123');
+  const handleStudentDemo = async () => {
+    setIsLoading(true);
+    try {
+      await ensureFirebaseUser();
+      performAppLogin('student');
+    } catch (e) {
+      // Error toast is handled in ensureFirebaseUser, just need to stop loading
+      setIsLoading(false);
+    }
+  };
 
-    if (!successfulLogin) {
+  const onFormSubmit = async (data: LoginFormValues) => {
+    setIsLoading(true);
+    const { email, password } = data;
+
+    const isAdmin = email === 'admin@campushub.com' && password === 'password123';
+    const isStudent = email === 'student@campushub.com' && password === 'password123';
+
+    if (!isAdmin && !isStudent) {
       toast({
         variant: 'destructive',
         title: 'Demo Login Failed',
-        description:
-          'Invalid credentials. Please use the "Admin Demo" or "Student Demo" buttons.',
+        description: 'Invalid credentials. Please use the "Admin Demo" or "Student Demo" buttons.',
       });
       setIsLoading(false);
       return;
     }
 
-    const performLogin = () => {
-      const isAdmin = email === 'admin@campushub.com';
-      toast({
-        title: 'Login Successful',
-        description: `Welcome back, ${isAdmin ? 'Admin' : 'Student'}! Redirecting to your dashboard.`,
-      });
-      if (!isAdmin) {
-          sessionStorage.setItem('demoStudentEmail', email);
-      } else {
-          sessionStorage.removeItem('demoStudentEmail');
-      }
-      router.push(isAdmin ? '/admin/dashboard' : '/student/dashboard');
-    };
-
-    if (auth?.currentUser) {
-      performLogin();
-    } else if (auth) {
-      signInAnonymously(auth)
-        .then(() => {
-          performLogin();
-        })
-        .catch((error) => {
-          console.error('Anonymous sign-in failed:', error);
-          toast({
-            variant: 'destructive',
-            title: 'Firebase Auth Error',
-            description: 'Could not sign in anonymously. ' + error.message,
-          });
-          setIsLoading(false);
-        });
-    } else {
-        toast({
-            variant: 'destructive',
-            title: 'Initialization Error',
-            description: 'Firebase is not ready. Please try again in a moment.',
-        });
-        setIsLoading(false);
+    try {
+      await ensureFirebaseUser();
+      performAppLogin(isAdmin ? 'admin' : 'student');
+    } catch (e) {
+      setIsLoading(false);
     }
   };
 
-  const onSubmit = (data: LoginFormValues) => {
-    handleLogin(data.email, data.password);
-  };
-  
-  const handleAdminDemo = () => {
-    handleLogin('admin@campushub.com', 'password123');
-  }
-
-  const handleStudentDemo = () => {
-    handleLogin('student@campushub.com', 'password123');
-  }
-
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)}>
+      <form onSubmit={form.handleSubmit(onFormSubmit)}>
         <Card className="w-full max-w-sm border-0 shadow-lg sm:border">
           <CardHeader className="text-center">
             <Link href="/" className="mx-auto mb-4">
