@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import type { User } from 'firebase/auth';
 
 import { useFirebase, useMemoFirebase } from '@/firebase';
@@ -10,7 +10,8 @@ import type { User as UserProfile } from '@/lib/types';
 // TODO: Replace with actual logged-in user's library
 const HARDCODED_LIBRARY_ID = 'library1';
 
-type UserRole = 'libraryOwner' | 'student';
+const VALID_ROLES = ["libraryOwner", "student"] as const;
+type UserRole = (typeof VALID_ROLES)[number];
 
 interface UseRoleResult {
     role: UserRole | null;
@@ -47,19 +48,27 @@ export function useRole(user: User | null): UseRoleResult {
                 const docSnap = await getDoc(userDocRef);
                 if (docSnap.exists()) {
                     const userProfile = docSnap.data() as UserProfile;
-                    if (userProfile.role) {
-                        setRole(userProfile.role);
+                    
+                    if (userProfile.role && VALID_ROLES.includes(userProfile.role as UserRole)) {
+                        setRole(userProfile.role as UserRole);
                         setError(null);
                     } else {
-                        setError(new Error('User profile is missing role.'));
-                        setRole(null);
+                        // AUTO-HEAL: Role is missing or invalid. Default to 'student'.
+                        console.warn(`Healing invalid/missing role for user ${user.uid}. Setting to "student".`);
+                        await updateDoc(userDocRef, {
+                            role: "student",
+                            updatedAt: serverTimestamp(),
+                        });
+                        setRole("student");
+                        setError(null);
                     }
                 } else {
-                    setError(new Error('User profile not found. Please contact support.'));
+                    // This case should be handled by ensureUserProfile, but as a fallback...
+                    setError(new Error('User profile not found. It should have been auto-created. Please contact support.'));
                     setRole(null);
                 }
             } catch (e) {
-                console.error("Failed to fetch user role:", e);
+                console.error("Failed to fetch or heal user role:", e);
                 setError(e instanceof Error ? e : new Error('An unexpected error occurred while fetching user role.'));
                 setRole(null);
             } finally {

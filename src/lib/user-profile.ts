@@ -8,6 +8,9 @@ import {
   type Firestore,
 } from 'firebase/firestore';
 
+const VALID_ROLES = ["libraryOwner", "student"] as const;
+type Role = (typeof VALID_ROLES)[number];
+
 /**
  * Ensures a user profile document exists in Firestore. If it doesn't, it creates one.
  * This function is idempotent and safe to call multiple times.
@@ -28,12 +31,17 @@ export async function ensureUserProfile({
   db: Firestore;
   uid: string;
   email: string | null;
-  role: 'libraryOwner' | 'student';
+  role: Role;
   libraryId: string;
 }) {
   if (!uid) {
     throw new Error('ensureUserProfile: UID is required.');
   }
+
+  if (!VALID_ROLES.includes(role)) {
+    throw new Error(`Invalid role "${role}" provided during profile creation.`);
+  }
+
   const userRef = doc(db, 'libraries', libraryId, 'users', uid);
   const userSnap = await getDoc(userRef);
 

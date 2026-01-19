@@ -15,33 +15,32 @@ function AuthRedirector() {
     const { role, isLoading: isRoleLoading, error: roleError } = useRole(user);
 
     React.useEffect(() => {
-        // Wait until both user and role are resolved
+        // Wait until both user and role loading states are false.
         if (isUserLoading || isRoleLoading) {
             return;
         }
 
-        // If no user is logged in after checking, go to login
+        // If no user is logged in after checking, go to login.
         if (!user) {
             router.replace('/login');
             return;
         }
 
-        // If there's an error fetching the role, stay on this page to show it
+        // If there is an error fetching the role, display it but don't redirect.
         if (roleError) {
             return;
         }
 
-        // Route based on role
+        // If role is resolved, redirect.
         if (role === 'libraryOwner') {
             router.replace('/admin/dashboard');
         } else if (role === 'student') {
             router.replace('/student/dashboard');
-        } else {
-            // This case handles a logged-in user with no valid role document.
-            // This can happen if Firestore profile creation fails after auth user is created.
-            // We log an error and prevent infinite redirects by not routing.
-             console.error("No valid role found for user:", user.uid);
         }
+        // If role is null but there's no error and it's not loading, it means
+        // the useRole hook is either healing or something went wrong.
+        // We do nothing and wait for the state to update on the next render.
+        
     }, [user, isUserLoading, role, isRoleLoading, roleError, router]);
 
     let content;
