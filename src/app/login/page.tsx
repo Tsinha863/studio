@@ -8,10 +8,10 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { useRouter } from 'next/navigation';
-import { signInAnonymously, signInWithEmailAndPassword, type User } from 'firebase/auth';
+import { signInWithEmailAndPassword } from 'firebase/auth';
 import { FirebaseError } from 'firebase/app';
 import { ArrowLeft } from 'lucide-react';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -46,14 +46,17 @@ const loginSchema = z.object({
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 
-// TODO: Replace with actual logged-in user's library
-const HARDCODED_LIBRARY_ID = 'library1';
+// In a real application, these credentials should be stored in secure environment variables.
+// For this demo, they are hardcoded for simplicity.
+const DEMO_ADMIN_EMAIL = "admin@campushub.com";
+const DEMO_ADMIN_PASSWORD = "password123";
+const DEMO_STUDENT_EMAIL = "student@campushub.com";
+const DEMO_STUDENT_PASSWORD = "password123";
 
 function LoginForm() {
   const router = useRouter();
   const { toast } = useToast();
-  const [isDemoLoading, setIsDemoLoading] = React.useState(false);
-  const { auth, firestore } = useFirebase();
+  const { auth } = useFirebase();
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -63,116 +66,56 @@ function LoginForm() {
     },
   });
   
-  const { formState: { isSubmitting } } = form;
+  const { formState: { isSubmitting, isSubmitted } } = form;
 
-  const ensureUserDocument = async (uid: string, role: 'libraryOwner' | 'student') => {
-    if (!firestore) return;
-    const userDocRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/users`, uid);
-    
-    // Set the document. If it exists, this will merge by default without overwriting.
-    // If it's a new user, it will be created.
-    await setDoc(userDocRef, {
-      uid: uid,
-      role: role,
-      libraryId: HARDCODED_LIBRARY_ID,
-    }, { merge: true });
-  };
-
-  const navigateToDashboard = (role: 'admin' | 'student', emailForSession?: string) => {
-     toast({
-      title: 'Login Successful',
-      description: `Welcome back! Redirecting to your dashboard.`,
-    });
-    
-    if (role === 'admin') {
-      sessionStorage.removeItem('demoStudentEmail');
-      router.push('/admin/dashboard');
-    } else {
-      if (emailForSession) {
-        sessionStorage.setItem('demoStudentEmail', emailForSession);
-      }
-      router.push('/student/dashboard');
-    }
-  };
-
-  const ensureFirebaseUser = async (): Promise<User> => {
+  const handleLogin = async (email: string, password: string) => {
     if (!auth) {
-      toast({ variant: 'destructive', title: 'Initialization Error', description: 'Firebase is not ready.' });
-      throw new Error("Firebase auth not ready");
+        toast({ variant: 'destructive', title: 'Initialization Error', description: 'Firebase is not ready.' });
+        return;
     }
-    if (auth.currentUser) {
-      return auth.currentUser;
-    }
-    try {
-      const creds = await signInAnonymously(auth);
-      return creds.user;
-    } catch (error) {
-      console.error('Anonymous sign-in failed:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Firebase Auth Error',
-        description: 'Could not sign in anonymously. ' + (error as Error).message,
-      });
-      throw error;
-    }
-  };
 
-  const handleAdminDemo = async () => {
-    setIsDemoLoading(true);
     try {
-      const user = await ensureFirebaseUser();
-      await ensureUserDocument(user.uid, 'libraryOwner');
-      navigateToDashboard('admin');
-    } catch (e) {
-      // Error toast is handled in ensureFirebaseUser
-    } finally {
-      setIsDemoLoading(false);
-    }
-  };
-  
-  const handleStudentDemo = async () => {
-    setIsDemoLoading(true);
-    try {
-      const user = await ensureFirebaseUser();
-      await ensureUserDocument(user.uid, 'student');
-      navigateToDashboard('student', 'student@campushub.com');
-    } catch (e) {
-      // Error toast is handled in ensureFirebaseUser
-    } finally {
-      setIsDemoLoading(false);
+        await signInWithEmailAndPassword(auth, email, password);
+        // On successful login, Firebase's onAuthStateChanged listener will trigger.
+        // We redirect to a loading page which will handle routing based on the user's role.
+        router.push('/loading');
+    } catch (error) {
+        let title = 'Login Failed';
+        let description = 'An unexpected error occurred. Please try again.';
+      
+        if (error instanceof FirebaseError) {
+            switch (error.code) {
+                case 'auth/user-not-found':
+                case 'auth/wrong-password':
+                case 'auth/invalid-credential':
+                    title = 'Invalid Credentials';
+                    description = 'The email or password you entered is incorrect.';
+                    break;
+                case 'auth/too-many-requests':
+                    title = 'Too Many Attempts';
+                    description = 'Access to this account has been temporarily disabled due to many failed login attempts. You can reset your password or try again later.';
+                    break;
+                default:
+                    description = error.message;
+                    break;
+            }
+        }
+        toast({ variant: 'destructive', title, description });
+        form.reset(); // Reset form state on error
     }
   };
 
   const onFormSubmit = async (data: LoginFormValues) => {
-    if (!auth) {
-      toast({ variant: 'destructive', title: 'Initialization Error', description: 'Firebase is not ready.' });
-      return;
-    }
-
-    try {
-      const userCredential = await signInWithEmailAndPassword(auth, data.email, data.password);
-      // The user document should already exist from signup, but this is a safe fallback.
-      await ensureUserDocument(userCredential.user.uid, 'student');
-      navigateToDashboard('student', userCredential.user.email!);
-    } catch (error) {
-      let title = 'Login Failed';
-      let description = 'Invalid credentials. Please use the demo buttons or sign up.';
-      if (error instanceof FirebaseError) {
-        if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
-           // Keep the clear message for demo purposes
-        } else {
-            description = 'An unexpected error occurred. Please try again.';
-        }
-      }
-      toast({
-        variant: 'destructive',
-        title,
-        description,
-      });
-    }
+    await handleLogin(data.email, data.password);
   };
+  
+  const onDemoLogin = async (role: 'admin' | 'student') => {
+    const email = role === 'admin' ? DEMO_ADMIN_EMAIL : DEMO_STUDENT_EMAIL;
+    const password = role === 'admin' ? DEMO_ADMIN_PASSWORD : DEMO_STUDENT_PASSWORD;
+    await handleLogin(email, password);
+  }
 
-  const isFormDisabled = isSubmitting || isDemoLoading;
+  const isFormDisabled = form.formState.isSubmitting;
 
   return (
     <Form {...form}>
@@ -230,21 +173,21 @@ function LoginForm() {
               className="w-full"
               disabled={isFormDisabled}
             >
-              {isSubmitting ? <Spinner className="mr-2" /> : null}
-              {isSubmitting ? 'Signing In...' : 'Sign In'}
+              {isSubmitting && !isSubmitted ? <Spinner className="mr-2" /> : null}
+              {isSubmitting && !isSubmitted ? 'Signing In...' : 'Sign In'}
             </Button>
             <div className="relative flex w-full items-center">
                 <div className="flex-grow border-t border-muted"></div>
-                <span className="flex-shrink mx-4 text-xs text-muted-foreground uppercase">Or</span>
+                <span className="flex-shrink mx-4 text-xs text-muted-foreground uppercase">Or Continue With</span>
                 <div className="flex-grow border-t border-muted"></div>
             </div>
             <div className='flex w-full gap-2'>
-              <Button type="button" variant="outline" className="w-full" onClick={handleAdminDemo} disabled={isFormDisabled}>
-                {isDemoLoading && <Spinner className="mr-2" />}
+              <Button type="button" variant="outline" className="w-full" onClick={() => onDemoLogin('admin')} disabled={isFormDisabled}>
+                {isSubmitting ? <Spinner className="mr-2" /> : null}
                 Admin Demo
               </Button>
-              <Button type="button" variant="outline" className="w-full" onClick={handleStudentDemo} disabled={isFormDisabled}>
-                {isDemoLoading && <Spinner className="mr-2" />}
+              <Button type="button" variant="outline" className="w-full" onClick={() => onDemoLogin('student')} disabled={isFormDisabled}>
+                {isSubmitting ? <Spinner className="mr-2" /> : null}
                 Student Demo
               </Button>
             </div>

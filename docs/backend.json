@@ -36,15 +36,15 @@
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "User",
       "type": "object",
-      "description": "Represents a user in the CampusHub system. Could be either an admin or a student.",
+      "description": "Represents a user in the CampusHub system. Could be either an admin or a student. This document is critical for role-based access control in Firestore Security Rules.",
       "properties": {
         "id": {
           "type": "string",
-          "description": "Unique identifier for the User entity."
+          "description": "Unique identifier for the User entity (matches Firebase Auth UID)."
         },
         "libraryId": {
           "type": "string",
-          "description": "Reference to Library. (Relationship: Library 1:N User). Identifies the library to which the user belongs."
+          "description": "Reference to Library. Identifies the library to which the user belongs."
         },
         "email": {
           "type": "string",
@@ -53,7 +53,11 @@
         },
         "role": {
           "type": "string",
-          "description": "Role of the user (e.g., 'admin', 'student')."
+          "description": "Role of the user, used for authorization.",
+          "enum": [
+            "libraryOwner",
+            "student"
+          ]
         },
         "profile": {
           "type": "string",

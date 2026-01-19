@@ -5,7 +5,7 @@ import * as React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { collection, query, where, limit, doc, getDocs } from 'firebase/firestore';
+import { doc } from 'firebase/firestore';
 import {
   Bell,
   Home,
@@ -37,6 +37,7 @@ import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { useDoc, useFirebase, useMemoFirebase } from '@/firebase';
 import { Student } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
+import { AuthGuard } from '@/components/auth/auth-guard';
 
 // TODO: Replace with actual logged-in user's library
 const HARDCODED_LIBRARY_ID = 'library1';
@@ -44,39 +45,11 @@ const HARDCODED_LIBRARY_ID = 'library1';
 function UserMenu() {
   const { firestore, user } = useFirebase();
   const userAvatar = PlaceHolderImages.find((p) => p.id === 'user-avatar');
-  const [studentId, setStudentId] = React.useState<string | null>(null);
-
-  React.useEffect(() => {
-    // A real user's ID is the source of truth.
-    // For the demo flow, we fall back to session storage for the email.
-    if (user?.uid) {
-      setStudentId(user.uid);
-    } else {
-      const demoEmail = sessionStorage.getItem('demoStudentEmail');
-      if (demoEmail) {
-        // This part is for the demo student, which doesn't have a real auth UID
-        // and must be looked up by email.
-        const fetchStudentIdByEmail = async () => {
-          if (!firestore) return;
-          const q = query(
-            collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students`),
-            where('email', '==', demoEmail),
-            limit(1)
-          );
-          const snapshot = await getDocs(q);
-          if (!snapshot.empty) {
-            setStudentId(snapshot.docs[0].id);
-          }
-        };
-        fetchStudentIdByEmail();
-      }
-    }
-  }, [user, firestore]);
   
   const studentDocRef = useMemoFirebase(() => {
-    if (!firestore || !studentId) return null;
-    return doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students`, studentId);
-  }, [firestore, studentId]);
+    if (!firestore || !user?.uid) return null;
+    return doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students`, user.uid);
+  }, [firestore, user]);
 
   const { data: student, isLoading: isLoadingStudent } = useDoc<Student>(studentDocRef);
 
@@ -167,26 +140,28 @@ export default function StudentLayout({
   children: React.ReactNode;
 }) {
   return (
-    <SidebarProvider>
-        <div className="flex min-h-screen w-full">
-            <MainSidebar />
-            <SidebarInset className="flex flex-col">
-                <header className="sticky top-0 z-10 flex h-14 items-center gap-4 border-b bg-background px-4 sm:px-6">
-                    <SidebarTrigger className="md:hidden" />
-                    <div className="flex-1">
-                        {/* Can add breadcrumbs or page title here */}
-                    </div>
-                    <Button variant="ghost" size="icon" className="rounded-full">
-                        <Bell className="h-5 w-5" />
-                        <span className="sr-only">Toggle notifications</span>
-                    </Button>
-                    <UserMenu />
-                </header>
-                <main className="flex-1 overflow-auto p-4 sm:p-6">
-                    {children}
-                </main>
-            </SidebarInset>
-        </div>
-    </SidebarProvider>
+    <AuthGuard requiredRole="student">
+      <SidebarProvider>
+          <div className="flex min-h-screen w-full">
+              <MainSidebar />
+              <SidebarInset className="flex flex-col">
+                  <header className="sticky top-0 z-10 flex h-14 items-center gap-4 border-b bg-background px-4 sm:px-6">
+                      <SidebarTrigger className="md:hidden" />
+                      <div className="flex-1">
+                          {/* Can add breadcrumbs or page title here */}
+                      </div>
+                      <Button variant="ghost" size="icon" className="rounded-full">
+                          <Bell className="h-5 w-5" />
+                          <span className="sr-only">Toggle notifications</span>
+                      </Button>
+                      <UserMenu />
+                  </header>
+                  <main className="flex-1 overflow-auto p-4 sm:p-6">
+                      {children}
+                  </main>
+              </SidebarInset>
+          </div>
+      </SidebarProvider>
+    </AuthGuard>
   );
 }

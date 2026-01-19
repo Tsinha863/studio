@@ -40,6 +40,7 @@ import {
 import { Logo } from '@/components/logo';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import Link from 'next/link';
+import { AuthGuard } from '@/components/auth/auth-guard';
 
 function UserMenu() {
   const userAvatar = PlaceHolderImages.find((p) => p.id === 'user-avatar');
@@ -171,26 +172,28 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   return (
-    <SidebarProvider>
-        <div className="flex min-h-screen w-full">
-            <MainSidebar />
-            <SidebarInset className="flex flex-col">
-                <header className="sticky top-0 z-10 flex h-14 items-center gap-4 border-b bg-background px-4 sm:px-6">
-                    <SidebarTrigger className="md:hidden" />
-                    <div className="flex-1">
-                        {/* Can add breadcrumbs or page title here */}
-                    </div>
-                    <Button variant="ghost" size="icon" className="rounded-full">
-                        <Bell className="h-5 w-5" />
-                        <span className="sr-only">Toggle notifications</span>
-                    </Button>
-                    <UserMenu />
-                </header>
-                <main className="flex-1 overflow-auto p-4 sm:p-6">
-                    {children}
-                </main>
-            </SidebarInset>
-        </div>
-    </SidebarProvider>
+    <AuthGuard requiredRole="libraryOwner">
+      <SidebarProvider>
+          <div className="flex min-h-screen w-full">
+              <MainSidebar />
+              <SidebarInset className="flex flex-col">
+                  <header className="sticky top-0 z-10 flex h-14 items-center gap-4 border-b bg-background px-4 sm:px-6">
+                      <SidebarTrigger className="md:hidden" />
+                      <div className="flex-1">
+                          {/* Can add breadcrumbs or page title here */}
+                      </div>
+                      <Button variant="ghost" size="icon" className="rounded-full">
+                          <Bell className="h-5 w-5" />
+                          <span className="sr-only">Toggle notifications</span>
+                      </Button>
+                      <UserMenu />
+                  </header>
+                  <main className="flex-1 overflow-auto p-4 sm:p-6">
+                      {children}
+                  </main>
+              </SidebarInset>
+          </div>
+      </SidebarProvider>
+    </AuthGuard>
   );
 }

@@ -3,7 +3,7 @@
 
 import * as React from 'react';
 import dynamic from 'next/dynamic';
-import { collection, query, where, orderBy, limit, doc, getDocs } from 'firebase/firestore';
+import { collection, query, where, orderBy, doc } from 'firebase/firestore';
 
 import { useCollection, useDoc, useFirebase, useMemoFirebase } from '@/firebase';
 import type { Student, Payment } from '@/lib/types';
@@ -27,38 +27,13 @@ const HARDCODED_LIBRARY_ID = 'library1';
 
 export default function StudentDashboardPage() {
   const { firestore, user } = useFirebase();
-  const [studentId, setStudentId] = React.useState<string | null>(null);
 
-  React.useEffect(() => {
-    // A real user's ID is the source of truth.
-    // For the demo flow, we fall back to session storage for the email.
-    if (user?.uid) {
-      setStudentId(user.uid);
-    } else {
-      const demoEmail = sessionStorage.getItem('demoStudentEmail');
-      if (demoEmail) {
-        // This part is for the demo student, which doesn't have a real auth UID
-        // and must be looked up by email.
-        const fetchStudentIdByEmail = async () => {
-          if (!firestore) return;
-          const q = query(
-            collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students`),
-            where('email', '==', demoEmail),
-            limit(1)
-          );
-          const snapshot = await getDocs(q);
-          if (!snapshot.empty) {
-            setStudentId(snapshot.docs[0].id);
-          }
-        };
-        fetchStudentIdByEmail();
-      }
-    }
-  }, [user, firestore]);
+  // The AuthGuard ensures user is available. The user's UID is the student's document ID.
+  const studentId = user?.uid;
 
   // --- Data Fetching ---
   
-  // 1. Get current student's data by their ID (UID or custom)
+  // 1. Get current student's data by their ID (UID)
   const studentDocRef = useMemoFirebase(() => {
     if (!firestore || !studentId) return null;
     return doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students`, studentId);

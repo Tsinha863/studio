@@ -11,7 +11,7 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { FirebaseError } from 'firebase/app';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, serverTimestamp, writeBatch } from 'firebase/firestore';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -86,17 +86,23 @@ function SignupForm() {
       const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
       const user = userCredential.user;
       
-      // 2. Create the user document for security rule checks
+      // 2. Create corresponding Firestore documents in a batch for atomicity
+      const batch = writeBatch(firestore);
+
+      // Create the user document for role management
       const userRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/users`, user.uid);
-      await setDoc(userRef, {
-        uid: user.uid,
-        role: 'student',
+      batch.set(userRef, {
+        id: user.uid,
+        email: user.email,
+        role: 'student', // All signups are students by default
         libraryId: HARDCODED_LIBRARY_ID,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
       });
 
-      // 3. Create corresponding Student document in Firestore using UID as the document ID
+      // Create the student profile document
       const studentRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students`, user.uid);
-      await setDoc(studentRef, {
+      batch.set(studentRef, {
         libraryId: HARDCODED_LIBRARY_ID,
         userId: user.uid,
         name: data.name,
@@ -112,16 +118,10 @@ function SignupForm() {
         updatedAt: serverTimestamp(),
       });
 
-      // 4. Show success and redirect
-      toast({
-        title: 'Account Created',
-        description: "Welcome! Redirecting to your dashboard.",
-      });
-      
-      if (user.email) {
-        sessionStorage.setItem('demoStudentEmail', user.email);
-      }
-      router.push('/student/dashboard');
+      await batch.commit();
+
+      // 3. Redirect to loading page for role-based routing
+      router.push('/loading');
 
     } catch (error) {
       let title = 'Sign-up failed';

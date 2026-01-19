@@ -6,7 +6,7 @@ import { Timestamp } from "firebase/firestore";
 export interface User {
   id: string;
   libraryId: string;
-  role: 'admin' | 'student';
+  role: 'libraryOwner' | 'student';
   profile: {
     name: string;
     email: string;
