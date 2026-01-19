@@ -52,7 +52,7 @@ export default function PrintOnDeskPage() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
         <div className="lg:col-span-2">
             <PrintRequestForm
-                student={student}
+                student={student as (Student & {id: string}) | null}
                 libraryId={HARDCODED_LIBRARY_ID}
                 isLoading={isLoadingStudent}
             />

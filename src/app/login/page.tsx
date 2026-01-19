@@ -126,7 +126,6 @@ function LoginForm() {
               name: 'Demo Student',
               email: user.email,
               status: 'active',
-              assignments: [],
               fibonacciStreak: 5,
               paymentDue: 0,
               notes: [],

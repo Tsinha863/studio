@@ -49,19 +49,15 @@ service cloud.firestore {
 
     // Payments: Admins manage. Any authenticated user in the library can read/list.
     match /libraries/{libraryId}/payments/{paymentId} {
-      allow read: if isLibraryUser(libraryId);
-      allow create, update, delete: if isAdmin(libraryId);
-    }
-    match /libraries/{libraryId}/payments/{paymentId} {
       allow list: if isLibraryUser(libraryId);
+      allow get: if isLibraryUser(libraryId);
+      allow create, update, delete: if isAdmin(libraryId);
     }
 
     // Expenses: Only Admins can C/R/U/D.
     match /libraries/{libraryId}/expenses/{expenseId} {
-      allow read, write: if isAdmin(libraryId);
-    }
-     match /libraries/{libraryId}/expenses/{expenseId} {
       allow list: if isAdmin(libraryId);
+      allow get, create, update, delete: if isAdmin(libraryId);
     }
 
     // Rooms & Seats: Admins manage. Any authenticated user in the library can read/list.
@@ -97,7 +93,8 @@ service cloud.firestore {
     
     // Activity Logs: Admins can create and read. No updates or deletes.
     match /libraries/{libraryId}/activityLogs/{logId} {
-      allow read, create: if isAdmin(libraryId);
+      allow get: if isAdmin(libraryId);
+      allow list, create: if isAdmin(libraryId);
       allow update, delete: if false;
     }
   }

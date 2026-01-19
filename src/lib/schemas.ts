@@ -1,3 +1,4 @@
+
 'use client';
 
 import { z } from 'zod';
@@ -27,16 +28,6 @@ export const roomFormSchema = z.object({
 });
 
 export type RoomFormValues = z.infer<typeof roomFormSchema>;
-
-export const bookingFormSchema = z.object({
-    studentId: z.string().min(1, 'Please select a student.'),
-    date: z.date({ required_error: 'Please select a date.' }),
-    startTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Invalid time format (HH:mm).'),
-    duration: z.coerce.number().positive('Duration must be positive.'),
-});
-
-export type BookingFormValues = z.infer<typeof bookingFormSchema>;
-
 
 export const announcementFormSchema = z.object({
   title: z.string().min(3, 'Title must be at least 3 characters.'),

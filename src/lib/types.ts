@@ -57,6 +57,7 @@ export interface Expense {
 }
 
 export interface Room {
+  id: string;
   libraryId: string;
   name: string;
   capacity: number;
@@ -89,6 +90,7 @@ export interface SeatBooking {
 }
 
 export interface Announcement {
+  id: string;
   libraryId: string;
   title: string;
   content: string;
@@ -97,6 +99,7 @@ export interface Announcement {
 }
 
 export interface Suggestion {
+  id: string;
   libraryId: string;
   studentId: string;
   studentName?: string;
@@ -107,6 +110,7 @@ export interface Suggestion {
 }
 
 export interface ActivityLog {
+  id: string;
   libraryId: string;
   activityType: string;
   user: {
@@ -120,6 +124,7 @@ export interface ActivityLog {
 export type PrintRequestStatus = 'Pending' | 'Approved' | 'Rejected';
 
 export interface PrintRequest {
+  id: string;
   libraryId: string;
   studentId: string;
   studentName: string;
@@ -132,5 +137,3 @@ export interface PrintRequest {
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
-
-    

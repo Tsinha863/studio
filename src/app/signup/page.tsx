@@ -110,7 +110,6 @@ function SignupForm() {
         name: data.name,
         email: data.email,
         status: 'active',
-        assignments: [],
         fibonacciStreak: 0,
         paymentDue: 0,
         notes: [],

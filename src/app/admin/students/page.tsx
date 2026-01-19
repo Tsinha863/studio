@@ -11,6 +11,7 @@ import {
   serverTimestamp,
   where,
   getDocs,
+  Timestamp,
 } from 'firebase/firestore';
 import {
   useReactTable,
@@ -148,7 +149,7 @@ export default function StudentsPage() {
         const bookingsQuery = query(
             collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/seatBookings`),
             where('studentId', '==', alertState.studentId),
-            where('endTime', '>=', serverTimestamp())
+            where('endTime', '>=', Timestamp.now())
         );
         const bookingsSnapshot = await getDocs(bookingsQuery);
         bookingsSnapshot.forEach(bookingDoc => {
