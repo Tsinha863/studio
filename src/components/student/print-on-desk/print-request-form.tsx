@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { doc, collection, writeBatch, serverTimestamp } from 'firebase/firestore';
+import { doc, collection, writeBatch, serverTimestamp, query, where, getDocs, limit, Timestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Paperclip } from 'lucide-react';
 
@@ -58,13 +58,26 @@ export function PrintRequestForm({ student, libraryId, isLoading }: PrintRequest
     }
 
     try {
+      // Find student's current seat booking
+      const now = Timestamp.now();
+      const bookingsQuery = query(
+        collection(firestore, `libraries/${libraryId}/seatBookings`),
+        where('studentId', '==', student.id),
+        where('startTime', '<=', now),
+        where('endTime', '>=', now),
+        limit(1)
+      );
+      const bookingsSnapshot = await getDocs(bookingsQuery);
+      const currentSeatId = bookingsSnapshot.empty ? null : bookingsSnapshot.docs[0].data().seatId;
+
+      // Upload file to storage
       const file = data.file;
       const uniqueFileName = `${Date.now()}-${file.name}`;
       const storageRef = ref(storage, `libraries/${libraryId}/printRequests/${student.id}/${uniqueFileName}`);
-      
       await uploadBytes(storageRef, file);
       const downloadURL = await getDownloadURL(storageRef);
 
+      // Create documents in a batch
       const batch = writeBatch(firestore);
       
       const requestRef = doc(collection(firestore, `libraries/${libraryId}/printRequests`));
@@ -72,7 +85,7 @@ export function PrintRequestForm({ student, libraryId, isLoading }: PrintRequest
         libraryId,
         studentId: student.id,
         studentName: student.name,
-        seatId: student.assignments?.[0]?.seatId || null,
+        seatId: currentSeatId,
         fileUrl: downloadURL,
         fileName: file.name,
         notes: data.notes || '',

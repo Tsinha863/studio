@@ -80,7 +80,6 @@ export function CreateRoomForm({ libraryId, onSuccess }: CreateRoomFormProps) {
           roomId: roomRef.id,
           libraryId,
           tier: validation.data.tier,
-          assignments: {},
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });

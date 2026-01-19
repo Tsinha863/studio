@@ -26,10 +26,9 @@ service cloud.firestore {
       allow list, create, update, delete: if false;
     }
 
-    // Users: Can read/write their own user object.
+    // Users: Can read/write their own user object. No one can list.
     match /libraries/{libraryId}/users/{userId} {
-      allow read, write: if isOwner(userId);
-      // No one can list all users.
+      allow get, write: if isOwner(userId);
       allow list: if false;
     }
 
@@ -39,45 +38,59 @@ service cloud.firestore {
       allow list: if isLibraryUser(libraryId);
       allow create, update, delete: if isAdmin(libraryId);
     }
+    
+    // Seat Bookings: Library users can read/list. Admins can create/delete.
+    match /libraries/{libraryId}/seatBookings/{bookingId} {
+        allow read, list: if isLibraryUser(libraryId);
+        allow create, delete: if isAdmin(libraryId);
+        // updates are not allowed, must cancel and re-book
+        allow update: if false;
+    }
 
     // Payments: Admins manage. Any authenticated user in the library can read/list.
     match /libraries/{libraryId}/payments/{paymentId} {
       allow read: if isLibraryUser(libraryId);
       allow create, update, delete: if isAdmin(libraryId);
     }
+    match /libraries/{libraryId}/payments/{paymentId} {
+      allow list: if isLibraryUser(libraryId);
+    }
 
     // Expenses: Only Admins can C/R/U/D.
     match /libraries/{libraryId}/expenses/{expenseId} {
       allow read, write: if isAdmin(libraryId);
     }
+     match /libraries/{libraryId}/expenses/{expenseId} {
+      allow list: if isAdmin(libraryId);
+    }
 
     // Rooms & Seats: Admins manage. Any authenticated user in the library can read/list.
     match /libraries/{libraryId}/rooms/{roomId} {
-      allow read: if isLibraryUser(libraryId);
+      allow read, list: if isLibraryUser(libraryId);
       allow write: if isAdmin(libraryId);
 
       match /seats/{seatId} {
-        allow read: if isLibraryUser(libraryId);
+        allow read, list: if isLibraryUser(libraryId);
         allow write: if isAdmin(libraryId);
       }
     }
 
     // Announcements: Admins manage. Any authenticated user in the library can read/list.
     match /libraries/{libraryId}/announcements/{announcementId} {
-      allow read: if isLibraryUser(libraryId);
+      allow read, list: if isLibraryUser(libraryId);
       allow write: if isAdmin(libraryId);
     }
 
     // Suggestions: Students create their own. Admins can R/U/D all.
     match /libraries/{libraryId}/suggestions/{suggestionId} {
-      allow read: if isLibraryUser(libraryId);
+      allow read, list: if isLibraryUser(libraryId);
       allow create: if isOwner(request.resource.data.studentId);
       allow update, delete: if isAdmin(libraryId);
     }
 
     // Print Requests: Students create their own. Admins can R/U/D all.
     match /libraries/{libraryId}/printRequests/{printRequestId} {
-      allow read: if isLibraryUser(libraryId);
+      allow read, list: if isLibraryUser(libraryId);
       allow create: if isOwner(request.resource.data.studentId);
       allow update, delete: if isAdmin(libraryId);
     }

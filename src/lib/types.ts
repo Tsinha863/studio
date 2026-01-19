@@ -16,19 +16,12 @@ export interface User {
   updatedAt: Timestamp;
 }
 
-export type TimeSlot = 'morning' | 'afternoon' | 'night';
-
 export interface Student {
   libraryId: string;
   userId?: string; // Optional link to a User account
   name: string;
   email: string;
   status: 'active' | 'at-risk' | 'inactive';
-  assignments: {
-    seatId: string;
-    roomId: string;
-    timeSlot: TimeSlot;
-  }[];
   fibonacciStreak: number;
   paymentDue: number;
   lastInteractionAt: Timestamp;
@@ -47,7 +40,6 @@ export interface Payment {
   dueDate: Timestamp;
   status: 'paid' | 'pending' | 'overdue';
   method: 'Online' | 'Cash';
-  assignments?: Student['assignments'];
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -80,13 +72,20 @@ export interface Seat {
   libraryId: string;
   roomId: string;
   tier: 'basic' | 'standard' | 'premium';
-  assignments: {
-    morning?: { studentId: string; studentName: string; };
-    afternoon?: { studentId: string; studentName: string; };
-    night?: { studentId: string; studentName: string; };
-  };
   createdAt: Timestamp;
   updatedAt: Timestamp;
+}
+
+export interface SeatBooking {
+  id?: string;
+  libraryId: string;
+  roomId: string;
+  seatId: string;
+  studentId: string;
+  studentName: string;
+  startTime: Timestamp;
+  endTime: Timestamp;
+  createdAt: Timestamp;
 }
 
 export interface Announcement {

@@ -8,37 +8,21 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { DataTableColumnHeader } from '@/components/admin/students/data-table-header';
 import { Spinner } from '@/components/spinner';
-import type { PaymentWithDetails } from '@/app/admin/payments/page';
+import type { Payment } from '@/lib/types';
 
+type PaymentWithId = Payment & { id: string };
 
 type ColumnsConfig = {
-  handleMarkAsPaid: (payment: PaymentWithDetails) => void;
+  handleMarkAsPaid: (payment: PaymentWithId) => void;
   isPaying: string | false;
 };
 
-export const columns = ({ handleMarkAsPaid, isPaying }: ColumnsConfig): ColumnDef<PaymentWithDetails>[] => [
+export const columns = ({ handleMarkAsPaid, isPaying }: ColumnsConfig): ColumnDef<PaymentWithId>[] => [
   {
     accessorKey: 'studentName',
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Student" />
     ),
-  },
-  {
-    accessorKey: 'assignments',
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Seat" />
-    ),
-    cell: ({ row }) => {
-      const assignments = row.original.assignments;
-      if (!assignments || assignments.length === 0) {
-        return <span className="text-muted-foreground">N/A</span>;
-      }
-      const assignmentText = assignments
-        .map(a => `${a.seatId}(${a.timeSlot.charAt(0).toUpperCase()})`)
-        .join(', ');
-
-      return <span title={assignmentText}>{assignmentText}</span>;
-    },
   },
   {
     accessorKey: 'amount',

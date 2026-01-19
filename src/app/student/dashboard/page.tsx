@@ -3,10 +3,10 @@
 
 import * as React from 'react';
 import dynamic from 'next/dynamic';
-import { collection, query, where, orderBy, doc } from 'firebase/firestore';
+import { collection, query, where, orderBy, doc, Timestamp } from 'firebase/firestore';
 
 import { useCollection, useDoc, useFirebase, useMemoFirebase } from '@/firebase';
-import type { Student, Payment } from '@/lib/types';
+import type { Student, Payment, SeatBooking } from '@/lib/types';
 import { WelcomeHeader } from '@/components/student/dashboard/welcome-header';
 import { AssignedSeatCard } from '@/components/student/dashboard/assigned-seat-card';
 import { UpcomingPaymentCard } from '@/components/student/dashboard/upcoming-payment-card';
@@ -53,6 +53,19 @@ export default function StudentDashboardPage() {
 
   const { data: payments, isLoading: isLoadingPayments } = useCollection<Payment>(paymentsQuery);
 
+  // 3. Get student's upcoming seat bookings
+  const bookingsQuery = useMemoFirebase(() => {
+    if (!firestore || !studentId) return null;
+    return query(
+        collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/seatBookings`),
+        where('studentId', '==', studentId),
+        where('endTime', '>=', Timestamp.now()),
+        orderBy('endTime', 'asc')
+    );
+  }, [firestore, studentId]);
+
+  const { data: bookings, isLoading: isLoadingBookings } = useCollection<SeatBooking>(bookingsQuery);
+
   const upcomingPayment = React.useMemo(() => {
     return payments?.find(p => p.status === 'pending' || p.status === 'overdue');
   }, [payments]);
@@ -62,7 +75,7 @@ export default function StudentDashboardPage() {
       <WelcomeHeader studentName={student?.name} isLoading={isLoadingStudent} />
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        <AssignedSeatCard assignments={student?.assignments || []} isLoading={isLoadingStudent} />
+        <AssignedSeatCard bookings={bookings || []} isLoading={isLoadingBookings} />
         <UpcomingPaymentCard payment={upcomingPayment} isLoading={isLoadingPayments} />
         <FibonacciStreakCard streak={student?.fibonacciStreak || 0} isLoading={isLoadingStudent} />
       </div>
@@ -72,7 +85,7 @@ export default function StudentDashboardPage() {
             <PaymentHistoryTable payments={payments || []} isLoading={isLoadingPayments} />
         </div>
         <div className="lg:col-span-2">
-            <SuggestionForm student={student} libraryId={HARDCODED_LIBRARY_ID} isLoading={isLoadingStudent}/>
+            <SuggestionForm student={student as (Student & {id: string}) | null} libraryId={HARDCODED_LIBRARY_ID} isLoading={isLoadingStudent}/>
         </div>
       </div>
     </div>

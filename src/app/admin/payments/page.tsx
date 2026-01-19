@@ -30,7 +30,6 @@ import {
 } from '@tanstack/react-table';
 
 import { cn } from '@/lib/utils';
-import { useIsMobile } from '@/hooks/use-mobile';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -62,8 +61,6 @@ type ReceiptState = {
   studentName?: string;
 };
 
-export type PaymentWithDetails = PaymentWithId & { studentId: string, assignments: Student['assignments'] };
-
 export default function PaymentsPage() {
   const { toast } = useToast();
   const { firestore, user } = useFirebase();
@@ -74,7 +71,6 @@ export default function PaymentsPage() {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
-  const isMobile = useIsMobile();
 
   const paymentsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
@@ -86,20 +82,10 @@ export default function PaymentsPage() {
 
   const { data: payments, isLoading: isLoadingPayments } = useCollection<Payment>(paymentsQuery);
   
-  const paymentsWithDetails: PaymentWithDetails[] = React.useMemo(() => {
-    if (!payments) return [];
-    // The 'assignments' property is now denormalized onto the payment document.
-    return payments.map(p => ({
-        ...p,
-        studentId: p.studentId, // Ensure studentId is present
-        assignments: p.assignments || [],
-    }));
-  }, [payments]);
-
   const memoizedColumns = React.useMemo(() => paymentColumns({ handleMarkAsPaid, isPaying }), [isPaying]);
   
   const table = useReactTable({
-    data: paymentsWithDetails,
+    data: payments || [],
     columns: memoizedColumns,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
@@ -114,10 +100,6 @@ export default function PaymentsPage() {
       columnVisibility,
     },
   });
-
-  React.useEffect(() => {
-    table.getColumn('assignments')?.toggleVisibility(!isMobile);
-  }, [isMobile, table]);
 
   const handleCreatePayments = async () => {
     if (!user || !firestore) return;
@@ -171,7 +153,6 @@ export default function PaymentsPage() {
             dueDate: Timestamp.fromDate(dueDate),
             paymentDate: null,
             method: 'Online',
-            assignments: student.assignments || [], // Denormalize assignments for cost savings
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           });
@@ -220,7 +201,7 @@ export default function PaymentsPage() {
     }
   };
 
-  const handleMarkAsPaid = async (payment: PaymentWithDetails) => {
+  const handleMarkAsPaid = async (payment: PaymentWithId) => {
     if (!user || !firestore || !payment.studentId) {
        toast({
         variant: 'destructive',

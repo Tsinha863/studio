@@ -9,8 +9,8 @@ import {
   runTransaction,
   doc,
   serverTimestamp,
-  deleteField,
   where,
+  getDocs,
 } from 'firebase/firestore';
 import {
   useReactTable,
@@ -143,21 +143,21 @@ export default function StudentsPage() {
         if (!studentDoc.exists()) throw new Error("Student not found.");
         
         const studentData = studentDoc.data() as Student;
+
+        // 1. Find and delete all future seat bookings for this student.
+        const bookingsQuery = query(
+            collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/seatBookings`),
+            where('studentId', '==', alertState.studentId),
+            where('endTime', '>=', serverTimestamp())
+        );
+        const bookingsSnapshot = await getDocs(bookingsQuery);
+        bookingsSnapshot.forEach(bookingDoc => {
+            transaction.delete(bookingDoc.ref);
+        });
   
-        // 1. Unassign student from any seats
-        if (studentData.assignments && studentData.assignments.length > 0) {
-            for (const assignment of studentData.assignments) {
-                const seatRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/rooms/${assignment.roomId}/seats/${assignment.seatId}`);
-                transaction.update(seatRef, {
-                    [`assignments.${assignment.timeSlot}`]: deleteField()
-                });
-            }
-        }
-  
-        // 2. Update student to inactive and clear assignments
+        // 2. Update student to inactive.
         transaction.update(studentRef, {
           status: 'inactive',
-          assignments: [],
           updatedAt: serverTimestamp(),
           lastInteractionAt: serverTimestamp(),
         });
@@ -167,19 +167,19 @@ export default function StudentsPage() {
         transaction.set(logRef, {
           libraryId: HARDCODED_LIBRARY_ID,
           user: { id: user.uid, name: user.displayName || 'Admin' },
-          activityType: 'student_deleted',
+          activityType: 'student_archived',
           details: { studentId: alertState.studentId, studentName: studentData.name },
           timestamp: serverTimestamp(),
         });
       });
 
       toast({
-        title: 'Student Set to Inactive',
-        description: `${alertState.studentName} has been marked as inactive and unassigned from all seats.`,
+        title: 'Student Archived',
+        description: `${alertState.studentName} has been marked as inactive and their future bookings have been cancelled.`,
       });
 
     } catch (error) {
-      console.error("DELETE STUDENT ERROR:", error);
+      console.error("ARCHIVE STUDENT ERROR:", error);
       toast({
         variant: 'destructive',
         title: 'Error',
@@ -277,7 +277,7 @@ export default function StudentsPage() {
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
               This action cannot be undone. This will set the student{' '}
-              <span className="font-semibold">{alertState.studentName}</span> to inactive and unassign them from any seats.
+              <span className="font-semibold">{alertState.studentName}</span> to inactive and cancel all their future bookings.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

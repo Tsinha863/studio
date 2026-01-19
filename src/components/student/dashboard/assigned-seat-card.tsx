@@ -2,19 +2,20 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import type { Student } from '@/lib/types';
+import type { SeatBooking } from '@/lib/types';
 import { Armchair } from 'lucide-react';
+import { format } from 'date-fns';
 
 interface AssignedSeatCardProps {
-  assignments: Student['assignments'];
+  bookings: SeatBooking[];
   isLoading: boolean;
 }
 
-export function AssignedSeatCard({ assignments, isLoading }: AssignedSeatCardProps) {
+export function AssignedSeatCard({ bookings, isLoading }: AssignedSeatCardProps) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">My Seats</CardTitle>
+        <CardTitle className="text-sm font-medium">My Upcoming Bookings</CardTitle>
         <Armchair className="h-4 w-4 text-muted-foreground" />
       </CardHeader>
       <CardContent>
@@ -23,19 +24,24 @@ export function AssignedSeatCard({ assignments, isLoading }: AssignedSeatCardPro
             <Skeleton className="h-8 w-1/2" />
             <Skeleton className="mt-2 h-4 w-1/4" />
           </div>
-        ) : assignments && assignments.length > 0 ? (
+        ) : bookings && bookings.length > 0 ? (
             <ul className="space-y-3">
-                {assignments.map((assignment, index) => (
-                    <li key={`${assignment.seatId}-${assignment.timeSlot}-${index}`}>
-                        <div className="text-2xl font-bold">{assignment.seatId}</div>
-                        <p className="text-xs text-muted-foreground capitalize">{assignment.timeSlot} Slot</p>
+                {bookings.slice(0, 2).map((booking, index) => (
+                    <li key={`${booking.seatId}-${booking.id}-${index}`}>
+                        <div className="text-2xl font-bold">Seat {booking.seatId}</div>
+                        <p className="text-xs text-muted-foreground">
+                            {format(booking.startTime.toDate(), 'MMM d, p')} - {format(booking.endTime.toDate(), 'p')}
+                        </p>
                     </li>
                 ))}
+                {bookings.length > 2 && (
+                    <p className="text-xs text-muted-foreground pt-1">...and {bookings.length - 2} more.</p>
+                )}
             </ul>
         ) : (
           <>
-            <div className="text-2xl font-bold">Not Assigned</div>
-            <p className="text-xs text-muted-foreground">Contact admin for assignment</p>
+            <div className="text-2xl font-bold">No Bookings</div>
+            <p className="text-xs text-muted-foreground">You have no upcoming seat bookings.</p>
           </>
         )}
       </CardContent>

@@ -111,34 +111,6 @@
           "description": "Contact email of the student.",
           "format": "email"
         },
-        "assignments": {
-          "type": "array",
-          "description": "List of seat assignments for the student.",
-          "items": {
-            "type": "object",
-            "properties": {
-              "seatId": {
-                "type": "string"
-              },
-              "roomId": {
-                "type": "string"
-              },
-              "timeSlot": {
-                "type": "string",
-                "enum": [
-                  "morning",
-                  "afternoon",
-                  "night"
-                ]
-              }
-            },
-            "required": [
-              "seatId",
-              "roomId",
-              "timeSlot"
-            ]
-          }
-        },
         "status": {
           "type": "string",
           "description": "The lifecycle status of the student, derived from payment history and activity.",
@@ -412,45 +384,6 @@
           "type": "string",
           "description": "Tier of the seat (e.g., 'premium', 'standard')."
         },
-        "assignments": {
-          "type": "object",
-          "description": "Map of time slots to student assignments.",
-          "properties": {
-            "morning": {
-              "type": "object",
-              "properties": {
-                "studentId": {
-                  "type": "string"
-                },
-                "studentName": {
-                  "type": "string"
-                }
-              }
-            },
-            "afternoon": {
-              "type": "object",
-              "properties": {
-                "studentId": {
-                  "type": "string"
-                },
-                "studentName": {
-                  "type": "string"
-                }
-              }
-            },
-            "night": {
-              "type": "object",
-              "properties": {
-                "studentId": {
-                  "type": "string"
-                },
-                "studentName": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        },
         "createdAt": {
           "type": "string",
           "description": "Timestamp indicating when the seat was created.",
@@ -469,6 +402,63 @@
         "tier",
         "createdAt",
         "updatedAt"
+      ]
+    },
+    "SeatBooking": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Seat Booking",
+      "type": "object",
+      "description": "Represents a time-bound booking of a specific seat by a student.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the SeatBooking entity."
+        },
+        "libraryId": {
+          "type": "string",
+          "description": "Reference to Library."
+        },
+        "roomId": {
+          "type": "string",
+          "description": "Reference to Room."
+        },
+        "seatId": {
+          "type": "string",
+          "description": "Reference to Seat."
+        },
+        "studentId": {
+          "type": "string",
+          "description": "Reference to Student."
+        },
+        "studentName": {
+          "type": "string",
+          "description": "Denormalized name of the student for easier display."
+        },
+        "startTime": {
+          "type": "string",
+          "description": "Timestamp indicating when the booking starts.",
+          "format": "date-time"
+        },
+        "endTime": {
+          "type": "string",
+          "description": "Timestamp indicating when the booking ends.",
+          "format": "date-time"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp indicating when the booking was created.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "libraryId",
+        "roomId",
+        "seatId",
+        "studentId",
+        "studentName",
+        "startTime",
+        "endTime",
+        "createdAt"
       ]
     },
     "Announcement": {
@@ -842,6 +832,26 @@
             {
               "name": "seatId",
               "description": "Unique identifier for the seat."
+            }
+          ]
+        }
+      },
+      {
+        "path": "libraries/{libraryId}/seatBookings/{bookingId}",
+        "definition": {
+          "entityName": "SeatBooking",
+          "schema": {
+            "$ref": "#/backend/entities/SeatBooking"
+          },
+          "description": "Stores all seat booking records. Includes the 'libraryId' for authorization independence.",
+          "params": [
+            {
+              "name": "libraryId",
+              "description": "Unique identifier for the library."
+            },
+            {
+              "name": "bookingId",
+              "description": "Unique identifier for the booking."
             }
           ]
         }

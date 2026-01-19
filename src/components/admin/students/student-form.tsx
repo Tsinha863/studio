@@ -129,7 +129,6 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
                     paymentDue: 0,
                     notes: [],
                     tags: [],
-                    assignments: [],
                     lastInteractionAt: serverTimestamp(),
                     createdAt: serverTimestamp(),
                     updatedAt: serverTimestamp(),
