@@ -9,7 +9,8 @@ import { z } from 'zod';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
-import { createUserWithEmailAndPassword, FirebaseError } from 'firebase/auth';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { FirebaseError } from 'firebase/app';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 import { Button } from '@/components/ui/button';

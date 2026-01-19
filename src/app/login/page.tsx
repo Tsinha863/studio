@@ -8,7 +8,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { useRouter } from 'next/navigation';
-import { signInAnonymously, signInWithEmailAndPassword, FirebaseError } from 'firebase/auth';
+import { signInAnonymously, signInWithEmailAndPassword } from 'firebase/auth';
+import { FirebaseError } from 'firebase/app';
 import { ArrowLeft } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -60,7 +61,7 @@ function LoginForm() {
   
   const { formState: { isSubmitting } } = form;
 
-  const performAppLogin = (role: 'admin' | 'student', email?: string) => {
+  const performAppLogin = async (role: 'admin' | 'student', email?: string) => {
     const isAdmin = role === 'admin';
     toast({
       title: 'Login Successful',
@@ -69,10 +70,10 @@ function LoginForm() {
     
     if (isAdmin) {
       sessionStorage.removeItem('demoStudentEmail');
-    } else {
-      // Use provided email or hardcode the demo email
-      sessionStorage.setItem('demoStudentEmail', email || 'student@campushub.com');
+    } else if (email) {
+      sessionStorage.setItem('demoStudentEmail', email);
     }
+    
     router.push(isAdmin ? '/admin/dashboard' : '/student/dashboard');
   };
 
@@ -102,21 +103,23 @@ function LoginForm() {
     setIsDemoLoading(true);
     try {
       await ensureFirebaseUser();
-      performAppLogin('admin');
+      // Hardcoded demo admin login
+      await performAppLogin('admin');
     } catch (e) {
-      // Error toast is handled in ensureFirebaseUser
+      // Error toast is handled in ensureFirebaseUser or performAppLogin
     } finally {
       setIsDemoLoading(false);
     }
   };
-
+  
   const handleStudentDemo = async () => {
     setIsDemoLoading(true);
     try {
       await ensureFirebaseUser();
-      performAppLogin('student');
+      // Hardcoded demo student login
+      await performAppLogin('student', 'student@campushub.com');
     } catch (e) {
-      // Error toast is handled in ensureFirebaseUser
+      // Error toast is handled in ensureFirebaseUser or performAppLogin
     } finally {
       setIsDemoLoading(false);
     }
@@ -131,7 +134,7 @@ function LoginForm() {
     try {
       const userCredential = await signInWithEmailAndPassword(auth, data.email, data.password);
       // For any user signing in with email/pass, assume student role.
-      performAppLogin('student', userCredential.user.email!);
+      await performAppLogin('student', userCredential.user.email!);
     } catch (error) {
       let title = 'Login Failed';
       let description = 'Invalid credentials. Please check your email and password.';
