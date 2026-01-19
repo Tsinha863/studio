@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -66,8 +67,9 @@ function LoginForm() {
     if (!successfulLogin) {
       toast({
         variant: 'destructive',
-        title: 'Login Failed',
-        description: 'Invalid email or password. Please try again.',
+        title: 'Demo Login Failed',
+        description:
+          'Invalid credentials. For this demo, please use the "Admin Demo" or "Student Demo" buttons to sign in.',
       });
       setIsLoading(false);
       return;
