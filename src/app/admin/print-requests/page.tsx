@@ -13,7 +13,7 @@ import {
   type ColumnFiltersState,
 } from '@tanstack/react-table';
 
-import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
+import { useCollection, useFirebase, useMemoFirebase, errorEmitter } from '@/firebase';
 import type { PrintRequest } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -34,6 +34,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Spinner } from '@/components/spinner';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 // TODO: Replace with actual logged-in user's library
 const HARDCODED_LIBRARY_ID = 'library1';
@@ -46,7 +47,6 @@ type RejectionDialogState = {
 export default function PrintRequestsPage() {
   const { toast } = useToast();
   const { firestore, user } = useFirebase();
-  const [processingId, setProcessingId] = React.useState<string | null>(null);
   const [rejectionDialog, setRejectionDialog] = React.useState<RejectionDialogState>({ isOpen: false });
   const [rejectionReason, setRejectionReason] = React.useState('');
   const [isSubmitting, setIsSubmitting] = React.useState(false);
@@ -65,8 +65,8 @@ export default function PrintRequestsPage() {
   const { data: requests, isLoading } = useCollection<PrintRequest>(requestsQuery);
 
   const memoizedColumns = React.useMemo(
-    () => printRequestColumns({ onApprove: (id) => handleStatusUpdate(id, 'Approved'), onReject: openRejectionDialog, processingId }),
-    [processingId]
+    () => printRequestColumns({ onApprove: (id) => handleStatusUpdate(id, 'Approved'), onReject: openRejectionDialog }),
+    []
   );
   
   const table = useReactTable({
@@ -89,54 +89,56 @@ export default function PrintRequestsPage() {
       toast({ variant: 'destructive', title: 'Error', description: 'You must be logged in.' });
       return;
     }
-    setProcessingId(requestId);
-    setIsSubmitting(true);
     
-    try {
-        const batch = writeBatch(firestore);
-        const actor = { id: user.uid, name: user.displayName || 'Admin' };
-        
-        const requestRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/printRequests`, requestId);
-        
-        const updateData: any = {
-            status: newStatus,
-            updatedAt: serverTimestamp(),
-        };
-        if (newStatus === 'Rejected' && reason) {
-            updateData.rejectionReason = reason;
-        }
-
-        batch.update(requestRef, updateData);
-
-        const logRef = doc(collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/activityLogs`));
-        batch.set(logRef, {
-            libraryId: HARDCODED_LIBRARY_ID,
-            user: actor,
-            activityType: newStatus === 'Approved' ? 'print_request_approved' : 'print_request_rejected',
-            details: { requestId, reason: reason || null },
-            timestamp: serverTimestamp(),
-        });
-        
-        await batch.commit();
-
-        toast({
-            title: `Request ${newStatus}`,
-            description: 'The print request has been updated.',
-        });
-
-    } catch (error) {
-        console.error("PRINT REQUEST STATUS UPDATE ERROR:", error);
-        toast({
-            variant: 'destructive',
-            title: 'Error',
-            description: error instanceof Error ? error.message : 'Could not update the request.',
-        });
-    } finally {
-        setProcessingId(null);
-        setIsSubmitting(false);
-        setRejectionDialog({ isOpen: false });
-        setRejectionReason('');
+    // Optimistic UI update for rejection dialog
+    if (newStatus === 'Rejected') {
+      setIsSubmitting(true);
     }
+    
+    const requestRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/printRequests`, requestId);
+
+    toast({
+        title: `Request ${newStatus}`,
+        description: 'The print request has been updated.',
+    });
+
+    const batch = writeBatch(firestore);
+    const actor = { id: user.uid, name: user.displayName || 'Admin' };
+    
+    const updateData: any = {
+        status: newStatus,
+        updatedAt: serverTimestamp(),
+    };
+    if (newStatus === 'Rejected' && reason) {
+        updateData.rejectionReason = reason;
+    }
+
+    batch.update(requestRef, updateData);
+
+    const logRef = doc(collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/activityLogs`));
+    batch.set(logRef, {
+        libraryId: HARDCODED_LIBRARY_ID,
+        user: actor,
+        activityType: newStatus === 'Approved' ? 'print_request_approved' : 'print_request_rejected',
+        details: { requestId, reason: reason || null },
+        timestamp: serverTimestamp(),
+    });
+    
+    batch.commit().catch((serverError) => {
+      console.error("PRINT REQUEST STATUS UPDATE ERROR:", serverError);
+      const permissionError = new FirestorePermissionError({
+        path: requestRef.path,
+        operation: 'update',
+        requestResourceData: updateData,
+      });
+      errorEmitter.emit('permission-error', permissionError);
+    }).finally(() => {
+        if (newStatus === 'Rejected') {
+            setIsSubmitting(false);
+            setRejectionDialog({ isOpen: false });
+            setRejectionReason('');
+        }
+    });
   };
 
   const openRejectionDialog = (requestId: string) => {

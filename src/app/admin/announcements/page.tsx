@@ -44,11 +44,11 @@ import { Input } from '@/components/ui/input';
 import { DataTable } from '@/components/ui/data-table';
 import { DataTablePagination } from '@/components/ui/data-table-pagination';
 import { useToast } from '@/hooks/use-toast';
-import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
+import { useCollection, useFirebase, useMemoFirebase, errorEmitter } from '@/firebase';
 import type { Announcement } from '@/lib/types';
 import { AnnouncementForm } from '@/components/admin/announcements/announcement-form';
 import { columns as announcementColumns } from '@/components/admin/announcements/columns';
-import { Spinner } from '@/components/spinner';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 type AnnouncementWithId = Announcement & { id: string };
 
@@ -70,7 +70,6 @@ export default function AnnouncementsPage() {
 
   const [modalState, setModalState] = React.useState<ModalState>({ isOpen: false });
   const [alertState, setAlertState] = React.useState<AlertState>({ isOpen: false });
-  const [isDeleting, setIsDeleting] = React.useState(false);
 
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
@@ -113,7 +112,7 @@ export default function AnnouncementsPage() {
   const closeDeleteAlert = () =>
     setAlertState({ isOpen: false, announcementId: undefined });
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (!alertState.announcementId || !user || !firestore) {
       toast({
         variant: 'destructive',
@@ -123,41 +122,37 @@ export default function AnnouncementsPage() {
       return;
     }
     
-    setIsDeleting(true);
-    try {
-      const batch = writeBatch(firestore);
-      const actor = { id: user.uid, name: user.displayName || 'Admin' };
+    // Optimistic UI update
+    closeDeleteAlert();
+    toast({
+      title: 'Announcement Deleted',
+      description: 'The announcement has been removed.',
+    });
 
-      const announcementRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/announcements/${alertState.announcementId}`);
-      batch.delete(announcementRef);
-  
-      const logRef = doc(collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/activityLogs`));
-      batch.set(logRef, {
-        libraryId: HARDCODED_LIBRARY_ID,
-        user: actor,
-        activityType: 'announcement_deleted',
-        details: { announcementId: alertState.announcementId },
-        timestamp: serverTimestamp(),
-      });
-  
-      await batch.commit();
+    const batch = writeBatch(firestore);
+    const actor = { id: user.uid, name: user.displayName || 'Admin' };
+    const announcementRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/announcements/${alertState.announcementId}`);
+    
+    batch.delete(announcementRef);
 
-      toast({
-        title: 'Announcement Deleted',
-        description: 'The announcement has been removed.',
-      });
+    const logRef = doc(collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/activityLogs`));
+    batch.set(logRef, {
+      libraryId: HARDCODED_LIBRARY_ID,
+      user: actor,
+      activityType: 'announcement_deleted',
+      details: { announcementId: alertState.announcementId },
+      timestamp: serverTimestamp(),
+    });
 
-    } catch (error) {
-      console.error("DELETE ANNOUNCEMENT ERROR:", error);
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Could not delete the announcement.',
+    // Non-blocking commit with error handling
+    batch.commit().catch((serverError) => {
+      console.error("DELETE ANNOUNCEMENT ERROR:", serverError);
+      const permissionError = new FirestorePermissionError({
+        path: announcementRef.path,
+        operation: 'delete',
       });
-    } finally {
-      setIsDeleting(false);
-      closeDeleteAlert();
-    }
+      errorEmitter.emit('permission-error', permissionError);
+    });
   };
 
   return (
@@ -234,9 +229,8 @@ export default function AnnouncementsPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={closeDeleteAlert}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} disabled={isDeleting}>
-              {isDeleting && <Spinner className="mr-2" />}
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete}>
               Continue
             </AlertDialogAction>
           </AlertDialogFooter>

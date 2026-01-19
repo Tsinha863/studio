@@ -44,11 +44,11 @@ import { Input } from '@/components/ui/input';
 import { DataTable } from '@/components/ui/data-table';
 import { DataTablePagination } from '@/components/ui/data-table-pagination';
 import { useToast } from '@/hooks/use-toast';
-import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
+import { useCollection, useFirebase, useMemoFirebase, errorEmitter } from '@/firebase';
 import type { Expense } from '@/lib/types';
 import { ExpenseForm } from '@/components/admin/expenses/expense-form';
 import { columns as expenseColumns } from '@/components/admin/expenses/columns';
-import { Spinner } from '@/components/spinner';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 type ExpenseWithId = Expense & { id: string };
 
@@ -71,8 +71,7 @@ export default function ExpensesPage() {
 
   const [modalState, setModalState] = React.useState<ModalState>({ isOpen: false });
   const [alertState, setAlertState] = React.useState<AlertState>({ isOpen: false });
-  const [isDeleting, setIsDeleting] = React.useState(false);
-
+  
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
 
@@ -121,40 +120,37 @@ export default function ExpensesPage() {
       return;
     }
 
-    setIsDeleting(true);
-    try {
-      const batch = writeBatch(firestore);
-      const actor = { id: user.uid, name: user.displayName || 'Admin' };
+    // Optimistic UI update
+    closeDeleteAlert();
+    toast({
+      title: 'Expense Deleted',
+      description: 'The expense has been removed from the system.',
+    });
 
-      const expenseRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/expenses/${alertState.expenseId}`);
-      batch.delete(expenseRef);
-  
-      const logRef = doc(collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/activityLogs`));
-      batch.set(logRef, {
-        libraryId: HARDCODED_LIBRARY_ID,
-        user: actor,
-        activityType: 'expense_deleted',
-        details: { expenseId: alertState.expenseId },
-        timestamp: serverTimestamp(),
-      });
-  
-      await batch.commit();
+    const batch = writeBatch(firestore);
+    const actor = { id: user.uid, name: user.displayName || 'Admin' };
+    const expenseRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/expenses/${alertState.expenseId}`);
+    
+    batch.delete(expenseRef);
 
-      toast({
-        title: 'Expense Deleted',
-        description: 'The expense has been removed from the system.',
+    const logRef = doc(collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/activityLogs`));
+    batch.set(logRef, {
+      libraryId: HARDCODED_LIBRARY_ID,
+      user: actor,
+      activityType: 'expense_deleted',
+      details: { expenseId: alertState.expenseId },
+      timestamp: serverTimestamp(),
+    });
+
+    // Non-blocking commit with error handling
+    batch.commit().catch((serverError) => {
+      console.error("DELETE EXPENSE ERROR:", serverError);
+      const permissionError = new FirestorePermissionError({
+        path: expenseRef.path,
+        operation: 'delete',
       });
-    } catch (error) {
-      console.error("DELETE EXPENSE ERROR:", error);
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Could not delete the expense.',
-      });
-    } finally {
-      setIsDeleting(false);
-      closeDeleteAlert();
-    }
+      errorEmitter.emit('permission-error', permissionError);
+    });
   };
 
   return (
@@ -236,9 +232,8 @@ export default function ExpensesPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={closeDeleteAlert}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteExpense} disabled={isDeleting}>
-              {isDeleting && <Spinner className="mr-2" />}
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteExpense}>
               Continue
             </AlertDialogAction>
           </AlertDialogFooter>

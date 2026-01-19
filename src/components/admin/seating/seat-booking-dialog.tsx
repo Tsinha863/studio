@@ -2,7 +2,7 @@
 'use client';
 
 import * as React from 'react';
-import { Check, ChevronsUpDown, Trash2, XIcon } from 'lucide-react';
+import { Check, ChevronsUpDown, Trash2 } from 'lucide-react';
 import { format, setHours, setMinutes } from 'date-fns';
 import {
   collection,
@@ -16,7 +16,7 @@ import {
   deleteDoc,
 } from 'firebase/firestore';
 
-import { useFirebase } from '@/firebase';
+import { useFirebase, errorEmitter } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import {
@@ -50,6 +50,7 @@ import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import type { Seat, Student, SeatBooking } from '@/lib/types';
 import { Spinner } from '@/components/spinner';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 type SeatWithId = Seat & { id: string };
 type StudentWithId = Student & { id: string };
@@ -91,7 +92,6 @@ export function SeatBookingDialog({
   const [duration, setDuration] = React.useState(4);
   
   const [isSubmitting, setIsSubmitting] = React.useState(false);
-  const [isCancelling, setIsCancelling] = React.useState<string | null>(null);
   const [isComboboxOpen, setIsComboboxOpen] = React.useState(false);
 
   const activeStudents = React.useMemo(() => students.filter(s => s.status !== 'inactive'), [students]);
@@ -171,20 +171,22 @@ export function SeatBookingDialog({
     }
   };
 
-  const handleCancelBooking = async (bookingId: string) => {
+  const handleCancelBooking = (bookingId: string) => {
     if (!firestore || !user) return;
-    setIsCancelling(bookingId);
-    try {
-      const bookingRef = doc(firestore, `libraries/${libraryId}/seatBookings/${bookingId}`);
-      await deleteDoc(bookingRef);
-      toast({ title: 'Booking Cancelled', description: 'The seat is now available for this time slot.' });
-      onSuccess();
-    } catch (error) {
-      console.error("CANCEL BOOKING ERROR:", error);
-      toast({ variant: 'destructive', title: 'Error', description: 'Could not cancel the booking.' });
-    } finally {
-      setIsCancelling(null);
-    }
+    
+    // Optimistic UI update
+    toast({ title: 'Booking Cancelled', description: 'The seat is now available for this time slot.' });
+    onSuccess();
+
+    const bookingRef = doc(firestore, `libraries/${libraryId}/seatBookings/${bookingId}`);
+    deleteDoc(bookingRef).catch((serverError) => {
+        console.error("CANCEL BOOKING ERROR:", serverError);
+        const permissionError = new FirestorePermissionError({
+          path: bookingRef.path,
+          operation: 'delete',
+        });
+        errorEmitter.emit('permission-error', permissionError);
+    });
   };
   
   React.useEffect(() => {
@@ -221,8 +223,8 @@ export function SeatBookingDialog({
                                         {format(booking.startTime.toDate(), 'h:mm a')} - {format(booking.endTime.toDate(), 'h:mm a')}
                                     </span>
                                 </div>
-                                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleCancelBooking(booking.id)} disabled={!!isCancelling}>
-                                    {isCancelling === booking.id ? <Spinner className="h-4 w-4"/> : <Trash2 className="h-4 w-4"/>}
+                                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleCancelBooking(booking.id)}>
+                                    <Trash2 className="h-4 w-4"/>
                                 </Button>
                             </li>
                         ))}

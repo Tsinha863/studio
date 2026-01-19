@@ -37,7 +37,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
+import { useCollection, useFirebase, useMemoFirebase, errorEmitter } from '@/firebase';
 import type { Payment, Student } from '@/lib/types';
 import { generateSimulatedReceipt } from '@/ai/flows/generate-simulated-receipt';
 
@@ -46,6 +46,7 @@ import { DataTablePagination } from '@/components/ui/data-table-pagination';
 import { columns as paymentColumns } from '@/components/admin/payments/columns';
 import { ReceiptDialog } from '@/components/receipt-dialog';
 import { Spinner } from '@/components/spinner';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 // TODO: Replace with actual logged-in user's library
 const HARDCODED_LIBRARY_ID = 'library1';

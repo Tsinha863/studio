@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -11,7 +12,7 @@ import {
   Timestamp,
 } from 'firebase/firestore';
 
-import { useFirebase } from '@/firebase';
+import { useFirebase, errorEmitter } from '@/firebase';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
@@ -29,6 +30,7 @@ import type { Expense, ExpenseCategory } from '@/lib/types';
 import { expenseFormSchema, type ExpenseFormValues } from '@/lib/schemas';
 import { Spinner } from '@/components/spinner';
 import { Label } from '@/components/ui/label';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 type ExpenseWithId = Expense & { id: string };
 
@@ -96,62 +98,68 @@ export function ExpenseForm({ expense, libraryId, onSuccess, onCancel }: Expense
     }
 
     setIsSubmitting(true);
-    try {
-      const actor = { id: user.uid, name: user.displayName || 'Admin' };
-      const batch = writeBatch(firestore);
-      const { expenseDate: validatedDate, ...expenseData } = validation.data;
-
-      if (expense?.id) {
-        // Update existing expense
-        const expenseRef = doc(firestore, `libraries/${libraryId}/expenses/${expense.id}`);
-        batch.update(expenseRef, {
-          ...expenseData,
-          expenseDate: Timestamp.fromDate(validatedDate),
-          updatedAt: serverTimestamp(),
-        });
     
-        const logRef = doc(collection(firestore, `libraries/${libraryId}/activityLogs`));
-        batch.set(logRef, {
-          libraryId,
-          user: actor,
-          activityType: 'expense_updated',
-          details: { expenseId: expense.id, newAmount: expenseData.amount },
-          timestamp: serverTimestamp(),
-        });
-      } else {
-        // Create new expense
-        const expenseRef = doc(collection(firestore, `libraries/${libraryId}/expenses`));
-        batch.set(expenseRef, {
-          ...expenseData,
-          libraryId,
-          expenseDate: Timestamp.fromDate(validatedDate),
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
+    // Optimistic UI update
+    onSuccess();
     
-        const logRef = doc(collection(firestore, `libraries/${libraryId}/activityLogs`));
-        batch.set(logRef, {
-          libraryId,
-          user: actor,
-          activityType: 'expense_created',
-          details: { amount: expenseData.amount, category: expenseData.category },
-          timestamp: serverTimestamp(),
-        });
-      }
+    const actor = { id: user.uid, name: user.displayName || 'Admin' };
+    const batch = writeBatch(firestore);
+    const { expenseDate: validatedDate, ...expenseData } = validation.data;
+    let operation: 'create' | 'update' = 'create';
+    let expenseRef: any;
 
-      await batch.commit();
-      onSuccess();
-
-    } catch (error) {
-        console.error("Expense form submission error:", error);
-        toast({
-            variant: "destructive",
-            title: "An unexpected error occurred",
-            description: error instanceof Error ? error.message : "The operation failed. Please try again."
-        });
-    } finally {
-        setIsSubmitting(false);
+    if (expense?.id) {
+      // Update existing expense
+      operation = 'update';
+      expenseRef = doc(firestore, `libraries/${libraryId}/expenses/${expense.id}`);
+      batch.update(expenseRef, {
+        ...expenseData,
+        expenseDate: Timestamp.fromDate(validatedDate),
+        updatedAt: serverTimestamp(),
+      });
+  
+      const logRef = doc(collection(firestore, `libraries/${libraryId}/activityLogs`));
+      batch.set(logRef, {
+        libraryId,
+        user: actor,
+        activityType: 'expense_updated',
+        details: { expenseId: expense.id, newAmount: expenseData.amount },
+        timestamp: serverTimestamp(),
+      });
+    } else {
+      // Create new expense
+      operation = 'create';
+      expenseRef = doc(collection(firestore, `libraries/${libraryId}/expenses`));
+      batch.set(expenseRef, {
+        ...expenseData,
+        libraryId,
+        expenseDate: Timestamp.fromDate(validatedDate),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+  
+      const logRef = doc(collection(firestore, `libraries/${libraryId}/activityLogs`));
+      batch.set(logRef, {
+        libraryId,
+        user: actor,
+        activityType: 'expense_created',
+        details: { amount: expenseData.amount, category: expenseData.category },
+        timestamp: serverTimestamp(),
+      });
     }
+
+    // Non-blocking commit with error handling
+    batch.commit().catch((serverError) => {
+        console.error("Expense form submission error:", serverError);
+        const permissionError = new FirestorePermissionError({
+          path: expenseRef.path,
+          operation: operation,
+          requestResourceData: expenseData,
+        });
+        errorEmitter.emit('permission-error', permissionError);
+    }).finally(() => {
+        setIsSubmitting(false);
+    });
   };
 
   return (

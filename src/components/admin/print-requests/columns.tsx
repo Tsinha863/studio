@@ -1,3 +1,4 @@
+
 'use client';
 
 import { ColumnDef } from '@tanstack/react-table';
@@ -8,7 +9,6 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { DataTableColumnHeader } from '@/components/admin/students/data-table-header';
 import type { PrintRequest, PrintRequestStatus } from '@/lib/types';
-import { Spinner } from '@/components/spinner';
 import {
   Tooltip,
   TooltipContent,
@@ -19,7 +19,6 @@ import {
 type ColumnsConfig = {
   onApprove: (requestId: string) => void;
   onReject: (requestId: string) => void;
-  processingId: string | null;
 };
 
 const statusColors: Record<PrintRequestStatus, 'default' | 'secondary' | 'destructive' | 'success'> = {
@@ -28,7 +27,7 @@ const statusColors: Record<PrintRequestStatus, 'default' | 'secondary' | 'destru
     Rejected: 'destructive',
 };
 
-export const columns = ({ onApprove, onReject, processingId }: ColumnsConfig): ColumnDef<PrintRequest>[] => [
+export const columns = ({ onApprove, onReject }: ColumnsConfig): ColumnDef<PrintRequest>[] => [
   {
     accessorKey: 'createdAt',
     header: ({ column }) => (
@@ -105,7 +104,6 @@ export const columns = ({ onApprove, onReject, processingId }: ColumnsConfig): C
     id: 'actions',
     cell: ({ row }) => {
       const request = row.original;
-      const isProcessing = processingId === request.id;
       const isActionable = request.status === 'Pending';
 
       if (!isActionable) {
@@ -114,34 +112,24 @@ export const columns = ({ onApprove, onReject, processingId }: ColumnsConfig): C
 
       return (
         <div className="flex justify-end gap-2">
-            {isProcessing ? (
-                <div className="flex items-center justify-center w-full h-full">
-                    <Spinner />
-                </div>
-            ) : (
-                <>
-                    <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => onApprove(request.id)}
-                        disabled={!!processingId}
-                    >
-                        <ThumbsUp className="mr-2 h-4 w-4" />
-                        Approve
-                    </Button>
-                    <Button
-                        type="button"
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => onReject(request.id)}
-                        disabled={!!processingId}
-                    >
-                         <ThumbsDown className="mr-2 h-4 w-4" />
-                        Reject
-                    </Button>
-                </>
-            )}
+            <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => onApprove(request.id)}
+            >
+                <ThumbsUp className="mr-2 h-4 w-4" />
+                Approve
+            </Button>
+            <Button
+                type="button"
+                size="sm"
+                variant="destructive"
+                onClick={() => onReject(request.id)}
+            >
+                    <ThumbsDown className="mr-2 h-4 w-4" />
+                Reject
+            </Button>
         </div>
       );
     },

@@ -8,7 +8,7 @@ import { doc, collection, writeBatch, serverTimestamp, query, where, getDocs, li
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Paperclip } from 'lucide-react';
 
-import { useFirebase, useStorage } from '@/firebase';
+import { useFirebase, useStorage, errorEmitter } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { printRequestFormSchema, type PrintRequestFormValues } from '@/lib/schemas';
 import type { Student } from '@/lib/types';
@@ -26,6 +26,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/spinner';
 import { Skeleton } from '@/components/ui/skeleton';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 type StudentWithId = Student & { id: string };
 
@@ -58,6 +59,9 @@ export function PrintRequestForm({ student, libraryId, isLoading }: PrintRequest
       return;
     }
 
+    // Set submitting state right away for UI feedback
+    form.control.register('isSubmitting', { value: true });
+
     try {
       // Find student's current seat booking
       const now = Timestamp.now();
@@ -77,12 +81,18 @@ export function PrintRequestForm({ student, libraryId, isLoading }: PrintRequest
       const storageRef = ref(storage, `libraries/${libraryId}/printRequests/${student.id}/${uniqueFileName}`);
       await uploadBytes(storageRef, file);
       const downloadURL = await getDownloadURL(storageRef);
+      
+      // Optimistic UI update
+      toast({
+        title: 'Request Submitted',
+        description: 'Your document has been sent to the library for printing.',
+      });
+      form.reset();
 
       // Create documents in a batch
       const batch = writeBatch(firestore);
-      
       const requestRef = doc(collection(firestore, `libraries/${libraryId}/printRequests`));
-      batch.set(requestRef, {
+      const requestData = {
         libraryId,
         studentId: student.id,
         studentName: student.name,
@@ -90,10 +100,11 @@ export function PrintRequestForm({ student, libraryId, isLoading }: PrintRequest
         fileUrl: downloadURL,
         fileName: file.name,
         notes: data.notes || '',
-        status: 'Pending',
+        status: 'Pending' as const,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      });
+      };
+      batch.set(requestRef, requestData);
 
       const logRef = doc(collection(firestore, `libraries/${libraryId}/activityLogs`));
       batch.set(logRef, {
@@ -104,13 +115,16 @@ export function PrintRequestForm({ student, libraryId, isLoading }: PrintRequest
         timestamp: serverTimestamp(),
       });
 
-      await batch.commit();
-
-      toast({
-        title: 'Request Submitted',
-        description: 'Your document has been sent to the library for printing.',
+      // Non-blocking commit
+      batch.commit().catch((serverError) => {
+        console.error("Print request submission error:", serverError);
+        const permissionError = new FirestorePermissionError({
+          path: requestRef.path,
+          operation: 'create',
+          requestResourceData: requestData
+        });
+        errorEmitter.emit('permission-error', permissionError);
       });
-      form.reset();
 
     } catch (error) {
       console.error("Print request submission error:", error);
@@ -119,6 +133,9 @@ export function PrintRequestForm({ student, libraryId, isLoading }: PrintRequest
         title: "Submission Failed",
         description: error instanceof Error ? error.message : "An unexpected error occurred."
       });
+    } finally {
+        // Unset submitting state
+        form.control.unregister('isSubmitting');
     }
   };
 

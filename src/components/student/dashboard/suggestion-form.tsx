@@ -9,7 +9,7 @@ import {
   serverTimestamp,
   writeBatch,
 } from 'firebase/firestore';
-import { useFirebase } from '@/firebase';
+import { useFirebase, errorEmitter } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
 
 import {
@@ -26,6 +26,7 @@ import { Spinner } from '@/components/spinner';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Label } from '@/components/ui/label';
 import { Student } from '@/lib/types';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 type StudentWithId = Student & { id: string };
 
@@ -69,35 +70,40 @@ export function SuggestionForm({ student, libraryId, isLoading: isLoadingStudent
     }
     
     setIsSubmitting(true);
-    try {
-        const batch = writeBatch(firestore);
-        const suggestionRef = doc(collection(firestore, `libraries/${libraryId}/suggestions`));
-        batch.set(suggestionRef, {
-            libraryId,
-            studentId: student.id,
-            studentName: student.name,
-            content,
-            status: 'new',
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-        });
-        await batch.commit();
+    
+    // Optimistic UI update
+    toast({
+      title: 'Suggestion Submitted',
+      description: 'Thank you for your feedback!',
+    });
+    setContent('');
 
-        toast({
-          title: 'Suggestion Submitted',
-          description: 'Thank you for your feedback!',
+    const suggestionData = {
+      libraryId,
+      studentId: student.id,
+      studentName: student.name,
+      content,
+      status: 'new' as const,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+
+    const batch = writeBatch(firestore);
+    const suggestionRef = doc(collection(firestore, `libraries/${libraryId}/suggestions`));
+    batch.set(suggestionRef, suggestionData);
+
+    // Non-blocking commit with error handling
+    batch.commit().catch((serverError) => {
+        console.error("Suggestion form submission error:", serverError);
+        const permissionError = new FirestorePermissionError({
+          path: suggestionRef.path,
+          operation: 'create',
+          requestResourceData: suggestionData,
         });
-        setContent('');
-    } catch (error) {
-        console.error("Suggestion form submission error:", error);
-        toast({
-            variant: "destructive",
-            title: "Submission Failed",
-            description: error instanceof Error ? error.message : "An unexpected error occurred."
-        });
-    } finally {
+        errorEmitter.emit('permission-error', permissionError);
+    }).finally(() => {
         setIsSubmitting(false);
-    }
+    });
   };
 
   const isFormDisabled = isSubmitting || isLoadingStudent || isUserLoading || !user;

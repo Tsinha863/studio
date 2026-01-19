@@ -22,7 +22,7 @@ import {
 
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
+import { useCollection, useFirebase, useMemoFirebase, errorEmitter } from '@/firebase';
 import type { Suggestion } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { DataTable } from '@/components/ui/data-table';
@@ -39,6 +39,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Spinner } from '@/components/spinner';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 type AlertState = {
   isOpen: boolean;
@@ -52,7 +53,6 @@ export default function SuggestionsPage() {
   const { toast } = useToast();
   const { firestore, user } = useFirebase();
   const [alertState, setAlertState] = React.useState<AlertState>({ isOpen: false });
-  const [isDeleting, setIsDeleting] = React.useState(false);
 
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
@@ -105,38 +105,38 @@ export default function SuggestionsPage() {
       return;
     }
 
-    try {
-      const batch = writeBatch(firestore);
-      const actor = { id: user.uid, name: user.displayName || 'Admin' };
+    toast({
+      title: 'Status Updated',
+      description: "The suggestion's status has been changed.",
+    });
 
-      const suggestionRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/suggestions/${suggestionId}`);
-      batch.update(suggestionRef, {
-        status,
-        updatedAt: serverTimestamp(),
+    const suggestionRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/suggestions/${suggestionId}`);
+    const batch = writeBatch(firestore);
+    const actor = { id: user.uid, name: user.displayName || 'Admin' };
+    
+    batch.update(suggestionRef, {
+      status,
+      updatedAt: serverTimestamp(),
+    });
+
+    const logRef = doc(collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/activityLogs`));
+    batch.set(logRef, {
+      libraryId: HARDCODED_LIBRARY_ID,
+      user: actor,
+      activityType: 'suggestion_status_updated',
+      details: { suggestionId, newStatus: status },
+      timestamp: serverTimestamp(),
+    });
+
+    batch.commit().catch((serverError) => {
+      console.error("UPDATE SUGGESTION STATUS ERROR:", serverError);
+      const permissionError = new FirestorePermissionError({
+        path: suggestionRef.path,
+        operation: 'update',
+        requestResourceData: { status },
       });
-  
-      const logRef = doc(collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/activityLogs`));
-      batch.set(logRef, {
-        libraryId: HARDCODED_LIBRARY_ID,
-        user: actor,
-        activityType: 'suggestion_status_updated',
-        details: { suggestionId, newStatus: status },
-        timestamp: serverTimestamp(),
-      });
-  
-      await batch.commit();
-      toast({
-        title: 'Status Updated',
-        description: "The suggestion's status has been changed.",
-      });
-    } catch (error) {
-      console.error("UPDATE SUGGESTION STATUS ERROR:", error);
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Could not update the status.',
-      });
-    }
+      errorEmitter.emit('permission-error', permissionError);
+    });
   };
 
   const openDeleteAlert = (suggestionId: string) =>
@@ -149,40 +149,36 @@ export default function SuggestionsPage() {
       return;
     }
 
-    setIsDeleting(true);
-    try {
-      const batch = writeBatch(firestore);
-      const actor = { id: user.uid, name: user.displayName || 'Admin' };
-      
-      const suggestionRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/suggestions/${alertState.suggestionId}`);
-      batch.delete(suggestionRef);
-  
-      const logRef = doc(collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/activityLogs`));
-      batch.set(logRef, {
-        libraryId: HARDCODED_LIBRARY_ID,
-        user: actor,
-        activityType: 'suggestion_deleted',
-        details: { suggestionId: alertState.suggestionId },
-        timestamp: serverTimestamp(),
-      });
-  
-      await batch.commit();
+    // Optimistic UI update
+    closeDeleteAlert();
+    toast({
+      title: 'Suggestion Deleted',
+      description: 'The suggestion has been removed.',
+    });
 
-      toast({
-        title: 'Suggestion Deleted',
-        description: 'The suggestion has been removed.',
+    const batch = writeBatch(firestore);
+    const actor = { id: user.uid, name: user.displayName || 'Admin' };
+    const suggestionRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/suggestions/${alertState.suggestionId}`);
+    
+    batch.delete(suggestionRef);
+
+    const logRef = doc(collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/activityLogs`));
+    batch.set(logRef, {
+      libraryId: HARDCODED_LIBRARY_ID,
+      user: actor,
+      activityType: 'suggestion_deleted',
+      details: { suggestionId: alertState.suggestionId },
+      timestamp: serverTimestamp(),
+    });
+
+    batch.commit().catch((serverError) => {
+      console.error("DELETE SUGGESTION ERROR:", serverError);
+      const permissionError = new FirestorePermissionError({
+        path: suggestionRef.path,
+        operation: 'delete',
       });
-    } catch (error) {
-      console.error("DELETE SUGGESTION ERROR:", error);
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Could not delete the suggestion.',
-      });
-    } finally {
-      setIsDeleting(false);
-      closeDeleteAlert();
-    }
+      errorEmitter.emit('permission-error', permissionError);
+    });
   };
 
   return (
@@ -233,9 +229,8 @@ export default function SuggestionsPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={closeDeleteAlert}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} disabled={isDeleting}>
-              {isDeleting && <Spinner className="mr-2" />}
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete}>
               Continue
             </AlertDialogAction>
           </AlertDialogFooter>
