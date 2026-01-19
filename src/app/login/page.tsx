@@ -33,6 +33,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useFirebase } from '@/firebase';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Logo } from '@/components/logo';
+import { Spinner } from '@/components/spinner';
 
 const loginSchema = z.object({
   email: z.string().email({ message: 'Please enter a valid email address.' }),
@@ -57,42 +58,38 @@ function LoginForm() {
     },
   });
 
-  const onSubmit = (data: LoginFormValues) => {
+  const handleLogin = (email: string, password: string) => {
     setIsLoading(true);
 
     const successfulLogin =
-      (data.email === 'admin@campushub.com' && data.password === 'password123') ||
-      (data.email === 'student@campushub.com' && data.password === 'password123');
+      (email === 'admin@campushub.com' && password === 'password123') ||
+      (email === 'student@campushub.com' && password === 'password123');
 
     if (!successfulLogin) {
       toast({
         variant: 'destructive',
         title: 'Demo Login Failed',
         description:
-          'Invalid credentials. For this demo, please use the "Admin Demo" or "Student Demo" buttons to sign in.',
+          'Invalid credentials. Please use the "Admin Demo" or "Student Demo" buttons.',
       });
       setIsLoading(false);
       return;
     }
 
     const performLogin = () => {
-      const isAdmin = data.email === 'admin@campushub.com';
+      const isAdmin = email === 'admin@campushub.com';
       toast({
         title: 'Login Successful',
         description: `Welcome back, ${isAdmin ? 'Admin' : 'Student'}! Redirecting to your dashboard.`,
       });
-      // Store the email for the student dashboard to use
       if (!isAdmin) {
-          sessionStorage.setItem('demoStudentEmail', data.email);
+          sessionStorage.setItem('demoStudentEmail', email);
       } else {
           sessionStorage.removeItem('demoStudentEmail');
       }
       router.push(isAdmin ? '/admin/dashboard' : '/student/dashboard');
     };
 
-    // This is a mock login flow. For the forms to be enabled on the next pages,
-    // we need a Firebase user. We'll sign in anonymously here to ensure
-    // that the `useFirebase` hook provides a user object.
     if (auth?.currentUser) {
       performLogin();
     } else if (auth) {
@@ -118,23 +115,17 @@ function LoginForm() {
         setIsLoading(false);
     }
   };
+
+  const onSubmit = (data: LoginFormValues) => {
+    handleLogin(data.email, data.password);
+  };
   
   const handleAdminDemo = () => {
-    form.setValue('email', 'admin@campushub.com');
-    form.setValue('password', 'password123');
-    toast({
-        title: 'Demo Mode',
-        description: 'Admin credentials filled. Click "Sign In" to continue.',
-    });
+    handleLogin('admin@campushub.com', 'password123');
   }
 
   const handleStudentDemo = () => {
-    form.setValue('email', 'student@campushub.com');
-    form.setValue('password', 'password123');
-    toast({
-        title: 'Demo Mode',
-        description: 'Student credentials filled. Click "Sign In" to continue.',
-    });
+    handleLogin('student@campushub.com', 'password123');
   }
 
   return (
@@ -193,13 +184,13 @@ function LoginForm() {
               className="w-full"
               disabled={isLoading}
             >
-              {isLoading ? 'Signing In...' : 'Sign In'}
+              {isLoading ? <Spinner className="mr-2" /> : 'Sign In'}
             </Button>
             <div className='flex w-full gap-2'>
-              <Button type="button" variant="outline" className="w-full" onClick={handleAdminDemo}>
+              <Button type="button" variant="outline" className="w-full" onClick={handleAdminDemo} disabled={isLoading}>
                 Admin Demo
               </Button>
-              <Button type="button" variant="outline" className="w-full" onClick={handleStudentDemo}>
+              <Button type="button" variant="outline" className="w-full" onClick={handleStudentDemo} disabled={isLoading}>
                 Student Demo
               </Button>
             </div>
