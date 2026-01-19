@@ -34,76 +34,84 @@ service cloud.firestore {
       allow create, update, delete: if false; // Client cannot modify libraries.
     }
 
+    // Users
+    match /libraries/{libraryId}/users {
+      allow list: if isSignedIn();
+    }
     match /libraries/{libraryId}/users/{userId} {
-      allow get: if isSignedIn();
-      allow list: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update: if isSignedIn();
-      allow delete: if isSignedIn();
+      allow get, create, update, delete: if isSignedIn();
     }
 
+    // Students
+    match /libraries/{libraryId}/students {
+      allow list: if isSignedIn();
+    }
     match /libraries/{libraryId}/students/{studentId} {
-      allow get: if isSignedIn();
-      allow list: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update: if isSignedIn();
-      allow delete: if isSignedIn();
+      allow get, create, update, delete: if isSignedIn();
     }
 
+    // Payments
+    match /libraries/{libraryId}/payments {
+      allow list: if isSignedIn();
+    }
     match /libraries/{libraryId}/payments/{paymentId} {
-      allow get: if isSignedIn();
-      allow list: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update: if isSignedIn();
-      allow delete: if isSignedIn();
+      allow get, create, update, delete: if isSignedIn();
     }
 
+    // Expenses
+    match /libraries/{libraryId}/expenses {
+      allow list: if isSignedIn();
+    }
     match /libraries/{libraryId}/expenses/{expenseId} {
-      allow get: if isSignedIn();
-      allow list: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update: if isSignedIn();
-      allow delete: if isSignedIn();
+      allow get, create, update, delete: if isSignedIn();
     }
 
+    // Rooms and Seats
+    match /libraries/{libraryId}/rooms {
+      allow list: if isSignedIn();
+    }
     match /libraries/{libraryId}/rooms/{roomId} {
-      allow get: if isSignedIn();
-      allow list: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update: if isSignedIn();
-      allow delete: if isSignedIn();
+      allow get, create, update, delete: if isSignedIn();
+
+      match /seats {
+        allow list: if isSignedIn();
+      }
+      match /seats/{seatId} {
+        allow get, create, update, delete: if isSignedIn();
+      }
     }
 
-    match /libraries/{libraryId}/rooms/{roomId}/seats/{seatId} {
-      allow get: if isSignedIn();
+    // Announcements
+    match /libraries/{libraryId}/announcements {
       allow list: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update: if isSignedIn();
-      allow delete: if isSignedIn();
     }
-
     match /libraries/{libraryId}/announcements/{announcementId} {
-      allow get: if isSignedIn();
-      allow list: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update: if isSignedIn();
-      allow delete: if isSignedIn();
+      allow get, create, update, delete: if isSignedIn();
     }
 
+    // Suggestions
+    match /libraries/{libraryId}/suggestions {
+      allow list: if isSignedIn();
+    }
     match /libraries/{libraryId}/suggestions/{suggestionId} {
-      allow get: if isSignedIn();
-      allow list: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update: if isSignedIn();
-      allow delete: if isSignedIn();
+      allow get, create, update, delete: if isSignedIn();
     }
 
-    match /libraries/{libraryId}/activityLogs/{logId} {
-      allow get: if isSignedIn();
+    // Print Requests
+    match /libraries/{libraryId}/printRequests {
       allow list: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update: if false;
-      allow delete: if false;
+    }
+    match /libraries/{libraryId}/printRequests/{printRequestId} {
+      allow get, create, update, delete: if isSignedIn();
+    }
+    
+    // Activity Logs
+    match /libraries/{libraryId}/activityLogs {
+      allow list: if isSignedIn();
+    }
+    match /libraries/{libraryId}/activityLogs/{logId} {
+      allow get, create: if isSignedIn();
+      allow update, delete: if false;
     }
   }
 }
