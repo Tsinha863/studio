@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -9,9 +8,13 @@ import { z } from 'zod';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
-import { createUserWithEmailAndPassword, deleteUser, type UserCredential } from 'firebase/auth';
+import {
+  createUserWithEmailAndPassword,
+  deleteUser,
+  type UserCredential,
+} from 'firebase/auth';
 import { FirebaseError } from 'firebase/app';
-import { doc, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -36,18 +39,23 @@ import { useFirebase } from '@/firebase';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Logo } from '@/components/logo';
 import { Spinner } from '@/components/spinner';
+import { ensureUserProfile } from '@/lib/user-profile';
 
-const signupSchema = z.object({
-  name: z.string().min(2, { message: 'Name must be at least 2 characters long.' }),
-  email: z.string().email({ message: 'Please enter a valid email address.' }),
-  password: z
-    .string()
-    .min(8, { message: 'Password must be at least 8 characters long.' }),
-  confirmPassword: z.string()
-}).refine(data => data.password === data.confirmPassword, {
-  message: "Passwords don't match",
-  path: ["confirmPassword"],
-});
+const signupSchema = z
+  .object({
+    name: z
+      .string()
+      .min(2, { message: 'Name must be at least 2 characters long.' }),
+    email: z.string().email({ message: 'Please enter a valid email address.' }),
+    password: z
+      .string()
+      .min(8, { message: 'Password must be at least 8 characters long.' }),
+    confirmPassword: z.string(),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords don't match",
+    path: ['confirmPassword'],
+  });
 
 type SignupFormValues = z.infer<typeof signupSchema>;
 
@@ -69,14 +77,17 @@ function SignupForm() {
     },
   });
 
-  const { formState: { isSubmitting } } = form;
+  const {
+    formState: { isSubmitting },
+  } = form;
 
   const onSubmit = async (data: SignupFormValues) => {
     if (!auth || !firestore) {
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: 'Firebase service is not available. Please try again later.',
+        description:
+          'Firebase service is not available. Please try again later.',
       });
       return;
     }
@@ -85,26 +96,29 @@ function SignupForm() {
 
     try {
       // 1. Create user in Firebase Auth
-      userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
+      userCredential = await createUserWithEmailAndPassword(
+        auth,
+        data.email,
+        data.password
+      );
       const user = userCredential.user;
-      
-      // 2. Create corresponding Firestore documents in a batch for atomicity
-      const batch = writeBatch(firestore);
 
-      // Create the user document for role management
-      const userRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/users`, user.uid);
-      batch.set(userRef, {
-        id: user.uid,
+      // 2. GUARANTEE user profile exists.
+      await ensureUserProfile({
+        db: firestore,
+        uid: user.uid,
         email: user.email,
-        role: 'student', // All signups are students by default
+        role: 'student', // All signups are students
         libraryId: HARDCODED_LIBRARY_ID,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
       });
 
-      // Create the student profile document
-      const studentRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students`, user.uid);
-      batch.set(studentRef, {
+      // 3. Create the student profile document
+      const studentRef = doc(
+        firestore,
+        `libraries/${HARDCODED_LIBRARY_ID}/students`,
+        user.uid
+      );
+      await setDoc(studentRef, {
         libraryId: HARDCODED_LIBRARY_ID,
         userId: user.uid,
         name: data.name,
@@ -119,20 +133,18 @@ function SignupForm() {
         updatedAt: serverTimestamp(),
       });
 
-      await batch.commit();
-
-      // 3. Redirect to loading page for role-based routing
+      // 4. Redirect to loading page for role-based routing
       router.push('/loading');
-
     } catch (error) {
-      // If Firestore write fails after Auth user creation, attempt to roll back.
+      // If ANY of the above awaits fail after Auth user is created, roll back.
       if (userCredential) {
-        await deleteUser(userCredential.user).catch(deleteError => {
-          console.error("Failed to rollback Auth user creation:", deleteError);
+        await deleteUser(userCredential.user).catch((deleteError) => {
+          console.error('Failed to rollback Auth user creation:', deleteError);
           toast({
             variant: 'destructive',
             title: 'Incomplete Signup',
-            description: 'Your account was created but profile setup failed. Please contact support.',
+            description:
+              'Your account was created but profile setup failed. Please contact support.',
             duration: 10000,
           });
         });
@@ -140,24 +152,26 @@ function SignupForm() {
 
       let title = 'Sign-up failed';
       let description = 'An unexpected error occurred. Please try again.';
-      
+
       if (error instanceof FirebaseError) {
         switch (error.code) {
           case 'auth/email-already-in-use':
             title = 'Email in Use';
-            description = 'This email address is already associated with an account.';
+            description =
+              'This email address is already associated with an account.';
             break;
           case 'auth/weak-password':
             title = 'Weak Password';
-            description = 'The password is not strong enough. Please choose a stronger password.';
+            description =
+              'The password is not strong enough. Please choose a stronger password.';
             break;
           default:
             description = error.message;
             break;
         }
-      } else {
-        // Assume it's a Firestore error from the batch commit
-        description = "Could not save your profile. Please try again.";
+      } else if (error instanceof Error) {
+        // Handle errors from ensureUserProfile or setDoc for student profile
+        description = `Could not save your profile: ${error.message}`;
       }
 
       toast({
@@ -176,7 +190,9 @@ function SignupForm() {
             <Link href="/" className="mx-auto mb-4">
               <Logo />
             </Link>
-            <CardTitle className="font-headline text-2xl">Create an Account</CardTitle>
+            <CardTitle className="font-headline text-2xl">
+              Create an Account
+            </CardTitle>
             <CardDescription>
               Enter your details below to create your account
             </CardDescription>
@@ -254,11 +270,7 @@ function SignupForm() {
             />
           </CardContent>
           <CardFooter className="flex flex-col gap-4">
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={isSubmitting}
-            >
+            <Button type="submit" className="w-full" disabled={isSubmitting}>
               {isSubmitting ? <Spinner className="mr-2" /> : null}
               {isSubmitting ? 'Creating Account...' : 'Create Account'}
             </Button>
@@ -276,12 +288,12 @@ function SignupForm() {
 }
 
 export default function SignupPage() {
-  const heroImage = PlaceHolderImages.find(p => p.id === 'login-hero');
+  const heroImage = PlaceHolderImages.find((p) => p.id === 'login-hero');
 
   return (
     <main className="flex min-h-screen w-full">
       <div className="relative flex w-full flex-col items-center justify-center p-4 lg:w-1/2">
-        <Link href="/" className="absolute top-4 left-4 sm:top-8 sm:left-8">
+        <Link href="/" className="absolute left-4 top-4 sm:left-8 sm:top-8">
           <Button variant="ghost">
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Welcome
@@ -291,16 +303,16 @@ export default function SignupPage() {
       </div>
       <div className="relative hidden w-1/2 flex-col justify-between bg-primary p-12 text-primary-foreground lg:flex">
         {heroImage && (
-            <Image
-                src={heroImage.imageUrl}
-                alt={heroImage.description}
-                fill
-                className="absolute inset-0 h-full w-full object-cover opacity-20"
-                data-ai-hint={heroImage.imageHint}
-            />
+          <Image
+            src={heroImage.imageUrl}
+            alt={heroImage.description}
+            fill
+            className="absolute inset-0 h-full w-full object-cover opacity-20"
+            data-ai-hint={heroImage.imageHint}
+          />
         )}
         <div className="relative z-10">
-           <Link href="/">
+          <Link href="/">
             <Logo className="h-10 w-10 text-primary-foreground" />
           </Link>
           <h1 className="mt-4 font-headline text-4xl font-bold">CampusHub</h1>
@@ -310,7 +322,9 @@ export default function SignupPage() {
         </div>
         <div className="relative z-10 mt-auto">
           <p className="text-base font-medium">
-            &ldquo;This platform has revolutionized how we manage our student facilities. It's intuitive, powerful, and has saved us countless hours.&rdquo;
+            &ldquo;This platform has revolutionized how we manage our student
+            facilities. It's intuitive, powerful, and has saved us countless
+            hours.&rdquo;
           </p>
           <footer className="mt-4 text-sm opacity-80">
             - Jane Doe, Library Administrator
