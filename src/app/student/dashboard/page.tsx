@@ -3,7 +3,7 @@
 
 import * as React from 'react';
 import dynamic from 'next/dynamic';
-import { collection, query, where, orderBy, limit, doc } from 'firebase/firestore';
+import { collection, query, where, orderBy, limit, doc, getDocs } from 'firebase/firestore';
 
 import { useCollection, useDoc, useFirebase, useMemoFirebase } from '@/firebase';
 import type { Student, Payment } from '@/lib/types';
