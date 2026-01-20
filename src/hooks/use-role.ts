@@ -6,6 +6,7 @@ import type { User } from 'firebase/auth';
 
 import { useFirebase, useMemoFirebase } from '@/firebase';
 import type { User as UserProfile } from '@/lib/types';
+import { ensureUserProfile } from '@/lib/user-profile';
 
 // TODO: Replace with actual logged-in user's library
 const HARDCODED_LIBRARY_ID = 'library1';
@@ -38,7 +39,7 @@ export function useRole(user: User | null): UseRoleResult {
             return;
         }
 
-        if (!userDocRef) {
+        if (!userDocRef || !firestore) {
             return;
         }
 
@@ -63,9 +64,17 @@ export function useRole(user: User | null): UseRoleResult {
                         setError(null);
                     }
                 } else {
-                    // This case should be handled by ensureUserProfile, but as a fallback...
-                    setError(new Error('User profile not found. It should have been auto-created. Please contact support.'));
-                    setRole(null);
+                    // AUTO-HEAL: User profile document does not exist. Create it with a safe default.
+                    console.warn(`User profile not found for ${user.uid}. Auto-healing by creating one with 'student' role.`);
+                    await ensureUserProfile({
+                        db: firestore,
+                        uid: user.uid,
+                        email: user.email,
+                        role: 'student', // Safe default for any user logging in without a profile.
+                        libraryId: HARDCODED_LIBRARY_ID,
+                    });
+                    setRole('student');
+                    setError(null);
                 }
             } catch (e) {
                 console.error("Failed to fetch or heal user role:", e);
@@ -78,7 +87,7 @@ export function useRole(user: User | null): UseRoleResult {
 
         fetchRole();
 
-    }, [user, userDocRef]);
+    }, [user, userDocRef, firestore]);
 
     return { role, isLoading, error };
 }
