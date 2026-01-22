@@ -44,7 +44,6 @@ import { generateSimulatedReceipt } from '@/ai/flows/generate-simulated-receipt'
 
 import { DataTablePagination } from '@/components/ui/data-table-pagination';
 import { columns as paymentColumns } from '@/components/admin/payments/columns';
-import { ReceiptDialog } from '@/components/receipt-dialog';
 import { Spinner } from '@/components/spinner';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -53,6 +52,11 @@ const DataTable = dynamic(() => import('@/components/ui/data-table').then(mod =>
     ssr: false,
     loading: () => <div className="rounded-md border"><Skeleton className="h-96 w-full" /></div>
 });
+
+const ReceiptDialog = dynamic(() => import('@/components/receipt-dialog').then(mod => mod.ReceiptDialog), { 
+    ssr: false,
+});
+
 
 // TODO: Replace with actual logged-in user's library
 const HARDCODED_LIBRARY_ID = 'library1';

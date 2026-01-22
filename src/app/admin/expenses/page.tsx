@@ -46,15 +46,21 @@ import { DataTablePagination } from '@/components/ui/data-table-pagination';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirebase, useMemoFirebase, errorEmitter } from '@/firebase';
 import type { Expense } from '@/lib/types';
-import { ExpenseForm } from '@/components/admin/expenses/expense-form';
 import { columns as expenseColumns } from '@/components/admin/expenses/columns';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Spinner } from '@/components/spinner';
 
 const DataTable = dynamic(() => import('@/components/ui/data-table').then(mod => mod.DataTable), { 
     ssr: false,
     loading: () => <div className="rounded-md border"><Skeleton className="h-96 w-full" /></div>
 });
+
+const ExpenseForm = dynamic(() => import('@/components/admin/expenses/expense-form').then(mod => mod.ExpenseForm), { 
+    ssr: false,
+    loading: () => <div className="h-[450px] flex items-center justify-center"><Spinner /></div>
+});
+
 
 type ExpenseWithId = Expense & { id: string };
 

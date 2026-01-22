@@ -46,15 +46,21 @@ import { DataTablePagination } from '@/components/ui/data-table-pagination';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirebase, useMemoFirebase, errorEmitter } from '@/firebase';
 import type { Announcement } from '@/lib/types';
-import { AnnouncementForm } from '@/components/admin/announcements/announcement-form';
 import { columns as announcementColumns } from '@/components/admin/announcements/columns';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Spinner } from '@/components/spinner';
 
 const DataTable = dynamic(() => import('@/components/ui/data-table').then(mod => mod.DataTable), { 
     ssr: false,
     loading: () => <div className="rounded-md border"><Skeleton className="h-96 w-full" /></div>
 });
+
+const AnnouncementForm = dynamic(() => import('@/components/admin/announcements/announcement-form').then(mod => mod.AnnouncementForm), { 
+    ssr: false,
+    loading: () => <div className="h-[280px] flex items-center justify-center"><Spinner /></div>
+});
+
 
 type AnnouncementWithId = Announcement & { id: string };
 

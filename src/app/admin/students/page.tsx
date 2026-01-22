@@ -51,7 +51,6 @@ import { DataTablePagination } from '@/components/ui/data-table-pagination';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
 import type { Student } from '@/lib/types';
-import { StudentForm } from '@/components/admin/students/student-form';
 import { columns as studentColumns } from '@/components/admin/students/columns';
 import { Spinner } from '@/components/spinner';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -60,6 +59,12 @@ const DataTable = dynamic(() => import('@/components/ui/data-table').then(mod =>
     ssr: false,
     loading: () => <div className="rounded-md border"><Skeleton className="h-96 w-full" /></div>
 });
+
+const StudentForm = dynamic(() => import('@/components/admin/students/student-form').then(mod => mod.StudentForm), { 
+    ssr: false, 
+    loading: () => <div className="h-[380px] flex items-center justify-center"><Spinner /></div> 
+});
+
 
 type StudentWithId = Student & { id: string };
 
