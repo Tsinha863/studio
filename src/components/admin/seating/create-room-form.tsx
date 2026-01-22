@@ -37,8 +37,7 @@ export function CreateRoomForm({ libraryId, onSuccess }: CreateRoomFormProps) {
   const [tier, setTier] = React.useState<Seat['tier']>('standard');
   const [errors, setErrors] = React.useState<Partial<Record<keyof RoomFormValues, string>>>({});
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const handleSubmit = async () => {
     if (!user || !firestore) {
       toast({
         variant: 'destructive',
@@ -125,7 +124,7 @@ export function CreateRoomForm({ libraryId, onSuccess }: CreateRoomFormProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-4">
+    <div className="flex flex-wrap items-end gap-4">
         <div className="flex-grow space-y-2" style={{minWidth: '200px'}}>
             <Label htmlFor="roomName">Room Name</Label>
             <Input
@@ -167,7 +166,7 @@ export function CreateRoomForm({ libraryId, onSuccess }: CreateRoomFormProps) {
             </Select>
         </div>
         
-        <Button type="submit" disabled={isSubmitting || !user}>
+        <Button type="button" onClick={handleSubmit} disabled={isSubmitting || !user}>
           {isSubmitting ? (
             <>
               <Spinner className="mr-2 h-4 w-4" />
@@ -180,6 +179,6 @@ export function CreateRoomForm({ libraryId, onSuccess }: CreateRoomFormProps) {
             </>
           )}
         </Button>
-    </form>
+    </div>
   );
 }
