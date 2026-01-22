@@ -75,12 +75,20 @@ export function useCollection<T = any>(
         setData(null);
         setIsLoading(false);
         
-        if (serverError.code === 'permission-denied') {
-            const permissionError = new FirestorePermissionError({
-              path: (memoizedTargetRefOrQuery as Query).id,
-              operation: 'list',
-            });
-            errorEmitter.emit('permission-error', permissionError);
+        if (serverError.code === 'permission-denied' && memoizedTargetRefOrQuery) {
+          // Safely try to get the path for the error context.
+          // This works for CollectionReferences but not for complex Queries,
+          // which is a limitation of the Firebase JS SDK.
+          let path = 'unknown collection';
+          if ('path' in memoizedTargetRefOrQuery && typeof (memoizedTargetRefOrQuery as any).path === 'string') {
+            path = (memoizedTargetRefOrQuery as any).path;
+          }
+          
+          const permissionError = new FirestorePermissionError({
+            path: path,
+            operation: 'list',
+          });
+          errorEmitter.emit('permission-error', permissionError);
         }
       }
     );
