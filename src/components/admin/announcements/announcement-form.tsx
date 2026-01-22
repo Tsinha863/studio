@@ -85,7 +85,6 @@ export function AnnouncementForm({ libraryId, onSuccess, onCancel }: Announcemen
 
     // Non-blocking commit with error handling
     batch.commit().catch((serverError) => {
-        console.error("Announcement form submission error:", serverError);
         const permissionError = new FirestorePermissionError({
           path: announcementRef.path,
           operation: 'create',

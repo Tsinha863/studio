@@ -82,7 +82,6 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
             // If the user profile doesn't exist, this is a new signup or a demo user login for the first time.
             // We create all necessary documents here to prevent race conditions.
             if (!docSnap.exists()) {
-              console.log(`Profile not found for UID ${firebaseUser.uid}. Creating...`);
               
               // Determine role. Default to 'student' unless it's the demo admin.
               const role: UserRole = firebaseUser.email === DEMO_ADMIN_EMAIL ? 'libraryOwner' : 'student';

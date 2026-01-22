@@ -150,7 +150,6 @@ export function ExpenseForm({ expense, libraryId, onSuccess, onCancel }: Expense
 
     // Non-blocking commit with error handling
     batch.commit().catch((serverError) => {
-        console.error("Expense form submission error:", serverError);
         const permissionError = new FirestorePermissionError({
           path: expenseRef.path,
           operation: operation,

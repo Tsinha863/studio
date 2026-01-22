@@ -107,7 +107,7 @@ export default function StudentsPage() {
 
   const { data: students, isLoading } = useCollection<Student>(studentsQuery);
 
-  const memoizedColumns = React.useMemo(() => studentColumns({ openModal, openDeleteAlert }), []);
+  const memoizedColumns = React.useMemo(() => studentColumns({ openModal, openDeleteAlert, toast }), [toast]);
 
   const table = useReactTable({
     data: students || [],
@@ -194,7 +194,6 @@ export default function StudentsPage() {
     });
 
     transactionPromise.catch((error) => {
-        console.error("ARCHIVE STUDENT ERROR:", error);
         toast({
             variant: 'destructive',
             title: 'Error',

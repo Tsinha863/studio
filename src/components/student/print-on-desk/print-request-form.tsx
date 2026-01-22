@@ -59,9 +59,6 @@ export function PrintRequestForm({ student, libraryId, isLoading }: PrintRequest
       return;
     }
 
-    // Set submitting state right away for UI feedback
-    form.control.register('isSubmitting', { value: true });
-
     try {
       // Find student's current seat booking
       const now = Timestamp.now();
@@ -117,7 +114,6 @@ export function PrintRequestForm({ student, libraryId, isLoading }: PrintRequest
 
       // Non-blocking commit
       batch.commit().catch((serverError) => {
-        console.error("Print request submission error:", serverError);
         const permissionError = new FirestorePermissionError({
           path: requestRef.path,
           operation: 'create',
@@ -127,15 +123,11 @@ export function PrintRequestForm({ student, libraryId, isLoading }: PrintRequest
       });
 
     } catch (error) {
-      console.error("Print request submission error:", error);
       toast({
         variant: "destructive",
         title: "Submission Failed",
         description: error instanceof Error ? error.message : "An unexpected error occurred."
       });
-    } finally {
-        // Unset submitting state
-        form.control.unregister('isSubmitting');
     }
   };
 

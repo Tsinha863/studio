@@ -154,7 +154,6 @@ export default function ExpensesPage() {
 
     // Non-blocking commit with error handling
     batch.commit().catch((serverError) => {
-      console.error("DELETE EXPENSE ERROR:", serverError);
       const permissionError = new FirestorePermissionError({
         path: expenseRef.path,
         operation: 'delete',

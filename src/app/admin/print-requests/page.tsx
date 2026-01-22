@@ -130,7 +130,6 @@ export default function PrintRequestsPage() {
     });
     
     batch.commit().catch((serverError) => {
-      console.error("PRINT REQUEST STATUS UPDATE ERROR:", serverError);
       const permissionError = new FirestorePermissionError({
         path: requestRef.path,
         operation: 'update',

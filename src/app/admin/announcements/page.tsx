@@ -156,7 +156,6 @@ export default function AnnouncementsPage() {
 
     // Non-blocking commit with error handling
     batch.commit().catch((serverError) => {
-      console.error("DELETE ANNOUNCEMENT ERROR:", serverError);
       const permissionError = new FirestorePermissionError({
         path: announcementRef.path,
         operation: 'delete',

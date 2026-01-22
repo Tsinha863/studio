@@ -91,10 +91,6 @@ export function useDoc<T = any>(
     return () => unsubscribe();
   }, [memoizedDocRef]); // Re-run if the memoizedDocRef changes.
 
-  if(memoizedDocRef && !memoizedDocRef.__memo) {
-    console.warn('useDoc received a reference that was not memoized with useMemoFirebase. This can lead to performance issues and infinite loops.', memoizedDocRef);
-  }
-
   return { data, isLoading, error };
 }
 

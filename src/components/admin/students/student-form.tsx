@@ -114,7 +114,6 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
             });
 
             batch.commit().catch((serverError) => {
-              console.error("Student form (update) error:", serverError);
               const permissionError = new FirestorePermissionError({
                 path: studentRef.path,
                 operation: 'update',
@@ -161,7 +160,6 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
             setIsSubmitting(false);
         }
     } catch (error) {
-        console.error("Student form submission error:", error);
         toast({
             variant: "destructive",
             title: "An unexpected error occurred",

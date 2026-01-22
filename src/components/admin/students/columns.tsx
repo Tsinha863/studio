@@ -1,3 +1,4 @@
+
 'use client';
 
 import { ColumnDef } from '@tanstack/react-table';
@@ -16,15 +17,17 @@ import {
 import { Badge } from '@/components/ui/badge';
 import type { Student } from '@/lib/types';
 import { DataTableColumnHeader } from './data-table-header';
+import type { useToast } from '@/hooks/use-toast';
 
 type StudentWithId = Student & { id: string };
 
 type ColumnsConfig = {
   openModal: (student: StudentWithId) => void;
   openDeleteAlert: (student: StudentWithId) => void;
+  toast: ReturnType<typeof useToast>['toast'];
 };
 
-export const columns = ({ openModal, openDeleteAlert }: ColumnsConfig): ColumnDef<StudentWithId>[] => [
+export const columns = ({ openModal, openDeleteAlert, toast }: ColumnsConfig): ColumnDef<StudentWithId>[] => [
   {
     accessorKey: 'id',
     header: ({ column }) => (
@@ -89,7 +92,23 @@ export const columns = ({ openModal, openDeleteAlert }: ColumnsConfig): ColumnDe
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>Actions</DropdownMenuLabel>
-            <DropdownMenuItem onClick={() => navigator.clipboard.writeText(student.id)}>
+            <DropdownMenuItem
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(student.id);
+                  toast({
+                    title: 'Student ID Copied',
+                    description: 'The ID has been copied to your clipboard.',
+                  });
+                } catch (err) {
+                  toast({
+                    variant: 'destructive',
+                    title: 'Copy Failed',
+                    description: 'Could not copy the ID to the clipboard.',
+                  });
+                }
+              }}
+            >
               Copy student ID
             </DropdownMenuItem>
             <DropdownMenuSeparator />

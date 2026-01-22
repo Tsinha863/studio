@@ -110,10 +110,6 @@ export function useCollection<T = any>(
     return () => unsubscribe();
   }, [memoizedTargetRefOrQuery]); // Re-run if the target query/reference changes.
   
-  if(memoizedTargetRefOrQuery && !memoizedTargetRefOrQuery.__memo) {
-    console.warn('useCollection received a query that was not memoized with useMemoFirebase. This can lead to performance issues and infinite loops.', memoizedTargetRefOrQuery);
-  }
-  
   return { data, isLoading, error };
 }
 

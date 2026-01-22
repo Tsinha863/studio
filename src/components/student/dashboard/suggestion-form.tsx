@@ -94,7 +94,6 @@ export function SuggestionForm({ student, libraryId, isLoading: isLoadingStudent
 
     // Non-blocking commit with error handling
     batch.commit().catch((serverError) => {
-        console.error("Suggestion form submission error:", serverError);
         const permissionError = new FirestorePermissionError({
           path: suggestionRef.path,
           operation: 'create',
@@ -144,5 +143,3 @@ export function SuggestionForm({ student, libraryId, isLoading: isLoadingStudent
     </Card>
   );
 }
-
-    
