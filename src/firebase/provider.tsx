@@ -8,7 +8,6 @@ import { Auth, User, onAuthStateChanged } from 'firebase/auth';
 import { FirebaseStorage } from 'firebase/storage';
 import { FirebaseErrorListener } from '@/components/FirebaseErrorListener';
 import type { User as UserProfileType } from '@/lib/types';
-import { ensureUserProfile } from '@/lib/user-profile';
 import { LIBRARY_ID } from '@/lib/config';
 
 const VALID_ROLES = ["libraryOwner", "student"] as const;
@@ -71,55 +70,16 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser) {
-        // We have a user object, now we need to fetch/create their profile.
-        // The entire process is wrapped in one async function to ensure
-        // the loading state is only set to false once everything is complete.
+        // When a user is authenticated, we must resolve their profile from Firestore.
         const resolveUserProfile = async () => {
           try {
             const userDocRef = doc(firestore, `libraries/${LIBRARY_ID}/users`, firebaseUser.uid);
-            let docSnap = await getDoc(userDocRef);
+            const docSnap = await getDoc(userDocRef);
             
-            // If the user profile doesn't exist, this is a new signup or a demo user login for the first time.
-            // We create all necessary documents here to prevent race conditions.
             if (!docSnap.exists()) {
-              
-              // Determine role. Default to 'student' unless it's the demo admin.
-              const role: UserRole = firebaseUser.email === DEMO_ADMIN_EMAIL ? 'libraryOwner' : 'student';
-              
-              // 1. Create the main user profile document.
-              await ensureUserProfile({
-                  db: firestore,
-                  uid: firebaseUser.uid,
-                  email: firebaseUser.email,
-                  role: role,
-                  libraryId: LIBRARY_ID,
-                  name: firebaseUser.displayName || (role === 'student' ? 'New Student' : 'Admin'),
-              });
-
-              // 2. If the user is a student, also create their detailed student record.
-              if (role === 'student') {
-                const studentRef = doc(firestore, `libraries/${LIBRARY_ID}/students`, firebaseUser.uid);
-                await setDoc(studentRef, {
-                    libraryId: LIBRARY_ID,
-                    userId: firebaseUser.uid,
-                    name: firebaseUser.displayName || 'New Student',
-                    email: firebaseUser.email,
-                    status: 'active',
-                    fibonacciStreak: 0,
-                    paymentDue: 0,
-                    notes: [],
-                    tags: [],
-                    lastInteractionAt: serverTimestamp(),
-                    createdAt: serverTimestamp(),
-                    updatedAt: serverTimestamp(),
-                });
-              }
-              
-              // 3. After creation, re-fetch the document to get the final, consistent state.
-              docSnap = await getDoc(userDocRef);
-              if (!docSnap.exists()) {
-                throw new Error("Fatal: User profile document still does not exist after creation.");
-              }
+              // The user profile is expected to be created atomically during the signup or first demo login.
+              // If it's missing, it represents a critical failure in the application logic.
+              throw new Error(`User profile not found for uid: ${firebaseUser.uid}. The profile should have been created during signup.`);
             }
             
             const profile = docSnap.data() as UserProfileType;
@@ -132,7 +92,8 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
             setAuthState(prev => ({ ...prev, user: firebaseUser, userProfile: profile, role: profile.role as UserRole, isLoading: false, error: null }));
 
           } catch (e) {
-            // Profile fetch/creation failed. Update state, set loading to false, and set the error.
+            // Any failure in this process is a critical error.
+            // Set the error state and stop loading.
             setAuthState(prev => ({ ...prev, user: firebaseUser, userProfile: null, role: null, isLoading: false, error: e instanceof Error ? e : new Error('Failed to resolve user profile') }));
           }
         };

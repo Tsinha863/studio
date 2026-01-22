@@ -10,9 +10,11 @@ import { useRouter } from 'next/navigation';
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  updateProfile,
 } from 'firebase/auth';
 import { FirebaseError } from 'firebase/app';
 import { ArrowLeft } from 'lucide-react';
+import { writeBatch, doc, serverTimestamp } from 'firebase/firestore';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -37,6 +39,7 @@ import { useFirebase } from '@/firebase';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Logo } from '@/components/logo';
 import { Spinner } from '@/components/spinner';
+import { LIBRARY_ID } from '@/lib/config';
 
 const loginSchema = z.object({
   email: z.string().email({ message: 'Please enter a valid email address.' }),
@@ -54,7 +57,7 @@ const DEMO_STUDENT_PASSWORD = 'password123';
 function LoginForm() {
   const router = useRouter();
   const { toast } = useToast();
-  const { auth } = useFirebase();
+  const { auth, firestore } = useFirebase();
   const [isDemoLoading, setIsDemoLoading] = React.useState<
     'admin' | 'student' | null
   >(null);
@@ -81,7 +84,7 @@ function LoginForm() {
 
   // Handler for both demo login buttons
   const handleDemoLogin = async (role: 'admin' | 'student') => {
-    if (!auth) return;
+    if (!auth || !firestore) return;
     setIsDemoLoading(role);
 
     const email = role === 'admin' ? DEMO_ADMIN_EMAIL : DEMO_STUDENT_EMAIL;
@@ -101,8 +104,54 @@ function LoginForm() {
           error.code === 'auth/invalid-credential')
       ) {
         try {
-          await createUserWithEmailAndPassword(auth, email, password);
-          // The FirebaseProvider's onAuthStateChanged will see the new user and create their profile.
+          const userCredential = await createUserWithEmailAndPassword(
+            auth,
+            email,
+            password
+          );
+          const { user } = userCredential;
+
+          const determinedRole = email === DEMO_ADMIN_EMAIL ? 'libraryOwner' : 'student';
+          const name = determinedRole === 'libraryOwner' ? 'Admin' : 'Student';
+
+          const batch = writeBatch(firestore);
+
+          // Create User profile
+          const userDocRef = doc(firestore, `libraries/${LIBRARY_ID}/users`, user.uid);
+          batch.set(userDocRef, {
+            id: user.uid,
+            name: name,
+            email: user.email,
+            role: determinedRole,
+            libraryId: LIBRARY_ID,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+
+          // Create Student profile if role is student
+          if (determinedRole === 'student') {
+            const studentRef = doc(
+              firestore,
+              `libraries/${LIBRARY_ID}/students`,
+              user.uid
+            );
+            batch.set(studentRef, {
+              libraryId: LIBRARY_ID,
+              userId: user.uid,
+              name: name,
+              email: user.email,
+              status: 'active',
+              fibonacciStreak: 0,
+              paymentDue: 0,
+              notes: [],
+              tags: [],
+              lastInteractionAt: serverTimestamp(),
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            });
+          }
+          await batch.commit();
+          await updateProfile(user, { displayName: name });
           router.push('/loading');
         } catch (creationError) {
           handleAuthError(creationError, 'Could not set up demo account.');

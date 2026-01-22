@@ -13,6 +13,7 @@ import {
   updateProfile,
 } from 'firebase/auth';
 import { FirebaseError } from 'firebase/app';
+import { writeBatch, doc, serverTimestamp } from 'firebase/firestore';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -37,6 +38,7 @@ import { useFirebase } from '@/firebase';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Logo } from '@/components/logo';
 import { Spinner } from '@/components/spinner';
+import { LIBRARY_ID } from '@/lib/config';
 
 const signupSchema = z
   .object({
@@ -76,7 +78,7 @@ function SignupForm() {
   } = form;
 
   const onSubmit = async (data: SignupFormValues) => {
-    if (!auth) {
+    if (!auth || !firestore) {
       toast({
         variant: 'destructive',
         title: 'Error',
@@ -88,19 +90,57 @@ function SignupForm() {
 
     try {
       // 1. Create user in Firebase Auth.
-      const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
-      
-      // 2. Set the user's display name from the form data. This ensures the name
-      // is available in the user object for the profile creation step.
-      await updateProfile(userCredential.user, { displayName: data.name });
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        data.email,
+        data.password
+      );
+      const { user } = userCredential;
 
-      // 3. IMPORTANT: Do NOT create the profile here. The FirebaseProvider's onAuthStateChanged
-      // listener will detect the new user and create their profile documents atomically.
-      // This eliminates the race condition that caused the infinite loading screen.
+      // 2. Atomically create the user's profile and student documents in Firestore.
+      const batch = writeBatch(firestore);
+
+      // Create User profile document
+      const userDocRef = doc(firestore, `libraries/${LIBRARY_ID}/users`, user.uid);
+      batch.set(userDocRef, {
+        id: user.uid,
+        name: data.name,
+        email: data.email,
+        role: 'student', // All new signups are students
+        libraryId: LIBRARY_ID,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      // Create Student profile document
+      const studentRef = doc(
+        firestore,
+        `libraries/${LIBRARY_ID}/students`,
+        user.uid
+      );
+      batch.set(studentRef, {
+        libraryId: LIBRARY_ID,
+        userId: user.uid,
+        name: data.name,
+        email: data.email,
+        status: 'active',
+        fibonacciStreak: 0,
+        paymentDue: 0,
+        notes: [],
+        tags: [],
+        lastInteractionAt: serverTimestamp(),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
       
-      // 4. Redirect to the loading page. The provider will now handle routing.
+      // Commit the atomic write.
+      await batch.commit();
+
+      // 3. Update the auth profile's display name for consistency.
+      await updateProfile(user, { displayName: data.name });
+
+      // 4. Redirect. The FirebaseProvider will now find the created profile.
       router.push('/loading');
-
     } catch (error) {
       let title = 'Sign-up failed';
       let description = 'An unexpected error occurred. Please try again.';
@@ -123,7 +163,7 @@ function SignupForm() {
             break;
         }
       }
-      
+
       toast({
         variant: 'destructive',
         title,
