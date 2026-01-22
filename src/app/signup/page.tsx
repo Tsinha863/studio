@@ -10,6 +10,7 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import {
   createUserWithEmailAndPassword,
+  updateProfile,
 } from 'firebase/auth';
 import { FirebaseError } from 'firebase/app';
 
@@ -87,13 +88,17 @@ function SignupForm() {
 
     try {
       // 1. Create user in Firebase Auth.
-      await createUserWithEmailAndPassword(auth, data.email, data.password);
+      const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
       
-      // 2. IMPORTANT: Do NOT create the profile here. The FirebaseProvider's onAuthStateChanged
+      // 2. Set the user's display name from the form data. This ensures the name
+      // is available in the user object for the profile creation step.
+      await updateProfile(userCredential.user, { displayName: data.name });
+
+      // 3. IMPORTANT: Do NOT create the profile here. The FirebaseProvider's onAuthStateChanged
       // listener will detect the new user and create their profile documents atomically.
       // This eliminates the race condition that caused the infinite loading screen.
       
-      // 3. Redirect to the loading page. The provider will now handle routing.
+      // 4. Redirect to the loading page. The provider will now handle routing.
       router.push('/loading');
 
     } catch (error) {

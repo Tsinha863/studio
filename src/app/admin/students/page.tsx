@@ -94,7 +94,7 @@ export default function StudentsPage() {
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
 
-  const { data: students, isLoading, error } = useCollection<Student>(() => {
+  const studentsQuery = React.useMemo(() => {
     if (!firestore || !user) return null;
     const constraints = [];
     if (!showInactive) {
@@ -105,6 +105,8 @@ export default function StudentsPage() {
       ...constraints
     );
   }, [firestore, user, showInactive]);
+
+  const { data: students, isLoading, error } = useCollection<Student>(studentsQuery);
 
   const openModal = React.useCallback((student?: StudentWithId) => setModalState({ isOpen: true, student }), []);
 
@@ -150,35 +152,41 @@ export default function StudentsPage() {
     
     setIsDeleting(true);
 
-    const studentRef = doc(firestore, `libraries/${LIBRARY_ID}/students/${alertState.studentId!}`);
-
     try {
+        // Step 1: Query for the student's future bookings outside the transaction.
+        // It's not permitted to run queries inside a client-side Firestore transaction.
+        const bookingsQuery = query(
+            collection(firestore, `libraries/${LIBRARY_ID}/seatBookings`),
+            where('studentId', '==', alertState.studentId),
+            where('endTime', '>=', Timestamp.now())
+        );
+        const bookingsSnapshot = await getDocs(bookingsQuery);
+        const bookingRefsToDelete = bookingsSnapshot.docs.map(d => d.ref);
+
+        // Step 2: Run the atomic write operations in a transaction.
         await runTransaction(firestore, async (transaction) => {
+          const studentRef = doc(firestore, `libraries/${LIBRARY_ID}/students/${alertState.studentId!}`);
           const studentDoc = await transaction.get(studentRef);
 
-          if (!studentDoc.exists()) throw new Error("Student not found.");
+          if (!studentDoc.exists()) {
+            throw new Error("Student not found. The operation cannot be completed.");
+          }
           
           const studentData = studentDoc.data() as Student;
 
-          // Find and delete all future seat bookings for this student.
-          const bookingsQuery = query(
-              collection(firestore, `libraries/${LIBRARY_ID}/seatBookings`),
-              where('studentId', '==', alertState.studentId),
-              where('endTime', '>=', Timestamp.now())
-          );
-          const bookingsSnapshot = await getDocs(bookingsQuery);
-          bookingsSnapshot.forEach(bookingDoc => {
-              transaction.delete(bookingDoc.ref);
+          // Delete all the future seat bookings found in Step 1.
+          bookingRefsToDelete.forEach(bookingRef => {
+              transaction.delete(bookingRef);
           });
 
-          // Update student to inactive.
+          // Update the student's status to inactive.
           transaction.update(studentRef, {
             status: 'inactive',
             updatedAt: serverTimestamp(),
             lastInteractionAt: serverTimestamp(),
           });
 
-          // Create activity log for the soft delete.
+          // Create an activity log entry for this action.
           const logRef = doc(collection(firestore, `libraries/${LIBRARY_ID}/activityLogs`));
           transaction.set(logRef, {
             libraryId: LIBRARY_ID,
@@ -188,6 +196,7 @@ export default function StudentsPage() {
             timestamp: serverTimestamp(),
           });
         });
+
         toast({
             title: 'Student Archived',
             description: `${alertState.studentName} has been marked as inactive and their future bookings have been cancelled.`,
@@ -195,6 +204,7 @@ export default function StudentsPage() {
         closeDeleteAlert();
     } catch(serverError) {
         if (serverError instanceof FirebaseError && serverError.code === 'permission-denied') {
+          const studentRef = doc(firestore, `libraries/${LIBRARY_ID}/students/${alertState.studentId!}`);
           const permissionError = new FirestorePermissionError({
             path: studentRef.path,
             operation: 'update',
