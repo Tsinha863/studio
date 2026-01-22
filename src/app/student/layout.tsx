@@ -38,6 +38,7 @@ import { Student } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AuthGuard } from '@/components/auth/auth-guard';
 import { doc } from 'firebase/firestore';
+import { useToast } from '@/hooks/use-toast';
 
 // TODO: Replace with actual logged-in user's library
 const HARDCODED_LIBRARY_ID = 'library1';
@@ -142,6 +143,7 @@ export default function StudentLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const { toast } = useToast();
   return (
     <AuthGuard requiredRole="student">
       <SidebarProvider>
@@ -153,7 +155,17 @@ export default function StudentLayout({
                       <div className="flex-1">
                           {/* Can add breadcrumbs or page title here */}
                       </div>
-                      <Button variant="ghost" size="icon" className="rounded-full">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="rounded-full"
+                        onClick={() => {
+                          toast({
+                            title: 'Notifications',
+                            description: 'This feature is not yet implemented.',
+                          });
+                        }}
+                      >
                           <Bell className="h-5 w-5" />
                           <span className="sr-only">Toggle notifications</span>
                       </Button>

@@ -41,6 +41,7 @@ import { Logo } from '@/components/logo';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import Link from 'next/link';
 import { AuthGuard } from '@/components/auth/auth-guard';
+import { useToast } from '@/hooks/use-toast';
 
 function UserMenu() {
   const userAvatar = PlaceHolderImages.find((p) => p.id === 'user-avatar');
@@ -171,6 +172,7 @@ export default function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const { toast } = useToast();
   return (
     <AuthGuard requiredRole="libraryOwner">
       <SidebarProvider>
@@ -182,7 +184,17 @@ export default function AdminLayout({
                       <div className="flex-1">
                           {/* Can add breadcrumbs or page title here */}
                       </div>
-                      <Button variant="ghost" size="icon" className="rounded-full">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="rounded-full"
+                        onClick={() => {
+                          toast({
+                            title: 'Notifications',
+                            description: 'This feature is not yet implemented.',
+                          });
+                        }}
+                      >
                           <Bell className="h-5 w-5" />
                           <span className="sr-only">Toggle notifications</span>
                       </Button>
