@@ -10,11 +10,8 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import {
   createUserWithEmailAndPassword,
-  deleteUser,
-  type UserCredential,
 } from 'firebase/auth';
 import { FirebaseError } from 'firebase/app';
-import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -39,7 +36,6 @@ import { useFirebase } from '@/firebase';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Logo } from '@/components/logo';
 import { Spinner } from '@/components/spinner';
-import { ensureUserProfile } from '@/lib/user-profile';
 
 const signupSchema = z
   .object({
@@ -58,9 +54,6 @@ const signupSchema = z
   });
 
 type SignupFormValues = z.infer<typeof signupSchema>;
-
-// TODO: Replace with actual logged-in user's library
-const HARDCODED_LIBRARY_ID = 'library1';
 
 function SignupForm() {
   const router = useRouter();
@@ -82,7 +75,7 @@ function SignupForm() {
   } = form;
 
   const onSubmit = async (data: SignupFormValues) => {
-    if (!auth || !firestore) {
+    if (!auth) {
       toast({
         variant: 'destructive',
         title: 'Error',
@@ -92,64 +85,18 @@ function SignupForm() {
       return;
     }
 
-    let userCredential: UserCredential | undefined = undefined;
-
     try {
-      // 1. Create user in Firebase Auth
-      userCredential = await createUserWithEmailAndPassword(
-        auth,
-        data.email,
-        data.password
-      );
-      const user = userCredential.user;
-
-      // 2. GUARANTEE user profile exists.
-      await ensureUserProfile({
-        db: firestore,
-        uid: user.uid,
-        email: user.email,
-        role: 'student', // All signups are students
-        libraryId: HARDCODED_LIBRARY_ID,
-      });
-
-      // 3. Create the student profile document
-      const studentRef = doc(
-        firestore,
-        `libraries/${HARDCODED_LIBRARY_ID}/students`,
-        user.uid
-      );
-      await setDoc(studentRef, {
-        libraryId: HARDCODED_LIBRARY_ID,
-        userId: user.uid,
-        name: data.name,
-        email: data.email,
-        status: 'active',
-        fibonacciStreak: 0,
-        paymentDue: 0,
-        notes: [],
-        tags: [],
-        lastInteractionAt: serverTimestamp(),
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-
-      // 4. Redirect to loading page for role-based routing
+      // 1. Create user in Firebase Auth.
+      await createUserWithEmailAndPassword(auth, data.email, data.password);
+      
+      // 2. IMPORTANT: Do NOT create the profile here. The FirebaseProvider's onAuthStateChanged
+      // listener will detect the new user and create their profile documents atomically.
+      // This eliminates the race condition that caused the infinite loading screen.
+      
+      // 3. Redirect to the loading page. The provider will now handle routing.
       router.push('/loading');
-    } catch (error) {
-      // If ANY of the above awaits fail after Auth user is created, roll back.
-      if (userCredential) {
-        await deleteUser(userCredential.user).catch((deleteError) => {
-          console.error('Failed to rollback Auth user creation:', deleteError);
-          toast({
-            variant: 'destructive',
-            title: 'Incomplete Signup',
-            description:
-              'Your account was created but profile setup failed. Please contact support.',
-            duration: 10000,
-          });
-        });
-      }
 
+    } catch (error) {
       let title = 'Sign-up failed';
       let description = 'An unexpected error occurred. Please try again.';
 
@@ -165,15 +112,13 @@ function SignupForm() {
             description =
               'The password is not strong enough. Please choose a stronger password.';
             break;
+
           default:
             description = error.message;
             break;
         }
-      } else if (error instanceof Error) {
-        // Handle errors from ensureUserProfile or setDoc for student profile
-        description = `Could not save your profile: ${error.message}`;
       }
-
+      
       toast({
         variant: 'destructive',
         title,

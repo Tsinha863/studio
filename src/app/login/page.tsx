@@ -10,11 +10,8 @@ import { useRouter } from 'next/navigation';
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
-  deleteUser,
-  type UserCredential,
 } from 'firebase/auth';
 import { FirebaseError } from 'firebase/app';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { ArrowLeft } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -40,7 +37,6 @@ import { useFirebase } from '@/firebase';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Logo } from '@/components/logo';
 import { Spinner } from '@/components/spinner';
-import { ensureUserProfile } from '@/lib/user-profile';
 
 const loginSchema = z.object({
   email: z.string().email({ message: 'Please enter a valid email address.' }),
@@ -54,12 +50,11 @@ const DEMO_ADMIN_EMAIL = 'admin@campushub.com';
 const DEMO_ADMIN_PASSWORD = 'password123';
 const DEMO_STUDENT_EMAIL = 'student@campushub.com';
 const DEMO_STUDENT_PASSWORD = 'password123';
-const HARDCODED_LIBRARY_ID = 'library1';
 
 function LoginForm() {
   const router = useRouter();
   const { toast } = useToast();
-  const { auth, firestore } = useFirebase();
+  const { auth } = useFirebase();
   const [isDemoLoading, setIsDemoLoading] = React.useState<
     'admin' | 'student' | null
   >(null);
@@ -86,92 +81,30 @@ function LoginForm() {
 
   // Handler for both demo login buttons
   const handleDemoLogin = async (role: 'admin' | 'student') => {
-    if (!auth || !firestore) return;
+    if (!auth) return;
     setIsDemoLoading(role);
 
     const email = role === 'admin' ? DEMO_ADMIN_EMAIL : DEMO_STUDENT_EMAIL;
     const password =
       role === 'admin' ? DEMO_ADMIN_PASSWORD : DEMO_STUDENT_PASSWORD;
-    const userRole = role === 'admin' ? 'libraryOwner' : 'student';
 
     try {
-      // 1. Attempt to sign in
-      const userCredential = await signInWithEmailAndPassword(
-        auth,
-        email,
-        password
-      );
-
-      // 2. Guarantee user profile exists after sign-in
-      await ensureUserProfile({
-        db: firestore,
-        uid: userCredential.user.uid,
-        email: userCredential.user.email,
-        role: userRole,
-        libraryId: HARDCODED_LIBRARY_ID,
-      });
-
+      // 1. Attempt to sign in.
+      await signInWithEmailAndPassword(auth, email, password);
+      // The FirebaseProvider will handle profile healing if needed.
       router.push('/loading');
     } catch (error) {
-      // 3. If user does not exist, create them and their necessary documents
+      // 2. If user does not exist, create them. The provider will handle the profile.
       if (
         error instanceof FirebaseError &&
         (error.code === 'auth/user-not-found' ||
           error.code === 'auth/invalid-credential')
       ) {
-        let newUserCredential: UserCredential | undefined;
         try {
-          // Create Auth user
-          newUserCredential = await createUserWithEmailAndPassword(
-            auth,
-            email,
-            password
-          );
-          const user = newUserCredential.user;
-
-          // GUARANTEE user profile exists.
-          await ensureUserProfile({
-            db: firestore,
-            uid: user.uid,
-            email: user.email,
-            role: userRole,
-            libraryId: HARDCODED_LIBRARY_ID,
-          });
-
-          // Create student profile document if it's a student demo
-          if (role === 'student') {
-            const studentRef = doc(
-              firestore,
-              `libraries/${HARDCODED_LIBRARY_ID}/students`,
-              user.uid
-            );
-            await setDoc(studentRef, {
-              libraryId: HARDCODED_LIBRARY_ID,
-              userId: user.uid,
-              name: 'Demo Student',
-              email: user.email,
-              status: 'active',
-              fibonacciStreak: 5,
-              paymentDue: 0,
-              notes: [],
-              tags: [],
-              lastInteractionAt: serverTimestamp(),
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp(),
-            });
-          }
-
+          await createUserWithEmailAndPassword(auth, email, password);
+          // The FirebaseProvider's onAuthStateChanged will see the new user and create their profile.
           router.push('/loading');
         } catch (creationError) {
-          // CRITICAL: Rollback Auth user creation if Firestore operations fail
-          if (newUserCredential) {
-            await deleteUser(newUserCredential.user).catch((deleteErr) => {
-              console.error(
-                'Failed to rollback demo user creation:',
-                deleteErr
-              );
-            });
-          }
           handleAuthError(creationError, 'Could not set up demo account.');
         }
       } else {

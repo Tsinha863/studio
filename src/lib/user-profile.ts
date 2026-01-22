@@ -18,6 +18,7 @@ type Role = (typeof VALID_ROLES)[number];
  * @param {object} params - The user profile parameters.
  * @param {string} params.uid - The user's UID.
  * @param {string | null} params.email - The user's email.
+ * @param {string} params.name - The user's display name.
  * @param {'libraryOwner' | 'student'} params.role - The user's role.
  * @param {string} params.libraryId - The ID of the library.
  */
@@ -25,12 +26,14 @@ export async function ensureUserProfile({
   db,
   uid,
   email,
+  name,
   role,
   libraryId,
 }: {
   db: Firestore;
   uid: string;
   email: string | null;
+  name: string | null;
   role: Role;
   libraryId: string;
 }) {
@@ -49,6 +52,7 @@ export async function ensureUserProfile({
     try {
       await setDoc(userRef, {
         id: uid,
+        name: name || 'Unnamed User',
         email,
         role,
         libraryId,
