@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -62,11 +63,12 @@ export function ReceiptDialog({
         });
         const imgData = canvas.toDataURL('image/png');
 
-        // Sanitize the filename to prevent any potential path traversal issues.
+        // Sanitize the filename to prevent any potential path traversal issues or DoS vectors.
         const safeStudentName = (studentName || 'student')
             .replace(/[^a-zA-Z0-9\s-]/g, '') // Allow only safe characters
             .trim()
-            .replace(/\s+/g, '_'); // Replace spaces with underscores
+            .replace(/\s+/g, '_') // Replace spaces with underscores
+            .slice(0, 50); // Truncate to prevent excessively long filenames.
         const fileName = `receipt-${safeStudentName}-${Date.now()}`;
 
         if (format === 'pdf') {
