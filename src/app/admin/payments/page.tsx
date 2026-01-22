@@ -17,7 +17,6 @@ import {
   getDocs,
   runTransaction,
   increment,
-  getDoc,
 } from 'firebase/firestore';
 import {
   useReactTable,
@@ -238,7 +237,7 @@ export default function PaymentsPage() {
 
     const transactionPromise = runTransaction(firestore, async (transaction) => {
       const paymentRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/payments/${payment.id}`);
-      const studentRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students/${payment.studentId}`);
+      const studentRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students/${payment.studentId!}`);
       
       const [paymentDoc, studentDoc] = await Promise.all([
         transaction.get(paymentRef),
@@ -249,7 +248,7 @@ export default function PaymentsPage() {
       if (!studentDoc.exists()) throw new Error('Student document not found.');
       
       const paymentData = paymentDoc.data() as Payment;
-      if (paymentData.status === 'paid') return; // Idempotent
+      if (paymentData.status === 'paid') return { studentBeforeUpdate: studentDoc.data() as Student, wasOverdue: false, alreadyPaid: true }; 
       
       const wasOverdue = paymentData.status === 'overdue';
 
@@ -281,35 +280,34 @@ export default function PaymentsPage() {
         },
         timestamp: serverTimestamp(),
       });
+      
+      return { studentBeforeUpdate: studentDoc.data() as Student, wasOverdue, alreadyPaid: false };
     });
 
-    transactionPromise.then(async () => {
-        // This now runs after transaction is successful
-        const studentRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students/${payment.studentId!}`);
-        const studentDoc = await getDoc(studentRef);
+    transactionPromise.then(async ({ studentBeforeUpdate, wasOverdue, alreadyPaid }) => {
+        if (alreadyPaid) return;
 
-        if (studentDoc.exists()) {
-            const student = studentDoc.data() as Student;
-            const receiptInput = {
-                studentName: student.name,
-                paymentAmount: payment.amount,
-                paymentDate: new Date().toISOString().split('T')[0],
-                fibonacciStreak: student.fibonacciStreak || 0,
-                studentStatus: 'active',
-                paymentId: payment.id,
-            };
-            
-            try {
-                const { receiptText } = await generateSimulatedReceipt(receiptInput);
-                setReceiptState({ isOpen: true, receiptText, studentName: student.name });
-            } catch (e) {
-                console.error("Receipt generation failed:", e);
-                toast({
-                    variant: "destructive",
-                    title: "Receipt Generation Failed",
-                    description: "Could not generate AI receipt, but payment was recorded."
-                })
-            }
+        const newFibonacciStreak = wasOverdue ? 0 : (studentBeforeUpdate.fibonacciStreak || 0) + 1;
+        
+        const receiptInput = {
+            studentName: studentBeforeUpdate.name,
+            paymentAmount: payment.amount,
+            paymentDate: new Date().toISOString().split('T')[0],
+            fibonacciStreak: newFibonacciStreak,
+            studentStatus: 'active',
+            paymentId: payment.id,
+        };
+        
+        try {
+            const { receiptText } = await generateSimulatedReceipt(receiptInput);
+            setReceiptState({ isOpen: true, receiptText, studentName: studentBeforeUpdate.name });
+        } catch (e) {
+            console.error("Receipt generation failed:", e);
+            toast({
+                variant: "destructive",
+                title: "Receipt Generation Failed",
+                description: "Could not generate AI receipt, but payment was recorded."
+            })
         }
     }).catch(error => {
       console.error("MARK AS PAID ERROR:", error);
