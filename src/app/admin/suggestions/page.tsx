@@ -73,7 +73,8 @@ export default function SuggestionsPage() {
     if (!suggestions) return [];
     return suggestions.map((s) => ({
       ...s,
-      // studentName is now denormalized on the suggestion document.
+      // studentName is denormalized on the suggestion document.
+      // Fallback for any legacy data that might not have it.
       studentName: s.studentName || 'Unknown Student',
     }));
   }, [suggestions]);
@@ -239,5 +240,7 @@ export default function SuggestionsPage() {
     </div>
   );
 }
+
+    
 
     

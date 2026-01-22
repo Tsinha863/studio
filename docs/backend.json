@@ -521,6 +521,10 @@
           "type": "string",
           "description": "Reference to Student. (Relationship: Student 1:N Suggestion). Identifies the student who submitted the suggestion."
         },
+        "studentName": {
+          "type": "string",
+          "description": "Denormalized name of the student for easier display."
+        },
         "content": {
           "type": "string",
           "description": "Content of the suggestion."
@@ -940,3 +944,5 @@
     "reasoning": "The Firestore structure is designed for a multi-tenant library system, prioritizing strict library isolation and role-based access control. The core principle is Authorization Independence achieved through the denormalization of the `libraryId` in every document. This eliminates the need for `get()` calls in security rules, simplifying the rules and ensuring atomic operations. The structure uses structural segregation by storing data with different access requirements in separate collections, which also helps with list operation QAPs. Access is modeled based on path-based ownership for user-specific data and a global role-based access control (DBAC) with dedicated collections for admin users. The explicit state modeling utilizes the status filed (e.g., for suggestions)."
   }
 }
+
+    
