@@ -10,6 +10,7 @@ import {
   doc,
   serverTimestamp,
 } from 'firebase/firestore';
+import { FirebaseError } from 'firebase/app';
 import {
   useReactTable,
   getCoreRowModel,
@@ -43,12 +44,13 @@ import {
 import { Input } from '@/components/ui/input';
 import { DataTablePagination } from '@/components/ui/data-table-pagination';
 import { useToast } from '@/hooks/use-toast';
-import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
+import { useCollection, useFirebase, useMemoFirebase, errorEmitter } from '@/firebase';
 import type { Announcement } from '@/lib/types';
 import { columns as announcementColumns } from '@/components/admin/announcements/columns';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/spinner';
 import { LIBRARY_ID } from '@/lib/config';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 const DataTable = dynamic(() => import('@/components/ui/data-table').then(mod => mod.DataTable), { 
     ssr: false,
@@ -91,7 +93,7 @@ export default function AnnouncementsPage() {
     );
   }, [firestore, user]);
 
-  const { data: announcements, isLoading } = useCollection<Announcement>(announcementsQuery);
+  const { data: announcements, isLoading, error } = useCollection<Announcement>(announcementsQuery);
 
   const openDeleteAlert = React.useCallback((announcement: AnnouncementWithId) =>
     setAlertState({ isOpen: true, announcementId: announcement.id }), []);
@@ -122,7 +124,7 @@ export default function AnnouncementsPage() {
   const closeDeleteAlert = () =>
     setAlertState({ isOpen: false, announcementId: undefined });
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (!alertState.announcementId || !user || !firestore) {
       toast({
         variant: 'destructive',
@@ -134,38 +136,46 @@ export default function AnnouncementsPage() {
     
     setIsSubmitting(true);
     
-    try {
-      const batch = writeBatch(firestore);
-      const actor = { id: user.uid, name: user.displayName || 'Admin' };
-      const announcementRef = doc(firestore, `libraries/${LIBRARY_ID}/announcements/${alertState.announcementId}`);
-      
-      batch.delete(announcementRef);
-  
-      const logRef = doc(collection(firestore, `libraries/${LIBRARY_ID}/activityLogs`));
-      batch.set(logRef, {
-        libraryId: LIBRARY_ID,
-        user: actor,
-        activityType: 'announcement_deleted',
-        details: { announcementId: alertState.announcementId },
-        timestamp: serverTimestamp(),
-      });
-  
-      await batch.commit();
+    const batch = writeBatch(firestore);
+    const actor = { id: user.uid, name: user.displayName || 'Admin' };
+    const announcementRef = doc(firestore, `libraries/${LIBRARY_ID}/announcements/${alertState.announcementId}`);
+    
+    batch.delete(announcementRef);
 
-      toast({
-        title: 'Announcement Deleted',
-        description: 'The announcement has been removed.',
+    const logRef = doc(collection(firestore, `libraries/${LIBRARY_ID}/activityLogs`));
+    batch.set(logRef, {
+      libraryId: LIBRARY_ID,
+      user: actor,
+      activityType: 'announcement_deleted',
+      details: { announcementId: alertState.announcementId },
+      timestamp: serverTimestamp(),
+    });
+
+    batch.commit()
+      .then(() => {
+        toast({
+          title: 'Announcement Deleted',
+          description: 'The announcement has been removed.',
+        });
+      })
+      .catch((serverError) => {
+        if (serverError instanceof FirebaseError && serverError.code === 'permission-denied') {
+          const permissionError = new FirestorePermissionError({
+            path: announcementRef.path,
+            operation: 'delete',
+          });
+          errorEmitter.emit('permission-error', permissionError);
+        }
+        toast({
+          variant: 'destructive',
+          title: 'Deletion Failed',
+          description: serverError instanceof Error ? serverError.message : 'Could not delete the announcement.',
+        });
+      })
+      .finally(() => {
+        setIsSubmitting(false);
+        closeDeleteAlert();
       });
-    } catch (error) {
-       toast({
-        variant: 'destructive',
-        title: 'Deletion Failed',
-        description: error instanceof Error ? error.message : 'Could not delete the announcement.',
-      });
-    } finally {
-      setIsSubmitting(false);
-      closeDeleteAlert();
-    }
   };
 
   return (
@@ -196,6 +206,7 @@ export default function AnnouncementsPage() {
               className="w-full sm:max-w-sm"
             />
           </div>
+           {error && <p className="text-sm font-medium text-destructive">Error loading announcements: {error.message}</p>}
           <DataTable
             table={table}
             columns={memoizedColumns}

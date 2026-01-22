@@ -8,7 +8,9 @@ import {
   writeBatch,
   runTransaction,
 } from 'firebase/firestore';
-import { useFirebase } from '@/firebase';
+import { FirebaseError } from 'firebase/app';
+
+import { useFirebase, errorEmitter } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -23,6 +25,7 @@ import type { Student } from '@/lib/types';
 import { studentFormSchema, type StudentFormValues } from '@/lib/schemas';
 import { Spinner } from '@/components/spinner';
 import { Label } from '@/components/ui/label';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 type StudentWithId = Student & { id: string };
 
@@ -58,7 +61,7 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
     }
   }, [student]);
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     if (!firestore || !user) {
       toast({
         variant: 'destructive',
@@ -85,76 +88,110 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
     }
 
     setIsSubmitting(true);
+    
+    const actor = { id: user.uid, name: user.displayName || 'Admin' };
+    const isUpdate = !!student?.id;
 
-    try {
-        const actor = { id: user.uid, name: user.displayName || 'Admin' };
-        
-        if (student?.id) { // UPDATE logic
-            const batch = writeBatch(firestore);
-            const studentRef = doc(firestore, `libraries/${libraryId}/students/${student.id}`);
-            const { id, ...dataToUpdate } = validation.data;
-            
-            batch.update(studentRef, {
-              ...dataToUpdate,
-              lastInteractionAt: serverTimestamp(),
-              updatedAt: serverTimestamp(),
-            });
-        
-            const logRef = doc(collection(firestore, `libraries/${libraryId}/activityLogs`));
-            batch.set(logRef, {
-              libraryId,
-              user: actor,
-              activityType: 'student_updated',
-              details: { studentId: student.id, studentName: validation.data.name || 'N/A' },
-              timestamp: serverTimestamp(),
-            });
-
-            await batch.commit();
-
-        } else { // CREATE logic must be atomic.
-            await runTransaction(firestore, async (transaction) => {
-                const validatedData = validation.data as StudentFormValues;
-                const newStudentRef = doc(firestore, `libraries/${libraryId}/students`, validatedData.id);
-                const logRef = doc(collection(firestore, `libraries/${libraryId}/activityLogs`));
-
-                const studentDoc = await transaction.get(newStudentRef);
-                if (studentDoc.exists()) {
-                    throw new Error(`A student with ID ${validatedData.id} already exists.`);
-                }
-
-                const { id, ...dataToSave } = validatedData;
-                transaction.set(newStudentRef, {
-                    ...dataToSave,
-                    libraryId,
-                    fibonacciStreak: 0,
-                    paymentDue: 0,
-                    notes: [],
-                    tags: [],
-                    lastInteractionAt: serverTimestamp(),
-                    createdAt: serverTimestamp(),
-                    updatedAt: serverTimestamp(),
-                });
-            
-                transaction.set(logRef, {
-                    libraryId,
-                    user: actor,
-                    activityType: 'student_created',
-                    details: { studentId: validatedData.id, studentName: validatedData.name },
-                    timestamp: serverTimestamp(),
-                });
-            });
-        }
-        
-        onSuccess();
-
-    } catch (error) {
-        toast({
-            variant: "destructive",
-            title: "An unexpected error occurred",
-            description: error instanceof Error ? error.message : "The operation failed. Please try again."
+    if (isUpdate) { // UPDATE logic
+        const batch = writeBatch(firestore);
+        const studentRef = doc(firestore, `libraries/${libraryId}/students/${student.id}`);
+        const { id, ...dataToUpdate } = validation.data;
+        const payload = {
+          ...dataToUpdate,
+          lastInteractionAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        };
+        batch.update(studentRef, payload);
+    
+        const logRef = doc(collection(firestore, `libraries/${libraryId}/activityLogs`));
+        batch.set(logRef, {
+          libraryId,
+          user: actor,
+          activityType: 'student_updated',
+          details: { studentId: student.id, studentName: validation.data.name || 'N/A' },
+          timestamp: serverTimestamp(),
         });
-    } finally {
-      setIsSubmitting(false);
+
+        batch.commit()
+          .then(onSuccess)
+          .catch((serverError) => {
+            if (serverError instanceof FirebaseError && serverError.code === 'permission-denied') {
+              const permissionError = new FirestorePermissionError({
+                path: studentRef.path,
+                operation: 'update',
+                requestResourceData: payload,
+              });
+              errorEmitter.emit('permission-error', permissionError);
+            }
+            toast({
+                variant: "destructive",
+                title: "Update Failed",
+                description: serverError instanceof Error ? serverError.message : "The operation failed. Please try again."
+            });
+          })
+          .finally(() => setIsSubmitting(false));
+
+    } else { // CREATE logic must be atomic.
+        const validatedData = validation.data as StudentFormValues;
+        const payload = {
+            ...validatedData,
+            libraryId,
+            fibonacciStreak: 0,
+            paymentDue: 0,
+            notes: [],
+            tags: [],
+            lastInteractionAt: serverTimestamp(),
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        };
+
+        runTransaction(firestore, async (transaction) => {
+            const newStudentRef = doc(firestore, `libraries/${libraryId}/students`, validatedData.id);
+            const logRef = doc(collection(firestore, `libraries/${libraryId}/activityLogs`));
+
+            const studentDoc = await transaction.get(newStudentRef);
+            if (studentDoc.exists()) {
+                throw new Error(`A student with ID ${validatedData.id} already exists.`);
+            }
+
+            const { id, ...dataToSave } = validatedData;
+            transaction.set(newStudentRef, {
+                ...dataToSave,
+                libraryId,
+                fibonacciStreak: 0,
+                paymentDue: 0,
+                notes: [],
+                tags: [],
+                lastInteractionAt: serverTimestamp(),
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+            });
+        
+            transaction.set(logRef, {
+                libraryId,
+                user: actor,
+                activityType: 'student_created',
+                details: { studentId: validatedData.id, studentName: validatedData.name },
+                timestamp: serverTimestamp(),
+            });
+        })
+        .then(onSuccess)
+        .catch((serverError) => {
+          if (serverError instanceof FirebaseError && serverError.code === 'permission-denied') {
+            const permissionError = new FirestorePermissionError({
+              path: `libraries/${libraryId}/students/${validatedData.id}`,
+              operation: 'create',
+              requestResourceData: payload,
+            });
+            errorEmitter.emit('permission-error', permissionError);
+          }
+          toast({
+              variant: "destructive",
+              title: "An unexpected error occurred",
+              description: serverError instanceof Error ? serverError.message : "The operation failed. Please try again."
+          });
+        })
+        .finally(() => setIsSubmitting(false));
     }
   };
 

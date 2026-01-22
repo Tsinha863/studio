@@ -11,6 +11,7 @@ import {
   doc,
   serverTimestamp,
 } from 'firebase/firestore';
+import { FirebaseError } from 'firebase/app';
 import {
   useReactTable,
   getCoreRowModel,
@@ -43,12 +44,13 @@ import {
 import { Input } from '@/components/ui/input';
 import { DataTablePagination } from '@/components/ui/data-table-pagination';
 import { useToast } from '@/hooks/use-toast';
-import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
+import { useCollection, useFirebase, useMemoFirebase, errorEmitter } from '@/firebase';
 import type { Expense } from '@/lib/types';
 import { columns as expenseColumns } from '@/components/admin/expenses/columns';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/spinner';
 import { LIBRARY_ID } from '@/lib/config';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 const DataTable = dynamic(() => import('@/components/ui/data-table').then(mod => mod.DataTable), { 
     ssr: false,
@@ -92,7 +94,7 @@ export default function ExpensesPage() {
     );
   }, [firestore, user]);
 
-  const { data: expenses, isLoading } = useCollection<Expense>(expensesQuery);
+  const { data: expenses, isLoading, error } = useCollection<Expense>(expensesQuery);
   
   const openModal = React.useCallback((expense?: ExpenseWithId) => setModalState({ isOpen: true, expense }), []);
   
@@ -123,7 +125,7 @@ export default function ExpensesPage() {
   const closeDeleteAlert = () =>
     setAlertState({ isOpen: false, expenseId: undefined });
 
-  const handleDeleteExpense = async () => {
+  const handleDeleteExpense = () => {
     if (!alertState.expenseId || !user || !firestore) {
       toast({
         variant: 'destructive',
@@ -135,38 +137,46 @@ export default function ExpensesPage() {
     
     setIsSubmitting(true);
 
-    try {
-      const batch = writeBatch(firestore);
-      const actor = { id: user.uid, name: user.displayName || 'Admin' };
-      const expenseRef = doc(firestore, `libraries/${LIBRARY_ID}/expenses/${alertState.expenseId}`);
-      
-      batch.delete(expenseRef);
+    const batch = writeBatch(firestore);
+    const actor = { id: user.uid, name: user.displayName || 'Admin' };
+    const expenseRef = doc(firestore, `libraries/${LIBRARY_ID}/expenses/${alertState.expenseId}`);
+    
+    batch.delete(expenseRef);
 
-      const logRef = doc(collection(firestore, `libraries/${LIBRARY_ID}/activityLogs`));
-      batch.set(logRef, {
-        libraryId: LIBRARY_ID,
-        user: actor,
-        activityType: 'expense_deleted',
-        details: { expenseId: alertState.expenseId },
-        timestamp: serverTimestamp(),
-      });
+    const logRef = doc(collection(firestore, `libraries/${LIBRARY_ID}/activityLogs`));
+    batch.set(logRef, {
+      libraryId: LIBRARY_ID,
+      user: actor,
+      activityType: 'expense_deleted',
+      details: { expenseId: alertState.expenseId },
+      timestamp: serverTimestamp(),
+    });
 
-      await batch.commit();
-
-      toast({
-        title: 'Expense Deleted',
-        description: 'The expense has been removed from the system.',
+    batch.commit()
+      .then(() => {
+        toast({
+          title: 'Expense Deleted',
+          description: 'The expense has been removed from the system.',
+        });
+      })
+      .catch((serverError) => {
+        if (serverError instanceof FirebaseError && serverError.code === 'permission-denied') {
+          const permissionError = new FirestorePermissionError({
+            path: expenseRef.path,
+            operation: 'delete',
+          });
+          errorEmitter.emit('permission-error', permissionError);
+        }
+        toast({
+          variant: 'destructive',
+          title: 'Deletion Failed',
+          description: serverError instanceof Error ? serverError.message : 'Could not delete the expense.',
+        });
+      })
+      .finally(() => {
+        setIsSubmitting(false);
+        closeDeleteAlert();
       });
-    } catch (error) {
-      toast({
-        variant: 'destructive',
-        title: 'Deletion Failed',
-        description: error instanceof Error ? error.message : 'Could not delete the expense.',
-      });
-    } finally {
-      setIsSubmitting(false);
-      closeDeleteAlert();
-    }
   };
 
   return (
@@ -197,6 +207,7 @@ export default function ExpensesPage() {
               className="w-full sm:max-w-sm"
             />
           </div>
+           {error && <p className="text-sm font-medium text-destructive">Error loading expenses: {error.message}</p>}
           <DataTable
             table={table}
             columns={memoizedColumns}

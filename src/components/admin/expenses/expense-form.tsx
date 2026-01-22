@@ -9,11 +9,10 @@ import {
   serverTimestamp,
   writeBatch,
   Timestamp,
-  updateDoc,
-  setDoc,
 } from 'firebase/firestore';
+import { FirebaseError } from 'firebase/app';
 
-import { useFirebase } from '@/firebase';
+import { useFirebase, errorEmitter } from '@/firebase';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
@@ -31,6 +30,7 @@ import type { Expense, ExpenseCategory } from '@/lib/types';
 import { expenseFormSchema, type ExpenseFormValues } from '@/lib/schemas';
 import { Spinner } from '@/components/spinner';
 import { Label } from '@/components/ui/label';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 type ExpenseWithId = Expense & { id: string };
 
@@ -68,7 +68,7 @@ export function ExpenseForm({ expense, libraryId, onSuccess, onCancel }: Expense
     }
   }, [expense]);
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     if (!firestore || !user) {
       toast({
         variant: 'destructive',
@@ -99,64 +99,61 @@ export function ExpenseForm({ expense, libraryId, onSuccess, onCancel }: Expense
 
     setIsSubmitting(true);
     
-    try {
-      const actor = { id: user.uid, name: user.displayName || 'Admin' };
-      const { expenseDate: validatedDate, ...expenseData } = validation.data;
-  
-      if (expense?.id) {
-        // Update existing expense
-        const expenseRef = doc(firestore, `libraries/${libraryId}/expenses/${expense.id}`);
-        const batch = writeBatch(firestore);
-        batch.update(expenseRef, {
-          ...expenseData,
-          expenseDate: Timestamp.fromDate(validatedDate),
-          updatedAt: serverTimestamp(),
-        });
-    
-        const logRef = doc(collection(firestore, `libraries/${libraryId}/activityLogs`));
-        batch.set(logRef, {
-          libraryId,
-          user: actor,
-          activityType: 'expense_updated',
-          details: { expenseId: expense.id, newAmount: expenseData.amount },
-          timestamp: serverTimestamp(),
-        });
-        await batch.commit();
+    const actor = { id: user.uid, name: user.displayName || 'Admin' };
+    const { expenseDate: validatedDate, ...expenseData } = validation.data;
+    const isUpdate = !!expense?.id;
 
-      } else {
-        // Create new expense
-        const expenseRef = doc(collection(firestore, `libraries/${libraryId}/expenses`));
-        const batch = writeBatch(firestore);
-        batch.set(expenseRef, {
-          ...expenseData,
-          libraryId,
-          expenseDate: Timestamp.fromDate(validatedDate),
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-    
-        const logRef = doc(collection(firestore, `libraries/${libraryId}/activityLogs`));
-        batch.set(logRef, {
-          libraryId,
-          user: actor,
-          activityType: 'expense_created',
-          details: { amount: expenseData.amount, category: expenseData.category },
-          timestamp: serverTimestamp(),
-        });
-        await batch.commit();
-      }
+    const expenseRef = isUpdate
+      ? doc(firestore, `libraries/${libraryId}/expenses/${expense.id}`)
+      : doc(collection(firestore, `libraries/${libraryId}/expenses`));
 
-      onSuccess();
+    const payload = {
+        ...expenseData,
+        libraryId,
+        expenseDate: Timestamp.fromDate(validatedDate),
+        updatedAt: serverTimestamp(),
+        ...(isUpdate ? {} : { createdAt: serverTimestamp() }),
+    };
 
-    } catch (error) {
-       toast({
-        variant: 'destructive',
-        title: 'Save Failed',
-        description: error instanceof Error ? error.message : "Could not save the expense.",
-      });
-    } finally {
-      setIsSubmitting(false);
+    const batch = writeBatch(firestore);
+
+    if (isUpdate) {
+        batch.update(expenseRef, payload);
+    } else {
+        batch.set(expenseRef, payload);
     }
+    
+    const logRef = doc(collection(firestore, `libraries/${libraryId}/activityLogs`));
+    batch.set(logRef, {
+        libraryId,
+        user: actor,
+        activityType: isUpdate ? 'expense_updated' : 'expense_created',
+        details: { expenseId: expenseRef.id, ...expenseData },
+        timestamp: serverTimestamp(),
+    });
+
+    batch.commit()
+      .then(() => {
+        onSuccess();
+      })
+      .catch((serverError) => {
+        if (serverError instanceof FirebaseError && serverError.code === 'permission-denied') {
+          const permissionError = new FirestorePermissionError({
+            path: expenseRef.path,
+            operation: isUpdate ? 'update' : 'create',
+            requestResourceData: payload,
+          });
+          errorEmitter.emit('permission-error', permissionError);
+        }
+        toast({
+          variant: 'destructive',
+          title: 'Save Failed',
+          description: serverError instanceof Error ? serverError.message : "Could not save the expense.",
+        });
+      })
+      .finally(() => {
+        setIsSubmitting(false);
+      });
   };
 
   return (

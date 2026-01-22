@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -98,7 +97,7 @@ export function SeatBookingDialog({
 
   const activeStudents = React.useMemo(() => students.filter(s => s.status !== 'inactive'), [students]);
 
-  const handleBooking = async () => {
+  const handleBooking = () => {
     if (!firestore || !user || !selectedStudentId) {
       toast({ variant: 'destructive', title: 'Error', description: 'Please select a student.' });
       return;
@@ -117,62 +116,70 @@ export function SeatBookingDialog({
         endDateTime = setMinutes(setHours(selectedDate, 21), 0);
     }
     
-    try {
-      await runTransaction(firestore, async (transaction) => {
-        const bookingsRef = collection(firestore, `libraries/${libraryId}/seatBookings`);
-        
-        // 1. Check for overlapping bookings for the same SEAT
-        const seatOverlapQuery = query(bookingsRef, 
-            where('seatId', '==', seat.id),
-            where('roomId', '==', seat.roomId),
-            where('endTime', '>', Timestamp.fromDate(startDateTime))
-        );
-        const seatOverlapSnapshot = await getDocs(seatOverlapQuery);
-        const seatConflicts = seatOverlapSnapshot.docs.filter(doc => doc.data().startTime.toDate() < endDateTime);
-        if (seatConflicts.length > 0) {
-            throw new Error(`This seat is already booked from ${format(seatConflicts[0].data().startTime.toDate(), 'p')} to ${format(seatConflicts[0].data().endTime.toDate(), 'p')}.`);
-        }
+    const bookingPayload = {
+      libraryId,
+      roomId: seat.roomId,
+      seatId: seat.id,
+      studentId: selectedStudentId,
+      studentName: studentToAssign.name,
+      startTime: Timestamp.fromDate(startDateTime),
+      endTime: Timestamp.fromDate(endDateTime),
+      createdAt: serverTimestamp(),
+    };
 
-        // 2. Check for overlapping bookings for the same STUDENT
-        const studentOverlapQuery = query(bookingsRef,
-            where('studentId', '==', selectedStudentId),
-            where('endTime', '>', Timestamp.fromDate(startDateTime))
-        );
-        const studentOverlapSnapshot = await getDocs(studentOverlapQuery);
-        const studentConflicts = studentOverlapSnapshot.docs.filter(doc => doc.data().startTime.toDate() < endDateTime);
-        if (studentConflicts.length > 0) {
-            const conflict = studentConflicts[0].data();
-            throw new Error(`${studentToAssign.name} already has a booking for seat ${conflict.seatId} from ${format(conflict.startTime.toDate(), 'p')} to ${format(conflict.endTime.toDate(), 'p')}.`);
-        }
+    runTransaction(firestore, async (transaction) => {
+      const bookingsRef = collection(firestore, `libraries/${libraryId}/seatBookings`);
+      
+      // 1. Check for overlapping bookings for the same SEAT
+      const seatOverlapQuery = query(bookingsRef, 
+          where('seatId', '==', seat.id),
+          where('roomId', '==', seat.roomId),
+          where('endTime', '>', Timestamp.fromDate(startDateTime))
+      );
+      const seatOverlapSnapshot = await getDocs(seatOverlapQuery);
+      const seatConflicts = seatOverlapSnapshot.docs.filter(doc => doc.data().startTime.toDate() < endDateTime);
+      if (seatConflicts.length > 0) {
+          throw new Error(`This seat is already booked from ${format(seatConflicts[0].data().startTime.toDate(), 'p')} to ${format(seatConflicts[0].data().endTime.toDate(), 'p')}.`);
+      }
 
-        // 3. If no conflicts, create the booking
-        const newBookingRef = doc(bookingsRef);
-        transaction.set(newBookingRef, {
-          libraryId,
-          roomId: seat.roomId,
-          seatId: seat.id,
-          studentId: selectedStudentId,
-          studentName: studentToAssign.name,
-          startTime: Timestamp.fromDate(startDateTime),
-          endTime: Timestamp.fromDate(endDateTime),
-          createdAt: serverTimestamp(),
-        });
-      });
+      // 2. Check for overlapping bookings for the same STUDENT
+      const studentOverlapQuery = query(bookingsRef,
+          where('studentId', '==', selectedStudentId),
+          where('endTime', '>', Timestamp.fromDate(startDateTime))
+      );
+      const studentOverlapSnapshot = await getDocs(studentOverlapQuery);
+      const studentConflicts = studentOverlapSnapshot.docs.filter(doc => doc.data().startTime.toDate() < endDateTime);
+      if (studentConflicts.length > 0) {
+          const conflict = studentConflicts[0].data();
+          throw new Error(`${studentToAssign.name} already has a booking for seat ${conflict.seatId} from ${format(conflict.startTime.toDate(), 'p')} to ${format(conflict.endTime.toDate(), 'p')}.`);
+      }
 
+      // 3. If no conflicts, create the booking
+      const newBookingRef = doc(bookingsRef);
+      transaction.set(newBookingRef, bookingPayload);
+    }).then(() => {
       toast({ title: 'Seat Booked!', description: `Seat ${seat.id} booked for ${studentToAssign.name}.` });
       onSuccess();
-    } catch (error) {
+    }).catch((serverError) => {
+       if (serverError instanceof FirebaseError && serverError.code === 'permission-denied') {
+        const permissionError = new FirestorePermissionError({
+          path: `libraries/${libraryId}/seatBookings`,
+          operation: 'create',
+          requestResourceData: bookingPayload,
+        });
+        errorEmitter.emit('permission-error', permissionError);
+      }
       toast({
         variant: 'destructive',
         title: 'Booking Failed',
-        description: error instanceof Error ? error.message : 'An unknown error occurred.',
+        description: serverError instanceof Error ? serverError.message : 'An unknown error occurred.',
       });
-    } finally {
+    }).finally(() => {
       setIsSubmitting(false);
-    }
+    });
   };
 
-  const handleCancelBooking = async (bookingId: string) => {
+  const handleCancelBooking = (bookingId: string) => {
     if (!firestore || !user) {
       toast({
         variant: 'destructive',
@@ -184,29 +191,30 @@ export function SeatBookingDialog({
     
     setIsCancelling(bookingId);
 
-    try {
-      const bookingRef = doc(firestore, `libraries/${libraryId}/seatBookings`, bookingId);
-      await deleteDoc(bookingRef);
-      
-      toast({ title: 'Booking Cancelled', description: 'The seat is now available for this time slot.' });
-      onSuccess();
-
-    } catch (serverError) {
-      if (serverError instanceof FirebaseError && serverError.code === 'permission-denied') {
-        const permissionError = new FirestorePermissionError({
-          path: `libraries/${libraryId}/seatBookings/${bookingId}`,
-          operation: 'delete',
+    const bookingRef = doc(firestore, `libraries/${libraryId}/seatBookings`, bookingId);
+    
+    deleteDoc(bookingRef)
+      .then(() => {
+        toast({ title: 'Booking Cancelled', description: 'The seat is now available for this time slot.' });
+        onSuccess();
+      })
+      .catch((serverError) => {
+        if (serverError instanceof FirebaseError && serverError.code === 'permission-denied') {
+          const permissionError = new FirestorePermissionError({
+            path: bookingRef.path,
+            operation: 'delete',
+          });
+          errorEmitter.emit('permission-error', permissionError);
+        }
+        toast({
+          variant: 'destructive',
+          title: 'Cancellation Failed',
+          description: serverError instanceof Error ? serverError.message : 'Could not cancel the booking.',
         });
-        errorEmitter.emit('permission-error', permissionError);
-      }
-       toast({
-        variant: 'destructive',
-        title: 'Cancellation Failed',
-        description: serverError instanceof Error ? serverError.message : 'Could not cancel the booking.',
+      })
+      .finally(() => {
+        setIsCancelling(false);
       });
-    } finally {
-      setIsCancelling(false);
-    }
   };
   
   React.useEffect(() => {

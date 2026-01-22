@@ -11,6 +11,7 @@ import {
   serverTimestamp,
   updateDoc,
 } from 'firebase/firestore';
+import { FirebaseError } from 'firebase/app';
 import {
   useReactTable,
   getCoreRowModel,
@@ -23,7 +24,7 @@ import {
 
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
+import { useCollection, useFirebase, useMemoFirebase, errorEmitter } from '@/firebase';
 import type { Suggestion } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { DataTablePagination } from '@/components/ui/data-table-pagination';
@@ -41,6 +42,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/spinner';
 import { LIBRARY_ID } from '@/lib/config';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 const DataTable = dynamic(() => import('@/components/ui/data-table').then(mod => mod.DataTable), { 
     ssr: false,
@@ -70,7 +72,7 @@ export default function SuggestionsPage() {
     );
   }, [firestore, user]);
 
-  const { data: suggestions, isLoading: isLoadingSuggestions } = useCollection<Suggestion>(suggestionsQuery);
+  const { data: suggestions, isLoading: isLoadingSuggestions, error } = useCollection<Suggestion>(suggestionsQuery);
   
   // --- Data Processing ---
   const suggestionsWithDetails = React.useMemo(() => {
@@ -89,23 +91,33 @@ export default function SuggestionsPage() {
     }
 
     const suggestionRef = doc(firestore, `libraries/${LIBRARY_ID}/suggestions/${suggestionId}`);
+    const payload = {
+      status,
+      updatedAt: serverTimestamp(),
+    };
     
-    try {
-      await updateDoc(suggestionRef, {
-        status,
-        updatedAt: serverTimestamp(),
+    updateDoc(suggestionRef, payload)
+      .then(() => {
+        toast({
+          title: 'Status Updated',
+          description: "The suggestion's status has been changed.",
+        });
+      })
+      .catch((serverError) => {
+        if (serverError instanceof FirebaseError && serverError.code === 'permission-denied') {
+          const permissionError = new FirestorePermissionError({
+            path: suggestionRef.path,
+            operation: 'update',
+            requestResourceData: payload,
+          });
+          errorEmitter.emit('permission-error', permissionError);
+        }
+        toast({
+          variant: 'destructive',
+          title: 'Update Failed',
+          description: serverError instanceof Error ? serverError.message : "The status could not be updated.",
+        });
       });
-      toast({
-        title: 'Status Updated',
-        description: "The suggestion's status has been changed.",
-      });
-    } catch (error) {
-       toast({
-        variant: 'destructive',
-        title: 'Update Failed',
-        description: error instanceof Error ? error.message : "The status could not be updated.",
-      });
-    }
   }, [user, firestore, toast]);
 
   const openDeleteAlert = React.useCallback((suggestionId: string) =>
@@ -113,7 +125,7 @@ export default function SuggestionsPage() {
 
   const closeDeleteAlert = () => setAlertState({ isOpen: false, suggestionId: undefined });
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (!alertState.suggestionId || !user || !firestore) {
       toast({ variant: 'destructive', title: 'Error', description: 'User not authenticated or suggestion not found.'});
       return;
@@ -122,37 +134,45 @@ export default function SuggestionsPage() {
     setIsSubmitting(true);
 
     const suggestionRef = doc(firestore, `libraries/${LIBRARY_ID}/suggestions/${alertState.suggestionId}`);
-    try {
-      const batch = writeBatch(firestore);
-      const actor = { id: user.uid, name: user.displayName || 'Admin' };
-      
-      batch.delete(suggestionRef);
-  
-      const logRef = doc(collection(firestore, `libraries/${LIBRARY_ID}/activityLogs`));
-      batch.set(logRef, {
-        libraryId: LIBRARY_ID,
-        user: actor,
-        activityType: 'suggestion_deleted',
-        details: { suggestionId: alertState.suggestionId },
-        timestamp: serverTimestamp(),
-      });
+    const batch = writeBatch(firestore);
+    const actor = { id: user.uid, name: user.displayName || 'Admin' };
+    
+    batch.delete(suggestionRef);
 
-      await batch.commit();
-      toast({
-        title: 'Suggestion Deleted',
-        description: 'The suggestion has been removed.',
-      });
+    const logRef = doc(collection(firestore, `libraries/${LIBRARY_ID}/activityLogs`));
+    batch.set(logRef, {
+      libraryId: LIBRARY_ID,
+      user: actor,
+      activityType: 'suggestion_deleted',
+      details: { suggestionId: alertState.suggestionId },
+      timestamp: serverTimestamp(),
+    });
 
-    } catch (error) {
-      toast({
-        variant: 'destructive',
-        title: 'Deletion Failed',
-        description: error instanceof Error ? error.message : "Could not delete the suggestion.",
+    batch.commit()
+      .then(() => {
+        toast({
+          title: 'Suggestion Deleted',
+          description: 'The suggestion has been removed.',
+        });
+      })
+      .catch((serverError) => {
+        if (serverError instanceof FirebaseError && serverError.code === 'permission-denied') {
+          const permissionError = new FirestorePermissionError({
+            path: suggestionRef.path,
+            operation: 'delete',
+          });
+          errorEmitter.emit('permission-error', permissionError);
+        }
+        toast({
+          variant: 'destructive',
+          title: 'Deletion Failed',
+          description: serverError instanceof Error ? serverError.message : "Could not delete the suggestion.",
+        });
+      })
+      .finally(() => {
+        setIsSubmitting(false);
+        closeDeleteAlert();
       });
-    } finally {
-      setIsSubmitting(false);
-      closeDeleteAlert();
-    }
   };
 
   const memoizedColumns = React.useMemo(
@@ -199,6 +219,7 @@ export default function SuggestionsPage() {
               className="w-full sm:max-w-sm"
             />
           </div>
+          {error && <p className="text-sm font-medium text-destructive">Error loading suggestions: {error.message}</p>}
           <DataTable
             table={table}
             columns={memoizedColumns}

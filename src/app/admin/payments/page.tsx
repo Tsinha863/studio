@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -18,6 +17,7 @@ import {
   runTransaction,
   increment,
 } from 'firebase/firestore';
+import { FirebaseError } from 'firebase/app';
 import {
   useReactTable,
   getCoreRowModel,
@@ -37,9 +37,10 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
+import { useCollection, useFirebase, useMemoFirebase, errorEmitter } from '@/firebase';
 import type { Payment, Student } from '@/lib/types';
 import { generateSimulatedReceipt } from '@/ai/flows/generate-simulated-receipt';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 import { DataTablePagination } from '@/components/ui/data-table-pagination';
 import { columns as paymentColumns } from '@/components/admin/payments/columns';
@@ -88,7 +89,7 @@ export default function PaymentsPage() {
     );
   }, [firestore, user]);
 
-  const { data: payments, isLoading: isLoadingPayments } = useCollection<Payment>(paymentsQuery);
+  const { data: payments, isLoading: isLoadingPayments, error } = useCollection<Payment>(paymentsQuery);
   
   const handleMarkAsPaid = React.useCallback((payment: PaymentWithId) => {
     if (!user || !firestore || !payment.studentId) {
@@ -147,10 +148,11 @@ export default function PaymentsPage() {
         timestamp: serverTimestamp(),
       });
       
-      return { studentBeforeUpdate: studentDoc.data() as Student, wasOverdue, alreadyPaid: false };
+      return { studentBeforeUpdate: studentDoc.data() as Student, wasOverdue, alreadyPaid: false, paymentData };
     });
 
-    transactionPromise.then(async ({ studentBeforeUpdate, wasOverdue, alreadyPaid }) => {
+    transactionPromise
+      .then(async ({ studentBeforeUpdate, wasOverdue, alreadyPaid, paymentData }) => {
         if (alreadyPaid) return;
 
         toast({
@@ -179,11 +181,18 @@ export default function PaymentsPage() {
                 description: "Could not generate AI receipt, but payment was recorded."
             })
         }
-    }).catch(error => {
+    }).catch(serverError => {
+      if (serverError instanceof FirebaseError && serverError.code === 'permission-denied') {
+        const permissionError = new FirestorePermissionError({
+          path: `libraries/${LIBRARY_ID}/payments/${payment.id}`,
+          operation: 'update',
+        });
+        errorEmitter.emit('permission-error', permissionError);
+      }
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: error instanceof Error ? error.message : 'Could not process payment.',
+        description: serverError instanceof Error ? serverError.message : 'Could not process payment.',
       });
     }).finally(() => {
       setIsPaying(false);
@@ -233,7 +242,9 @@ export default function PaymentsPage() {
       const newlyOverdueStudentIds = new Set<string>();
       pendingToOverdueSnapshot.forEach(paymentDoc => {
           batch.update(paymentDoc.ref, { status: 'overdue', updatedAt: serverTimestamp() });
-          newlyOverdueStudentIds.add(paymentDoc.data().studentId);
+          if(paymentDoc.data().studentId) {
+            newlyOverdueStudentIds.add(paymentDoc.data().studentId);
+          }
       });
   
       // 2. Query all students not 'inactive' and all unpaid payments
@@ -297,6 +308,13 @@ export default function PaymentsPage() {
         description: `${createdCount} new payment obligations were created.`,
       });
     } catch(error) {
+       if (error instanceof FirebaseError && error.code === 'permission-denied') {
+        const permissionError = new FirestorePermissionError({
+          path: `libraries/${LIBRARY_ID}/payments`,
+          operation: 'write',
+        });
+        errorEmitter.emit('permission-error', permissionError);
+      }
       toast({
         variant: 'destructive',
         title: 'Error',
@@ -408,6 +426,7 @@ export default function PaymentsPage() {
               </Button>
             )}
           </div>
+          {error && <p className="text-sm font-medium text-destructive">Error loading payments: {error.message}</p>}
           <DataTable
             table={table}
             columns={memoizedColumns}

@@ -3,6 +3,7 @@
 import * as React from 'react';
 import dynamic from 'next/dynamic';
 import { collection, query, orderBy, writeBatch, doc, serverTimestamp } from 'firebase/firestore';
+import { FirebaseError } from 'firebase/app';
 import {
   useReactTable,
   getCoreRowModel,
@@ -13,7 +14,7 @@ import {
   type ColumnFiltersState,
 } from '@tanstack/react-table';
 
-import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
+import { useCollection, useFirebase, useMemoFirebase, errorEmitter } from '@/firebase';
 import type { PrintRequest } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -35,6 +36,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Spinner } from '@/components/spinner';
 import { Skeleton } from '@/components/ui/skeleton';
 import { LIBRARY_ID } from '@/lib/config';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 const DataTable = dynamic(() => import('@/components/ui/data-table').then(mod => mod.DataTable), { 
     ssr: false,
@@ -65,7 +67,7 @@ export default function PrintRequestsPage() {
     );
   }, [firestore, user]);
 
-  const { data: requests, isLoading } = useCollection<PrintRequest>(requestsQuery);
+  const { data: requests, isLoading, error } = useCollection<PrintRequest>(requestsQuery);
 
   const handleStatusUpdate = React.useCallback(async (requestId: string, newStatus: 'Approved' | 'Rejected', reason?: string) => {
     if (!user || !firestore) {
@@ -75,50 +77,58 @@ export default function PrintRequestsPage() {
     
     setIsSubmitting(true);
     
-    try {
-      const requestRef = doc(firestore, `libraries/${LIBRARY_ID}/printRequests`, requestId);
-      const batch = writeBatch(firestore);
-      const actor = { id: user.uid, name: user.displayName || 'Admin' };
-      
-      const updateData: any = {
-          status: newStatus,
-          updatedAt: serverTimestamp(),
-      };
-      if (newStatus === 'Rejected' && reason) {
-          updateData.rejectionReason = reason;
-      }
-
-      batch.update(requestRef, updateData);
-
-      const logRef = doc(collection(firestore, `libraries/${LIBRARY_ID}/activityLogs`));
-      batch.set(logRef, {
-          libraryId: LIBRARY_ID,
-          user: actor,
-          activityType: newStatus === 'Approved' ? 'print_request_approved' : 'print_request_rejected',
-          details: { requestId, reason: reason || null },
-          timestamp: serverTimestamp(),
-      });
-      
-      await batch.commit();
-
-      toast({
-          title: `Request ${newStatus}`,
-          description: 'The print request has been updated.',
-      });
-
-    } catch (serverError) {
-      toast({
-        variant: 'destructive',
-        title: 'Update Failed',
-        description: serverError instanceof Error ? serverError.message : 'Could not update the request.',
-      });
-    } finally {
-        setIsSubmitting(false);
-        if (newStatus === 'Rejected') {
-            setRejectionDialog({ isOpen: false });
-            setRejectionReason('');
-        }
+    const requestRef = doc(firestore, `libraries/${LIBRARY_ID}/printRequests`, requestId);
+    const batch = writeBatch(firestore);
+    const actor = { id: user.uid, name: user.displayName || 'Admin' };
+    
+    const updateData: any = {
+        status: newStatus,
+        updatedAt: serverTimestamp(),
+    };
+    if (newStatus === 'Rejected' && reason) {
+        updateData.rejectionReason = reason;
     }
+
+    batch.update(requestRef, updateData);
+
+    const logRef = doc(collection(firestore, `libraries/${LIBRARY_ID}/activityLogs`));
+    batch.set(logRef, {
+        libraryId: LIBRARY_ID,
+        user: actor,
+        activityType: newStatus === 'Approved' ? 'print_request_approved' : 'print_request_rejected',
+        details: { requestId, reason: reason || null },
+        timestamp: serverTimestamp(),
+    });
+    
+    batch.commit()
+      .then(() => {
+        toast({
+            title: `Request ${newStatus}`,
+            description: 'The print request has been updated.',
+        });
+      })
+      .catch((serverError) => {
+        if (serverError instanceof FirebaseError && serverError.code === 'permission-denied') {
+          const permissionError = new FirestorePermissionError({
+            path: requestRef.path,
+            operation: 'update',
+            requestResourceData: updateData,
+          });
+          errorEmitter.emit('permission-error', permissionError);
+        }
+        toast({
+          variant: 'destructive',
+          title: 'Update Failed',
+          description: serverError instanceof Error ? serverError.message : 'Could not update the request.',
+        });
+      })
+      .finally(() => {
+          setIsSubmitting(false);
+          if (newStatus === 'Rejected') {
+              setRejectionDialog({ isOpen: false });
+              setRejectionReason('');
+          }
+      });
   }, [user, firestore, toast]);
 
   const approveRequest = React.useCallback((requestId: string) => {
@@ -177,6 +187,7 @@ export default function PrintRequestsPage() {
               className="w-full sm:max-w-sm"
             />
           </div>
+          {error && <p className="text-sm font-medium text-destructive">Error loading print requests: {error.message}</p>}
           <DataTable
             table={table}
             columns={memoizedColumns}

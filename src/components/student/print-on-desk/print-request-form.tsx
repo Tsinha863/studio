@@ -4,10 +4,11 @@ import * as React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { doc, collection, writeBatch, serverTimestamp, query, where, getDocs, limit, Timestamp } from 'firebase/firestore';
+import { FirebaseError } from 'firebase/app';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Paperclip } from 'lucide-react';
 
-import { useFirebase, useStorage } from '@/firebase';
+import { useFirebase, useStorage, errorEmitter } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { printRequestFormSchema, type PrintRequestFormValues } from '@/lib/schemas';
 import type { Student } from '@/lib/types';
@@ -25,6 +26,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/spinner';
 import { Skeleton } from '@/components/ui/skeleton';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 type StudentWithId = Student & { id: string };
 
@@ -103,20 +105,39 @@ export function PrintRequestForm({ student, libraryId, isLoading }: PrintRequest
         timestamp: serverTimestamp(),
       });
 
-      await batch.commit();
-
-      toast({
-        title: 'Request Submitted',
-        description: 'Your document has been sent to the library for printing.',
-      });
-      form.reset();
+      batch.commit()
+        .then(() => {
+          toast({
+            title: 'Request Submitted',
+            description: 'Your document has been sent to the library for printing.',
+          });
+          form.reset();
+        })
+        .catch((serverError) => {
+          if (serverError instanceof FirebaseError && serverError.code === 'permission-denied') {
+            const permissionError = new FirestorePermissionError({
+              path: requestRef.path,
+              operation: 'create',
+              requestResourceData: requestData,
+            });
+            errorEmitter.emit('permission-error', permissionError);
+          }
+          toast({
+            variant: "destructive",
+            title: "Submission Failed",
+            description: serverError instanceof Error ? serverError.message : "An unexpected error occurred."
+          });
+        });
 
     } catch (error) {
+      // This catch block is for errors during file upload or query, before the batch commit.
       toast({
         variant: "destructive",
         title: "Submission Failed",
         description: error instanceof Error ? error.message : "An unexpected error occurred."
       });
+      // Also ensure form is re-enabled if upload fails
+      form.control._reset(); 
     }
   };
 
