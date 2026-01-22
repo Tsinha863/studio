@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -10,6 +9,7 @@ import {
   writeBatch,
   doc,
   serverTimestamp,
+  deleteDoc,
 } from 'firebase/firestore';
 import {
   useReactTable,
@@ -44,10 +44,9 @@ import {
 import { Input } from '@/components/ui/input';
 import { DataTablePagination } from '@/components/ui/data-table-pagination';
 import { useToast } from '@/hooks/use-toast';
-import { useCollection, useFirebase, useMemoFirebase, errorEmitter } from '@/firebase';
+import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
 import type { Announcement } from '@/lib/types';
 import { columns as announcementColumns } from '@/components/admin/announcements/columns';
-import { FirestorePermissionError } from '@/firebase/errors';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/spinner';
 import { LIBRARY_ID } from '@/lib/config';
@@ -122,7 +121,7 @@ export default function AnnouncementsPage() {
   const closeDeleteAlert = () =>
     setAlertState({ isOpen: false, announcementId: undefined });
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!alertState.announcementId || !user || !firestore) {
       toast({
         variant: 'destructive',
@@ -132,36 +131,37 @@ export default function AnnouncementsPage() {
       return;
     }
     
-    // Optimistic UI update
-    closeDeleteAlert();
-    toast({
-      title: 'Announcement Deleted',
-      description: 'The announcement has been removed.',
-    });
-
-    const batch = writeBatch(firestore);
-    const actor = { id: user.uid, name: user.displayName || 'Admin' };
-    const announcementRef = doc(firestore, `libraries/${LIBRARY_ID}/announcements/${alertState.announcementId}`);
-    
-    batch.delete(announcementRef);
-
-    const logRef = doc(collection(firestore, `libraries/${LIBRARY_ID}/activityLogs`));
-    batch.set(logRef, {
-      libraryId: LIBRARY_ID,
-      user: actor,
-      activityType: 'announcement_deleted',
-      details: { announcementId: alertState.announcementId },
-      timestamp: serverTimestamp(),
-    });
-
-    // Non-blocking commit with error handling
-    batch.commit().catch((serverError) => {
-      const permissionError = new FirestorePermissionError({
-        path: announcementRef.path,
-        operation: 'delete',
+    try {
+      const batch = writeBatch(firestore);
+      const actor = { id: user.uid, name: user.displayName || 'Admin' };
+      const announcementRef = doc(firestore, `libraries/${LIBRARY_ID}/announcements/${alertState.announcementId}`);
+      
+      batch.delete(announcementRef);
+  
+      const logRef = doc(collection(firestore, `libraries/${LIBRARY_ID}/activityLogs`));
+      batch.set(logRef, {
+        libraryId: LIBRARY_ID,
+        user: actor,
+        activityType: 'announcement_deleted',
+        details: { announcementId: alertState.announcementId },
+        timestamp: serverTimestamp(),
       });
-      errorEmitter.emit('permission-error', permissionError);
-    });
+  
+      await batch.commit();
+
+      toast({
+        title: 'Announcement Deleted',
+        description: 'The announcement has been removed.',
+      });
+    } catch (error) {
+       toast({
+        variant: 'destructive',
+        title: 'Deletion Failed',
+        description: error instanceof Error ? error.message : 'Could not delete the announcement.',
+      });
+    } finally {
+      closeDeleteAlert();
+    }
   };
 
   return (

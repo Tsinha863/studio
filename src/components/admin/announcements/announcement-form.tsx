@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -8,7 +7,7 @@ import {
   serverTimestamp,
   writeBatch,
 } from 'firebase/firestore';
-import { useFirebase, errorEmitter } from '@/firebase';
+import { useFirebase } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -16,7 +15,6 @@ import { useToast } from '@/hooks/use-toast';
 import { announcementFormSchema, type AnnouncementFormValues } from '@/lib/schemas';
 import { Spinner } from '@/components/spinner';
 import { Label } from '@/components/ui/label';
-import { FirestorePermissionError } from '@/firebase/errors';
 
 interface AnnouncementFormProps {
   libraryId: string;
@@ -57,43 +55,42 @@ export function AnnouncementForm({ libraryId, onSuccess, onCancel }: Announcemen
 
     setIsSubmitting(true);
     
-    // Optimistic UI update
-    onSuccess();
+    try {
+      const batch = writeBatch(firestore);
+      const actor = { id: user.uid, name: user.displayName || 'Admin' };
+      const announcementRef = doc(collection(firestore, `libraries/${libraryId}/announcements`));
+      
+      const validatedData = validation.data;
+      batch.set(announcementRef, {
+        ...validatedData,
+        libraryId,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+  
+      const logRef = doc(collection(firestore, `libraries/${libraryId}/activityLogs`));
+      batch.set(logRef, {
+        libraryId,
+        user: actor,
+        activityType: 'announcement_created',
+        details: {
+          title: validatedData.title,
+        },
+        timestamp: serverTimestamp(),
+      });
+  
+      await batch.commit();
+      onSuccess();
 
-    const batch = writeBatch(firestore);
-    const actor = { id: user.uid, name: user.displayName || 'Admin' };
-    const announcementRef = doc(collection(firestore, `libraries/${libraryId}/announcements`));
-    
-    const validatedData = validation.data;
-    batch.set(announcementRef, {
-      ...validatedData,
-      libraryId,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-
-    const logRef = doc(collection(firestore, `libraries/${libraryId}/activityLogs`));
-    batch.set(logRef, {
-      libraryId,
-      user: actor,
-      activityType: 'announcement_created',
-      details: {
-        title: validatedData.title,
-      },
-      timestamp: serverTimestamp(),
-    });
-
-    // Non-blocking commit with error handling
-    batch.commit().catch((serverError) => {
-        const permissionError = new FirestorePermissionError({
-          path: announcementRef.path,
-          operation: 'create',
-          requestResourceData: validatedData,
-        });
-        errorEmitter.emit('permission-error', permissionError);
-    }).finally(() => {
-        setIsSubmitting(false);
-    });
+    } catch (error) {
+       toast({
+        variant: 'destructive',
+        title: 'Submission Failed',
+        description: error instanceof Error ? error.message : 'Could not create announcement.',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (

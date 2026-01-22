@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -9,7 +8,7 @@ import {
   writeBatch,
   runTransaction,
 } from 'firebase/firestore';
-import { useFirebase, errorEmitter } from '@/firebase';
+import { useFirebase } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -24,7 +23,6 @@ import type { Student } from '@/lib/types';
 import { studentFormSchema, type StudentFormValues } from '@/lib/schemas';
 import { Spinner } from '@/components/spinner';
 import { Label } from '@/components/ui/label';
-import { FirestorePermissionError } from '@/firebase/errors';
 
 type StudentWithId = Student & { id: string };
 
@@ -91,9 +89,7 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
     try {
         const actor = { id: user.uid, name: user.displayName || 'Admin' };
         
-        if (student?.id) { // UPDATE logic uses a non-blocking batch write.
-            onSuccess();
-
+        if (student?.id) { // UPDATE logic
             const batch = writeBatch(firestore);
             const studentRef = doc(firestore, `libraries/${libraryId}/students/${student.id}`);
             const { id, ...dataToUpdate } = validation.data;
@@ -113,18 +109,9 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
               timestamp: serverTimestamp(),
             });
 
-            batch.commit().catch((serverError) => {
-              const permissionError = new FirestorePermissionError({
-                path: studentRef.path,
-                operation: 'update',
-                requestResourceData: dataToUpdate,
-              });
-              errorEmitter.emit('permission-error', permissionError);
-            }).finally(() => {
-              setIsSubmitting(false);
-            });
+            await batch.commit();
 
-        } else { // CREATE logic must be atomic, so we await the transaction.
+        } else { // CREATE logic must be atomic.
             await runTransaction(firestore, async (transaction) => {
                 const validatedData = validation.data as StudentFormValues;
                 const newStudentRef = doc(firestore, `libraries/${libraryId}/students`, validatedData.id);
@@ -156,16 +143,18 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
                     timestamp: serverTimestamp(),
                 });
             });
-            onSuccess(); // Call success only after transaction completes.
-            setIsSubmitting(false);
         }
+        
+        onSuccess();
+
     } catch (error) {
         toast({
             variant: "destructive",
             title: "An unexpected error occurred",
             description: error instanceof Error ? error.message : "The operation failed. Please try again."
         });
-        setIsSubmitting(false);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 

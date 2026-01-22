@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -16,7 +15,7 @@ import {
   deleteDoc,
 } from 'firebase/firestore';
 
-import { useFirebase, errorEmitter } from '@/firebase';
+import { useFirebase } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import {
@@ -50,7 +49,6 @@ import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import type { Seat, Student, SeatBooking } from '@/lib/types';
 import { Spinner } from '@/components/spinner';
-import { FirestorePermissionError } from '@/firebase/errors';
 
 type SeatWithId = Seat & { id: string };
 type StudentWithId = Student & { id: string };
@@ -170,21 +168,21 @@ export function SeatBookingDialog({
     }
   };
 
-  const handleCancelBooking = (bookingId: string) => {
+  const handleCancelBooking = async (bookingId: string) => {
     if (!firestore || !user) return;
     
-    // Optimistic UI update
-    toast({ title: 'Booking Cancelled', description: 'The seat is now available for this time slot.' });
-    onSuccess();
-
-    const bookingRef = doc(firestore, `libraries/${libraryId}/seatBookings/${bookingId}`);
-    deleteDoc(bookingRef).catch((serverError) => {
-        const permissionError = new FirestorePermissionError({
-          path: bookingRef.path,
-          operation: 'delete',
-        });
-        errorEmitter.emit('permission-error', permissionError);
-    });
+    try {
+      const bookingRef = doc(firestore, `libraries/${libraryId}/seatBookings/${bookingId}`);
+      await deleteDoc(bookingRef);
+      toast({ title: 'Booking Cancelled', description: 'The seat is now available for this time slot.' });
+      onSuccess();
+    } catch (error) {
+       toast({
+        variant: 'destructive',
+        title: 'Cancellation Failed',
+        description: error instanceof Error ? error.message : 'Could not cancel the booking.',
+      });
+    }
   };
   
   React.useEffect(() => {

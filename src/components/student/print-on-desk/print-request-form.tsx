@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -8,7 +7,7 @@ import { doc, collection, writeBatch, serverTimestamp, query, where, getDocs, li
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Paperclip } from 'lucide-react';
 
-import { useFirebase, useStorage, errorEmitter } from '@/firebase';
+import { useFirebase, useStorage } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { printRequestFormSchema, type PrintRequestFormValues } from '@/lib/schemas';
 import type { Student } from '@/lib/types';
@@ -26,7 +25,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/spinner';
 import { Skeleton } from '@/components/ui/skeleton';
-import { FirestorePermissionError } from '@/firebase/errors';
 
 type StudentWithId = Student & { id: string };
 
@@ -79,13 +77,6 @@ export function PrintRequestForm({ student, libraryId, isLoading }: PrintRequest
       await uploadBytes(storageRef, file);
       const downloadURL = await getDownloadURL(storageRef);
       
-      // Optimistic UI update
-      toast({
-        title: 'Request Submitted',
-        description: 'Your document has been sent to the library for printing.',
-      });
-      form.reset();
-
       // Create documents in a batch
       const batch = writeBatch(firestore);
       const requestRef = doc(collection(firestore, `libraries/${libraryId}/printRequests`));
@@ -112,15 +103,13 @@ export function PrintRequestForm({ student, libraryId, isLoading }: PrintRequest
         timestamp: serverTimestamp(),
       });
 
-      // Non-blocking commit
-      batch.commit().catch((serverError) => {
-        const permissionError = new FirestorePermissionError({
-          path: requestRef.path,
-          operation: 'create',
-          requestResourceData: requestData
-        });
-        errorEmitter.emit('permission-error', permissionError);
+      await batch.commit();
+
+      toast({
+        title: 'Request Submitted',
+        description: 'Your document has been sent to the library for printing.',
       });
+      form.reset();
 
     } catch (error) {
       toast({

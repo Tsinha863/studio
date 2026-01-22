@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -10,6 +9,7 @@ import {
   writeBatch,
   doc,
   serverTimestamp,
+  updateDoc,
 } from 'firebase/firestore';
 import {
   useReactTable,
@@ -23,7 +23,7 @@ import {
 
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { useCollection, useFirebase, useMemoFirebase, errorEmitter } from '@/firebase';
+import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
 import type { Suggestion } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { DataTablePagination } from '@/components/ui/data-table-pagination';
@@ -38,7 +38,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { FirestorePermissionError } from '@/firebase/errors';
 import { Skeleton } from '@/components/ui/skeleton';
 import { LIBRARY_ID } from '@/lib/config';
 
@@ -109,38 +108,24 @@ export default function SuggestionsPage() {
       return;
     }
 
-    toast({
-      title: 'Status Updated',
-      description: "The suggestion's status has been changed.",
-    });
-
     const suggestionRef = doc(firestore, `libraries/${LIBRARY_ID}/suggestions/${suggestionId}`);
-    const batch = writeBatch(firestore);
-    const actor = { id: user.uid, name: user.displayName || 'Admin' };
     
-    batch.update(suggestionRef, {
-      status,
-      updatedAt: serverTimestamp(),
-    });
-
-    const logRef = doc(collection(firestore, `libraries/${LIBRARY_ID}/activityLogs`));
-    batch.set(logRef, {
-      libraryId: LIBRARY_ID,
-      user: actor,
-      activityType: 'suggestion_status_updated',
-      details: { suggestionId, newStatus: status },
-      timestamp: serverTimestamp(),
-    });
-
-    batch.commit().catch((serverError) => {
-      console.error("UPDATE SUGGESTION STATUS ERROR:", serverError);
-      const permissionError = new FirestorePermissionError({
-        path: suggestionRef.path,
-        operation: 'update',
-        requestResourceData: { status },
+    try {
+      await updateDoc(suggestionRef, {
+        status,
+        updatedAt: serverTimestamp(),
       });
-      errorEmitter.emit('permission-error', permissionError);
-    });
+      toast({
+        title: 'Status Updated',
+        description: "The suggestion's status has been changed.",
+      });
+    } catch (error) {
+       toast({
+        variant: 'destructive',
+        title: 'Update Failed',
+        description: error instanceof Error ? error.message : "The status could not be updated.",
+      });
+    }
   };
 
   const openDeleteAlert = (suggestionId: string) =>
@@ -153,36 +138,38 @@ export default function SuggestionsPage() {
       return;
     }
 
-    // Optimistic UI update
-    closeDeleteAlert();
-    toast({
-      title: 'Suggestion Deleted',
-      description: 'The suggestion has been removed.',
-    });
-
-    const batch = writeBatch(firestore);
-    const actor = { id: user.uid, name: user.displayName || 'Admin' };
     const suggestionRef = doc(firestore, `libraries/${LIBRARY_ID}/suggestions/${alertState.suggestionId}`);
-    
-    batch.delete(suggestionRef);
-
-    const logRef = doc(collection(firestore, `libraries/${LIBRARY_ID}/activityLogs`));
-    batch.set(logRef, {
-      libraryId: LIBRARY_ID,
-      user: actor,
-      activityType: 'suggestion_deleted',
-      details: { suggestionId: alertState.suggestionId },
-      timestamp: serverTimestamp(),
-    });
-
-    batch.commit().catch((serverError) => {
-      console.error("DELETE SUGGESTION ERROR:", serverError);
-      const permissionError = new FirestorePermissionError({
-        path: suggestionRef.path,
-        operation: 'delete',
+    try {
+      await writeBatch(firestore);
+      const batch = writeBatch(firestore);
+      const actor = { id: user.uid, name: user.displayName || 'Admin' };
+      
+      batch.delete(suggestionRef);
+  
+      const logRef = doc(collection(firestore, `libraries/${LIBRARY_ID}/activityLogs`));
+      batch.set(logRef, {
+        libraryId: LIBRARY_ID,
+        user: actor,
+        activityType: 'suggestion_deleted',
+        details: { suggestionId: alertState.suggestionId },
+        timestamp: serverTimestamp(),
       });
-      errorEmitter.emit('permission-error', permissionError);
-    });
+
+      await batch.commit();
+      toast({
+        title: 'Suggestion Deleted',
+        description: 'The suggestion has been removed.',
+      });
+
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Deletion Failed',
+        description: error instanceof Error ? error.message : "Could not delete the suggestion.",
+      });
+    } finally {
+      closeDeleteAlert();
+    }
   };
 
   return (

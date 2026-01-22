@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -8,7 +7,7 @@ import {
   serverTimestamp,
   writeBatch,
 } from 'firebase/firestore';
-import { useFirebase, errorEmitter } from '@/firebase';
+import { useFirebase } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
@@ -18,7 +17,6 @@ import { Label } from '@/components/ui/label';
 import { PlusCircle } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Seat } from '@/lib/types';
-import { FirestorePermissionError } from '@/firebase/errors';
 
 interface CreateRoomFormProps {
   libraryId: string;
@@ -62,64 +60,63 @@ export function CreateRoomForm({ libraryId, onSuccess }: CreateRoomFormProps) {
     
     setIsSubmitting(true);
     
-    // Optimistic UI update
-    onSuccess();
-    // Reset form on success
-    setName('');
-    setCapacity(20);
-    setTier('standard');
-    setErrors({});
-
-    const validatedData = validation.data;
-    const batch = writeBatch(firestore);
-    const actor = { id: user.uid, name: user.displayName || 'Admin' };
-    const roomRef = doc(collection(firestore, `libraries/${libraryId}/rooms`));
-
-    batch.set(roomRef, {
-      name: validatedData.name,
-      capacity: validatedData.capacity,
-      libraryId,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-
-    const seatsColRef = collection(firestore, `libraries/${libraryId}/rooms/${roomRef.id}/seats`);
-    for (let i = 1; i <= validatedData.capacity; i++) {
-      const seatRef = doc(seatsColRef, i.toString());
-      batch.set(seatRef, {
-        roomId: roomRef.id,
+    try {
+      const validatedData = validation.data;
+      const batch = writeBatch(firestore);
+      const actor = { id: user.uid, name: user.displayName || 'Admin' };
+      const roomRef = doc(collection(firestore, `libraries/${libraryId}/rooms`));
+  
+      batch.set(roomRef, {
+        name: validatedData.name,
+        capacity: validatedData.capacity,
         libraryId,
-        tier: validatedData.tier,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
-    }
-
-    const logRef = doc(collection(firestore, `libraries/${libraryId}/activityLogs`));
-    batch.set(logRef, {
-      libraryId,
-      user: actor,
-      activityType: 'room_created',
-      details: {
-        roomId: roomRef.id,
-        name: validatedData.name,
-        capacity: validatedData.capacity,
-      },
-      timestamp: serverTimestamp(),
-    });
-
-    // Non-blocking commit with error handling
-    batch.commit().catch((serverError) => {
-        // A single batch write can fail for many reasons. We'll report the most likely one (room creation).
-        const permissionError = new FirestorePermissionError({
-          path: roomRef.path,
-          operation: 'create',
-          requestResourceData: { name: validatedData.name, capacity: validatedData.capacity }
+  
+      const seatsColRef = collection(firestore, `libraries/${libraryId}/rooms/${roomRef.id}/seats`);
+      for (let i = 1; i <= validatedData.capacity; i++) {
+        const seatRef = doc(seatsColRef, i.toString());
+        batch.set(seatRef, {
+          roomId: roomRef.id,
+          libraryId,
+          tier: validatedData.tier,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
         });
-        errorEmitter.emit('permission-error', permissionError);
-    }).finally(() => {
-        setIsSubmitting(false);
-    });
+      }
+  
+      const logRef = doc(collection(firestore, `libraries/${libraryId}/activityLogs`));
+      batch.set(logRef, {
+        libraryId,
+        user: actor,
+        activityType: 'room_created',
+        details: {
+          roomId: roomRef.id,
+          name: validatedData.name,
+          capacity: validatedData.capacity,
+        },
+        timestamp: serverTimestamp(),
+      });
+      
+      await batch.commit();
+      
+      onSuccess();
+      // Reset form on success
+      setName('');
+      setCapacity(20);
+      setTier('standard');
+      setErrors({});
+
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Room Creation Failed',
+        description: error instanceof Error ? error.message : "The room could not be created."
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
