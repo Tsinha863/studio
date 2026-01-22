@@ -2,6 +2,7 @@
 'use client';
 
 import * as React from 'react';
+import dynamic from 'next/dynamic';
 import {
   collection,
   query,
@@ -41,7 +42,6 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
-import { DataTable } from '@/components/ui/data-table';
 import { DataTablePagination } from '@/components/ui/data-table-pagination';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirebase, useMemoFirebase, errorEmitter } from '@/firebase';
@@ -49,6 +49,12 @@ import type { Announcement } from '@/lib/types';
 import { AnnouncementForm } from '@/components/admin/announcements/announcement-form';
 import { columns as announcementColumns } from '@/components/admin/announcements/columns';
 import { FirestorePermissionError } from '@/firebase/errors';
+import { Skeleton } from '@/components/ui/skeleton';
+
+const DataTable = dynamic(() => import('@/components/ui/data-table').then(mod => mod.DataTable), { 
+    ssr: false,
+    loading: () => <div className="rounded-md border"><Skeleton className="h-96 w-full" /></div>
+});
 
 type AnnouncementWithId = Announcement & { id: string };
 
@@ -183,14 +189,12 @@ export default function AnnouncementsPage() {
               className="w-full sm:max-w-sm"
             />
           </div>
-          <div className="rounded-md border">
-            <DataTable
-              table={table}
-              columns={memoizedColumns}
-              isLoading={isLoading}
-              noResultsMessage="No announcements found."
-            />
-          </div>
+          <DataTable
+            table={table}
+            columns={memoizedColumns}
+            isLoading={isLoading}
+            noResultsMessage="No announcements found."
+          />
           <DataTablePagination table={table} />
         </CardContent>
       </Card>

@@ -5,7 +5,6 @@ import * as React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { doc } from 'firebase/firestore';
 import {
   Bell,
   Home,
@@ -38,6 +37,7 @@ import { useDoc, useFirebase, useMemoFirebase } from '@/firebase';
 import { Student } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AuthGuard } from '@/components/auth/auth-guard';
+import { doc } from 'firebase/firestore';
 
 // TODO: Replace with actual logged-in user's library
 const HARDCODED_LIBRARY_ID = 'library1';
@@ -46,6 +46,9 @@ function UserMenu() {
   const { firestore, user } = useFirebase();
   const userAvatar = PlaceHolderImages.find((p) => p.id === 'user-avatar');
   
+  // The student profile contains more detailed info (like name) than the user profile.
+  // We fetch it here for the UI. The AuthGuard and redirects have already used the
+  // core `role` from the user profile for security.
   const studentDocRef = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
     return doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students`, user.uid);

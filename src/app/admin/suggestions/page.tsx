@@ -2,6 +2,7 @@
 'use client';
 
 import * as React from 'react';
+import dynamic from 'next/dynamic';
 import {
   collection,
   query,
@@ -25,7 +26,6 @@ import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirebase, useMemoFirebase, errorEmitter } from '@/firebase';
 import type { Suggestion } from '@/lib/types';
 import { Input } from '@/components/ui/input';
-import { DataTable } from '@/components/ui/data-table';
 import { DataTablePagination } from '@/components/ui/data-table-pagination';
 import { columns as suggestionColumns } from '@/components/admin/suggestions/columns';
 import {
@@ -38,8 +38,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Spinner } from '@/components/spinner';
 import { FirestorePermissionError } from '@/firebase/errors';
+import { Skeleton } from '@/components/ui/skeleton';
+
+const DataTable = dynamic(() => import('@/components/ui/data-table').then(mod => mod.DataTable), { 
+    ssr: false,
+    loading: () => <div className="rounded-md border"><Skeleton className="h-96 w-full" /></div>
+});
 
 type AlertState = {
   isOpen: boolean;
@@ -206,15 +211,13 @@ export default function SuggestionsPage() {
               className="w-full sm:max-w-sm"
             />
           </div>
-          <div className="rounded-md border">
-            <DataTable
-              table={table}
-              columns={memoizedColumns}
-              data={suggestionsWithDetails}
-              isLoading={isLoadingSuggestions}
-              noResultsMessage="No suggestions found."
-            />
-          </div>
+          <DataTable
+            table={table}
+            columns={memoizedColumns}
+            data={suggestionsWithDetails}
+            isLoading={isLoadingSuggestions}
+            noResultsMessage="No suggestions found."
+          />
           <DataTablePagination table={table} />
         </CardContent>
       </Card>
@@ -240,7 +243,3 @@ export default function SuggestionsPage() {
     </div>
   );
 }
-
-    
-
-    

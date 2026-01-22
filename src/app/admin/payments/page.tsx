@@ -2,6 +2,7 @@
 'use client';
 
 import * as React from 'react';
+import dynamic from 'next/dynamic';
 import { PlusCircle, Calendar as CalendarIcon, X as ClearIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import {
@@ -41,12 +42,17 @@ import { useCollection, useFirebase, useMemoFirebase, errorEmitter } from '@/fir
 import type { Payment, Student } from '@/lib/types';
 import { generateSimulatedReceipt } from '@/ai/flows/generate-simulated-receipt';
 
-import { DataTable } from '@/components/ui/data-table';
 import { DataTablePagination } from '@/components/ui/data-table-pagination';
 import { columns as paymentColumns } from '@/components/admin/payments/columns';
 import { ReceiptDialog } from '@/components/receipt-dialog';
 import { Spinner } from '@/components/spinner';
 import { FirestorePermissionError } from '@/firebase/errors';
+import { Skeleton } from '@/components/ui/skeleton';
+
+const DataTable = dynamic(() => import('@/components/ui/data-table').then(mod => mod.DataTable), { 
+    ssr: false,
+    loading: () => <div className="rounded-md border"><Skeleton className="h-96 w-full" /></div>
+});
 
 // TODO: Replace with actual logged-in user's library
 const HARDCODED_LIBRARY_ID = 'library1';
@@ -102,11 +108,16 @@ export default function PaymentsPage() {
     },
   });
 
-  const handleCreatePayments = async () => {
+  const handleCreatePayments = () => {
     if (!user || !firestore) return;
     setIsCreating(true);
 
-    try {
+    toast({
+      title: 'Payment Generation Started',
+      description: 'Processing student payments in the background.',
+    });
+
+    const createPaymentsLogic = async () => {
       const batch = writeBatch(firestore);
       const actor = { id: user.uid, name: user.displayName || 'Admin' };
       const today = new Date();
@@ -182,27 +193,29 @@ export default function PaymentsPage() {
             timestamp: serverTimestamp(),
           });
       }
-  
-      await batch.commit();
+      
+      return { count: createdCount };
+    };
 
+    // Run the logic and commit non-blockingly
+    createPaymentsLogic().then(({ count }) => {
       toast({
         title: 'Payments Generated',
-        description: `${createdCount} new payment obligations were created.`,
+        description: `${count} new payment obligations were created.`,
       });
-
-    } catch (error) {
+    }).catch(error => {
       console.error("CREATE MONTHLY PAYMENTS ERROR:", error);
       toast({
         variant: 'destructive',
         title: 'Error',
         description: error instanceof Error ? error.message : "Could not create payments.",
       });
-    } finally {
+    }).finally(() => {
       setIsCreating(false);
-    }
+    });
   };
 
-  const handleMarkAsPaid = async (payment: PaymentWithId) => {
+  const handleMarkAsPaid = (payment: PaymentWithId) => {
     if (!user || !firestore || !payment.studentId) {
        toast({
         variant: 'destructive',
@@ -213,97 +226,97 @@ export default function PaymentsPage() {
     };
     setIsPaying(payment.id);
 
-    try {
-      await runTransaction(firestore, async (transaction) => {
-        const paymentRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/payments/${payment.id}`);
-        const studentRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students/${payment.studentId}`);
-        
-        const [paymentDoc, studentDoc] = await Promise.all([
-          transaction.get(paymentRef),
-          transaction.get(studentRef),
-        ]);
-  
-        if (!paymentDoc.exists()) throw new Error('Payment document not found.');
-        if (!studentDoc.exists()) throw new Error('Student document not found.');
-        
-        const paymentData = paymentDoc.data() as Payment;
-        if (paymentData.status === 'paid') return; // Idempotent
-        
-        const wasOverdue = paymentData.status === 'overdue';
-  
-        // Update payment
-        transaction.update(paymentRef, {
-          status: 'paid',
-          paymentDate: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-  
-        // Update student
-        transaction.update(studentRef, {
-          fibonacciStreak: wasOverdue ? 0 : increment(1),
-          status: 'active',
-          lastInteractionAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-  
-        // Create activity log
-        const logRef = doc(collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/activityLogs`));
-        transaction.set(logRef, {
-          libraryId: HARDCODED_LIBRARY_ID,
-          user: { id: user.uid, name: user.displayName || 'Admin' },
-          activityType: 'payment_processed',
-          details: {
-            studentName: studentDoc.data().name,
-            amount: paymentData.amount,
-            paymentId: payment.id,
-          },
-          timestamp: serverTimestamp(),
-        });
-      });
+    // Optimistic UI updates
+    toast({
+      title: 'Payment Confirmed',
+      description: `${payment.studentName}'s payment of ${new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(payment.amount)} has been recorded.`,
+    });
 
-      toast({
-        title: 'Payment Confirmed',
-        description: `${payment.studentName}'s payment of ${new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(payment.amount)} has been recorded.`,
-      });
-
-      // Generate receipt after successful transaction by fetching only the required student.
+    const transactionPromise = runTransaction(firestore, async (transaction) => {
+      const paymentRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/payments/${payment.id}`);
       const studentRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students/${payment.studentId}`);
-      const studentDoc = await getDoc(studentRef);
+      
+      const [paymentDoc, studentDoc] = await Promise.all([
+        transaction.get(paymentRef),
+        transaction.get(studentRef),
+      ]);
 
-      if (studentDoc.exists()) {
-          const student = studentDoc.data() as Student;
-          const receiptInput = {
-              studentName: student.name,
-              paymentAmount: payment.amount,
-              paymentDate: new Date().toISOString().split('T')[0],
-              fibonacciStreak: student.fibonacciStreak || 0,
-              studentStatus: 'active',
-              paymentId: payment.id,
-          };
-          
-          try {
-              const { receiptText } = await generateSimulatedReceipt(receiptInput);
-              setReceiptState({ isOpen: true, receiptText, studentName: student.name });
-          } catch (e) {
-              console.error("Receipt generation failed:", e);
-              toast({
-                  variant: "destructive",
-                  title: "Receipt Generation Failed",
-                  description: "Could not generate AI receipt, but payment was recorded."
-              })
-          }
-      }
+      if (!paymentDoc.exists()) throw new Error('Payment document not found.');
+      if (!studentDoc.exists()) throw new Error('Student document not found.');
+      
+      const paymentData = paymentDoc.data() as Payment;
+      if (paymentData.status === 'paid') return; // Idempotent
+      
+      const wasOverdue = paymentData.status === 'overdue';
 
-    } catch (error) {
+      // Update payment
+      transaction.update(paymentRef, {
+        status: 'paid',
+        paymentDate: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      // Update student
+      transaction.update(studentRef, {
+        fibonacciStreak: wasOverdue ? 0 : increment(1),
+        status: 'active',
+        lastInteractionAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      // Create activity log
+      const logRef = doc(collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/activityLogs`));
+      transaction.set(logRef, {
+        libraryId: HARDCODED_LIBRARY_ID,
+        user: { id: user.uid, name: user.displayName || 'Admin' },
+        activityType: 'payment_processed',
+        details: {
+          studentName: studentDoc.data().name,
+          amount: paymentData.amount,
+          paymentId: payment.id,
+        },
+        timestamp: serverTimestamp(),
+      });
+    });
+
+    transactionPromise.then(async () => {
+        // This now runs after transaction is successful
+        const studentRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students/${payment.studentId!}`);
+        const studentDoc = await getDoc(studentRef);
+
+        if (studentDoc.exists()) {
+            const student = studentDoc.data() as Student;
+            const receiptInput = {
+                studentName: student.name,
+                paymentAmount: payment.amount,
+                paymentDate: new Date().toISOString().split('T')[0],
+                fibonacciStreak: student.fibonacciStreak || 0,
+                studentStatus: 'active',
+                paymentId: payment.id,
+            };
+            
+            try {
+                const { receiptText } = await generateSimulatedReceipt(receiptInput);
+                setReceiptState({ isOpen: true, receiptText, studentName: student.name });
+            } catch (e) {
+                console.error("Receipt generation failed:", e);
+                toast({
+                    variant: "destructive",
+                    title: "Receipt Generation Failed",
+                    description: "Could not generate AI receipt, but payment was recorded."
+                })
+            }
+        }
+    }).catch(error => {
       console.error("MARK AS PAID ERROR:", error);
       toast({
         variant: 'destructive',
         title: 'Error',
         description: error instanceof Error ? error.message : 'Could not process payment.',
       });
-    } finally {
+    }).finally(() => {
       setIsPaying(false);
-    }
+    });
   };
   
   const closeReceiptDialog = () => setReceiptState({ isOpen: false });
@@ -407,13 +420,11 @@ export default function PaymentsPage() {
               </Button>
             )}
           </div>
-          <div className="rounded-md border">
-            <DataTable
-              table={table}
-              columns={memoizedColumns}
-              isLoading={isLoadingPayments}
-            />
-          </div>
+          <DataTable
+            table={table}
+            columns={memoizedColumns}
+            isLoading={isLoadingPayments}
+          />
           <DataTablePagination table={table} />
         </CardContent>
       </Card>
@@ -427,5 +438,3 @@ export default function PaymentsPage() {
     </div>
   );
 }
-
-    

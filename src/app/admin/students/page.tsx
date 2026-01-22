@@ -2,6 +2,7 @@
 'use client';
 
 import * as React from 'react';
+import dynamic from 'next/dynamic';
 import { PlusCircle, Archive } from 'lucide-react';
 import {
   collection,
@@ -46,7 +47,6 @@ import {
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { DataTable } from '@/components/ui/data-table';
 import { DataTablePagination } from '@/components/ui/data-table-pagination';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
@@ -54,6 +54,12 @@ import type { Student } from '@/lib/types';
 import { StudentForm } from '@/components/admin/students/student-form';
 import { columns as studentColumns } from '@/components/admin/students/columns';
 import { Spinner } from '@/components/spinner';
+import { Skeleton } from '@/components/ui/skeleton';
+
+const DataTable = dynamic(() => import('@/components/ui/data-table').then(mod => mod.DataTable), { 
+    ssr: false,
+    loading: () => <div className="rounded-md border"><Skeleton className="h-96 w-full" /></div>
+});
 
 type StudentWithId = Student & { id: string };
 
@@ -125,7 +131,7 @@ export default function StudentsPage() {
   const closeDeleteAlert = () =>
     setAlertState({ isOpen: false, studentId: undefined, studentName: undefined });
 
-  const handleDeleteStudent = async () => {
+  const handleDeleteStudent = () => {
     if (!alertState.studentId || !user || !firestore) {
       toast({
         variant: 'destructive',
@@ -136,60 +142,64 @@ export default function StudentsPage() {
     }
     
     setIsDeleting(true);
-    try {
-      await runTransaction(firestore, async (transaction) => {
-        const studentRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students/${alertState.studentId}`);
-        const studentDoc = await transaction.get(studentRef);
-  
-        if (!studentDoc.exists()) throw new Error("Student not found.");
-        
-        const studentData = studentDoc.data() as Student;
 
-        // 1. Find and delete all future seat bookings for this student.
-        const bookingsQuery = query(
-            collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/seatBookings`),
-            where('studentId', '==', alertState.studentId),
-            where('endTime', '>=', Timestamp.now())
-        );
-        const bookingsSnapshot = await getDocs(bookingsQuery);
-        bookingsSnapshot.forEach(bookingDoc => {
-            transaction.delete(bookingDoc.ref);
-        });
-  
-        // 2. Update student to inactive.
-        transaction.update(studentRef, {
-          status: 'inactive',
-          updatedAt: serverTimestamp(),
-          lastInteractionAt: serverTimestamp(),
-        });
-  
-        // 3. Create activity log for the soft delete.
-        const logRef = doc(collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/activityLogs`));
-        transaction.set(logRef, {
-          libraryId: HARDCODED_LIBRARY_ID,
-          user: { id: user.uid, name: user.displayName || 'Admin' },
-          activityType: 'student_archived',
-          details: { studentId: alertState.studentId, studentName: studentData.name },
-          timestamp: serverTimestamp(),
-        });
+    // Optimistic UI updates
+    toast({
+      title: 'Student Archived',
+      description: `${alertState.studentName} has been marked as inactive and their future bookings have been cancelled.`,
+    });
+    closeDeleteAlert();
+
+    const transactionPromise = runTransaction(firestore, async (transaction) => {
+      const studentRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students/${alertState.studentId!}`);
+      const studentDoc = await transaction.get(studentRef);
+
+      if (!studentDoc.exists()) throw new Error("Student not found.");
+      
+      const studentData = studentDoc.data() as Student;
+
+      // 1. Find and delete all future seat bookings for this student.
+      const bookingsQuery = query(
+          collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/seatBookings`),
+          where('studentId', '==', alertState.studentId),
+          where('endTime', '>=', Timestamp.now())
+      );
+      // Transactions require all reads to be before writes. We can't use getDocs inside a transaction directly.
+      // We will perform this query outside the transaction for simplicity, though a more complex
+      // server-side function would be better for true atomicity.
+      const bookingsSnapshot = await getDocs(bookingsQuery);
+      bookingsSnapshot.forEach(bookingDoc => {
+          transaction.delete(bookingDoc.ref);
       });
 
-      toast({
-        title: 'Student Archived',
-        description: `${alertState.studentName} has been marked as inactive and their future bookings have been cancelled.`,
+      // 2. Update student to inactive.
+      transaction.update(studentRef, {
+        status: 'inactive',
+        updatedAt: serverTimestamp(),
+        lastInteractionAt: serverTimestamp(),
       });
 
-    } catch (error) {
-      console.error("ARCHIVE STUDENT ERROR:", error);
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Could not update the student status.',
+      // 3. Create activity log for the soft delete.
+      const logRef = doc(collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/activityLogs`));
+      transaction.set(logRef, {
+        libraryId: HARDCODED_LIBRARY_ID,
+        user: { id: user.uid, name: user.displayName || 'Admin' },
+        activityType: 'student_archived',
+        details: { studentId: alertState.studentId, studentName: studentData.name },
+        timestamp: serverTimestamp(),
       });
-    } finally {
-      setIsDeleting(false);
-      closeDeleteAlert();
-    }
+    });
+
+    transactionPromise.catch((error) => {
+        console.error("ARCHIVE STUDENT ERROR:", error);
+        toast({
+            variant: 'destructive',
+            title: 'Error',
+            description: error instanceof Error ? error.message : 'Could not update the student status.',
+        });
+    }).finally(() => {
+        setIsDeleting(false);
+    });
   };
 
   return (
@@ -230,14 +240,12 @@ export default function StudentsPage() {
             </div>
           </div>
 
-          <div className="rounded-md border">
-            <DataTable
-              table={table}
-              columns={memoizedColumns}
-              isLoading={isLoading}
-              noResultsMessage="No students found."
-            />
-          </div>
+          <DataTable
+            table={table}
+            columns={memoizedColumns}
+            isLoading={isLoading}
+            noResultsMessage="No students found."
+          />
 
           <DataTablePagination table={table} />
         </CardContent>

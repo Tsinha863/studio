@@ -1,10 +1,10 @@
+
 'use client';
 
 import * as React from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 
-import { useUser } from '@/firebase';
-import { useRole } from '@/hooks/use-role';
+import { useFirebase } from '@/firebase';
 import { Spinner } from '@/components/spinner';
 
 type Role = 'libraryOwner' | 'student';
@@ -17,10 +17,7 @@ interface AuthGuardProps {
 export function AuthGuard({ children, requiredRole }: AuthGuardProps) {
     const router = useRouter();
     const pathname = usePathname();
-    const { user, isUserLoading, userError } = useUser();
-    const { role, isLoading: isRoleLoading, error: roleError } = useRole(user);
-
-    const isLoading = isUserLoading || isRoleLoading;
+    const { user, role, isLoading, error } = useFirebase();
 
     React.useEffect(() => {
         // If still loading, do nothing.
@@ -29,17 +26,17 @@ export function AuthGuard({ children, requiredRole }: AuthGuardProps) {
         }
 
         // If there's an auth error or no user, redirect to login.
-        if (userError || !user) {
+        if (error || !user) {
             router.replace(`/login?redirect=${pathname}`);
             return;
         }
 
         // If there's a role error or the role doesn't match, redirect to login.
         // This prevents users from accessing pages they shouldn't.
-        if (roleError || role !== requiredRole) {
+        if (role !== requiredRole) {
             router.replace('/login');
         }
-    }, [isLoading, user, userError, role, roleError, requiredRole, router, pathname]);
+    }, [isLoading, user, error, role, requiredRole, router, pathname]);
 
     if (isLoading || role !== requiredRole) {
         return (

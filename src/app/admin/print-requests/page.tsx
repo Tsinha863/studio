@@ -2,6 +2,7 @@
 'use client';
 
 import * as React from 'react';
+import dynamic from 'next/dynamic';
 import { collection, query, orderBy, writeBatch, doc, serverTimestamp } from 'firebase/firestore';
 import {
   useReactTable,
@@ -18,7 +19,6 @@ import type { PrintRequest } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { DataTable } from '@/components/ui/data-table';
 import { DataTablePagination } from '@/components/ui/data-table-pagination';
 import { columns as printRequestColumns } from '@/components/admin/print-requests/columns';
 import {
@@ -35,6 +35,13 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Spinner } from '@/components/spinner';
 import { FirestorePermissionError } from '@/firebase/errors';
+import { Skeleton } from '@/components/ui/skeleton';
+
+const DataTable = dynamic(() => import('@/components/ui/data-table').then(mod => mod.DataTable), { 
+    ssr: false,
+    loading: () => <div className="rounded-md border"><Skeleton className="h-96 w-full" /></div>
+});
+
 
 // TODO: Replace with actual logged-in user's library
 const HARDCODED_LIBRARY_ID = 'library1';
@@ -173,15 +180,13 @@ export default function PrintRequestsPage() {
               className="w-full sm:max-w-sm"
             />
           </div>
-          <div className="rounded-md border">
-            <DataTable
-              table={table}
-              columns={memoizedColumns}
-              data={requests || []}
-              isLoading={isLoading}
-              noResultsMessage="No pending requests."
-            />
-          </div>
+          <DataTable
+            table={table}
+            columns={memoizedColumns}
+            data={requests || []}
+            isLoading={isLoading}
+            noResultsMessage="No pending requests."
+          />
           <DataTablePagination table={table} />
         </CardContent>
       </Card>

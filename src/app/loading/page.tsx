@@ -1,33 +1,27 @@
+
 'use client';
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 
-import { useUser } from '@/firebase';
-import { useRole } from '@/hooks/use-role';
+import { useFirebase } from '@/firebase';
 import { Spinner } from '@/components/spinner';
 import { Logo } from '@/components/logo';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 
 function AuthRedirector() {
     const router = useRouter();
-    const { user, isUserLoading } = useUser();
-    const { role, isLoading: isRoleLoading, error: roleError } = useRole(user);
+    const { user, role, isLoading, error } = useFirebase();
 
     React.useEffect(() => {
         // Wait until both user and role loading states are false.
-        if (isUserLoading || isRoleLoading) {
+        if (isLoading) {
             return;
         }
 
-        // If no user is logged in after checking, go to login.
-        if (!user) {
+        // If there is an error fetching the role, or no user, go to login.
+        if (error || !user) {
             router.replace('/login');
-            return;
-        }
-
-        // If there is an error fetching the role, display it but don't redirect.
-        if (roleError) {
             return;
         }
 
@@ -41,14 +35,14 @@ function AuthRedirector() {
         // the useRole hook is either healing or something went wrong.
         // We do nothing and wait for the state to update on the next render.
         
-    }, [user, isUserLoading, role, isRoleLoading, roleError, router]);
+    }, [user, isLoading, role, error, router]);
 
     let content;
-    if (roleError) {
+    if (error) {
         content = (
              <div className="text-center text-destructive">
                 <h3 className="font-semibold">Authentication Error</h3>
-                <p className="text-sm mt-1">{roleError.message}</p>
+                <p className="text-sm mt-1">{error.message}</p>
              </div>
         );
     } else {
