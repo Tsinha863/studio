@@ -7,7 +7,7 @@ import {
   query,
 } from 'firebase/firestore';
 
-import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
+import { useCollection, useFirebase } from '@/firebase';
 import type { Room } from '@/lib/types';
 import {
   Card,
@@ -30,14 +30,12 @@ export default function SeatingPage() {
   const { firestore, user } = useFirebase();
   const { toast } = useToast();
 
-  const roomsQuery = useMemoFirebase(() => {
+  const { data: rooms, isLoading: isLoadingRooms } = useCollection<Room>(() => {
     if (!firestore || !user) return null;
     return query(
       collection(firestore, `libraries/${LIBRARY_ID}/rooms`)
     );
   }, [firestore, user]);
-
-  const { data: rooms, isLoading: isLoadingRooms } = useCollection<Room>(roomsQuery);
 
   const onRoomCreated = () => {
     toast({ title: 'Room Created', description: 'The new room has been added.' });

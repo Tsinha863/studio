@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Query,
   onSnapshot,
@@ -27,19 +27,16 @@ export interface UseCollectionResult<T> {
 
 /**
  * React hook to subscribe to a Firestore collection or query in real-time.
- * Handles nullable references/queries.
+ * It encapsulates memoization to prevent infinite loops from unstable query objects.
  * 
- * IMPORTANT! YOU MUST MEMOIZE the inputted memoizedTargetRefOrQuery or BAD THINGS WILL HAPPEN
- * use useMemo to memoize it per React guidence.  Also make sure that it's dependencies are stable
- * references
- *  
  * @template T Optional type for document data. Defaults to any.
- * @param {CollectionReference<DocumentData> | Query<DocumentData> | null | undefined} targetRefOrQuery -
- * The Firestore CollectionReference or Query. Waits if null/undefined.
+ * @param {() => CollectionReference | Query | null | undefined} queryFactory - A function that returns the Firestore query/reference.
+ * @param {React.DependencyList} deps - Dependencies for the query factory, similar to `useMemo`.
  * @returns {UseCollectionResult<T>} Object with data, isLoading, error.
  */
 export function useCollection<T = any>(
-    memoizedTargetRefOrQuery: ((CollectionReference<DocumentData> | Query<DocumentData>) & {__memo?: boolean})  | null | undefined,
+    queryFactory: () => CollectionReference<DocumentData> | Query<DocumentData> | null | undefined,
+    deps: React.DependencyList = []
 ): UseCollectionResult<T> {
   type ResultItemType = WithId<T>;
   type StateDataType = ResultItemType[] | null;
@@ -48,10 +45,12 @@ export function useCollection<T = any>(
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<FirestoreError | null>(null);
 
+  const memoizedTargetRefOrQuery = useMemo(queryFactory, deps);
+
   useEffect(() => {
     if (!memoizedTargetRefOrQuery) {
       setData(null);
-      setIsLoading(true); // Keep loading until a valid query is provided
+      setIsLoading(false); 
       setError(null);
       return;
     }
@@ -72,16 +71,13 @@ export function useCollection<T = any>(
         setIsLoading(false);
       },
       (serverError: FirestoreError) => {
-        // For read operations (listeners), we set a local error for the UI
-        // but also emit a global error for better debugging if it's a permission issue.
         setError(serverError);
         setData(null);
         setIsLoading(false);
         
         if (serverError.code === 'permission-denied') {
             const permissionError = new FirestorePermissionError({
-              // The path for a collection query is its ID.
-              path: memoizedTargetRefOrQuery.id,
+              path: (memoizedTargetRefOrQuery as Query).id,
               operation: 'list',
             });
             errorEmitter.emit('permission-error', permissionError);
@@ -90,7 +86,7 @@ export function useCollection<T = any>(
     );
 
     return () => unsubscribe();
-  }, [memoizedTargetRefOrQuery]); // Re-run if the target query/reference changes.
+  }, [memoizedTargetRefOrQuery]);
   
   return { data, isLoading, error };
 }

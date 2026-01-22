@@ -44,7 +44,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { DataTablePagination } from '@/components/ui/data-table-pagination';
 import { useToast } from '@/hooks/use-toast';
-import { useCollection, useFirebase, useMemoFirebase, errorEmitter } from '@/firebase';
+import { useCollection, useFirebase, errorEmitter } from '@/firebase';
 import type { Expense } from '@/lib/types';
 import { columns as expenseColumns } from '@/components/admin/expenses/columns';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -86,15 +86,13 @@ export default function ExpensesPage() {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
 
-  const expensesQuery = useMemoFirebase(() => {
+  const { data: expenses, isLoading, error } = useCollection<Expense>(() => {
     if (!firestore || !user) return null;
     return query(
       collection(firestore, `libraries/${LIBRARY_ID}/expenses`),
       orderBy('expenseDate', 'desc')
     );
   }, [firestore, user]);
-
-  const { data: expenses, isLoading, error } = useCollection<Expense>(expensesQuery);
   
   const openModal = React.useCallback((expense?: ExpenseWithId) => setModalState({ isOpen: true, expense }), []);
   
@@ -125,7 +123,7 @@ export default function ExpensesPage() {
   const closeDeleteAlert = () =>
     setAlertState({ isOpen: false, expenseId: undefined });
 
-  const handleDeleteExpense = () => {
+  const handleDeleteExpense = async () => {
     if (!alertState.expenseId || !user || !firestore) {
       toast({
         variant: 'destructive',
@@ -152,14 +150,14 @@ export default function ExpensesPage() {
       timestamp: serverTimestamp(),
     });
 
-    batch.commit()
-      .then(() => {
+    try {
+        await batch.commit();
         toast({
           title: 'Expense Deleted',
           description: 'The expense has been removed from the system.',
         });
-      })
-      .catch((serverError) => {
+        closeDeleteAlert();
+    } catch(serverError) {
         if (serverError instanceof FirebaseError && serverError.code === 'permission-denied') {
           const permissionError = new FirestorePermissionError({
             path: expenseRef.path,
@@ -172,11 +170,9 @@ export default function ExpensesPage() {
           title: 'Deletion Failed',
           description: serverError instanceof Error ? serverError.message : 'Could not delete the expense.',
         });
-      })
-      .finally(() => {
+    } finally {
         setIsSubmitting(false);
-        closeDeleteAlert();
-      });
+    }
   };
 
   return (

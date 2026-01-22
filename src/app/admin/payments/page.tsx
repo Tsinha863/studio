@@ -37,7 +37,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { useCollection, useFirebase, useMemoFirebase, errorEmitter } from '@/firebase';
+import { useCollection, useFirebase, errorEmitter } from '@/firebase';
 import type { Payment, Student } from '@/lib/types';
 import { generateSimulatedReceipt } from '@/ai/flows/generate-simulated-receipt';
 import { FirestorePermissionError } from '@/firebase/errors';
@@ -81,15 +81,13 @@ export default function PaymentsPage() {
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
 
-  const paymentsQuery = useMemoFirebase(() => {
+  const { data: payments, isLoading: isLoadingPayments, error } = useCollection<Payment>(() => {
     if (!firestore || !user) return null;
     return query(
       collection(firestore, `libraries/${LIBRARY_ID}/payments`),
       orderBy('dueDate', 'desc')
     );
   }, [firestore, user]);
-
-  const { data: payments, isLoading: isLoadingPayments, error } = useCollection<Payment>(paymentsQuery);
   
   const handleMarkAsPaid = React.useCallback((payment: PaymentWithId) => {
     if (!user || !firestore || !payment.studentId) {
@@ -103,10 +101,9 @@ export default function PaymentsPage() {
     setIsPaying(payment.id);
 
     const paymentRef = doc(firestore, `libraries/${LIBRARY_ID}/payments/${payment.id}`);
+    const studentRef = doc(firestore, `libraries/${LIBRARY_ID}/students/${payment.studentId!}`);
 
     runTransaction(firestore, async (transaction) => {
-      const studentRef = doc(firestore, `libraries/${LIBRARY_ID}/students/${payment.studentId!}`);
-      
       const [paymentDoc, studentDoc] = await Promise.all([
         transaction.get(paymentRef),
         transaction.get(studentRef),
@@ -152,9 +149,8 @@ export default function PaymentsPage() {
       return { studentBeforeUpdate: studentDoc.data() as Student, wasOverdue, alreadyPaid: false, paymentData };
     })
       .then(async (result) => {
-        if (!result) return;
-        const { studentBeforeUpdate, wasOverdue, alreadyPaid, paymentData } = result;
-        if (alreadyPaid) return;
+        if (!result || result.alreadyPaid) return;
+        const { studentBeforeUpdate, wasOverdue, paymentData } = result;
 
         toast({
           title: 'Payment Confirmed',
@@ -163,17 +159,15 @@ export default function PaymentsPage() {
 
         const newFibonacciStreak = wasOverdue ? 0 : (studentBeforeUpdate.fibonacciStreak || 0) + 1;
         
-        const receiptInput = {
-            studentName: studentBeforeUpdate.name,
-            paymentAmount: payment.amount,
-            paymentDate: new Date().toISOString().split('T')[0],
-            fibonacciStreak: newFibonacciStreak,
-            studentStatus: 'active',
-            paymentId: payment.id,
-        };
-        
         try {
-            const { receiptText } = await generateSimulatedReceipt(receiptInput);
+            const { receiptText } = await generateSimulatedReceipt({
+                studentName: studentBeforeUpdate.name,
+                paymentAmount: payment.amount,
+                paymentDate: new Date().toISOString().split('T')[0],
+                fibonacciStreak: newFibonacciStreak,
+                studentStatus: 'active',
+                paymentId: payment.id,
+            });
             setReceiptState({ isOpen: true, receiptText, studentName: studentBeforeUpdate.name });
         } catch (e) {
             toast({
@@ -192,7 +186,7 @@ export default function PaymentsPage() {
       }
       toast({
         variant: 'destructive',
-        title: 'Error',
+        title: 'Transaction Error',
         description: serverError instanceof Error ? serverError.message : 'Could not process payment.',
       });
     }).finally(() => {

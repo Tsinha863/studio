@@ -44,7 +44,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { DataTablePagination } from '@/components/ui/data-table-pagination';
 import { useToast } from '@/hooks/use-toast';
-import { useCollection, useFirebase, useMemoFirebase, errorEmitter } from '@/firebase';
+import { useCollection, useFirebase, errorEmitter } from '@/firebase';
 import type { Announcement } from '@/lib/types';
 import { columns as announcementColumns } from '@/components/admin/announcements/columns';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -85,15 +85,13 @@ export default function AnnouncementsPage() {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
 
-  const announcementsQuery = useMemoFirebase(() => {
+  const { data: announcements, isLoading, error } = useCollection<Announcement>(() => {
     if (!firestore || !user) return null;
     return query(
       collection(firestore, `libraries/${LIBRARY_ID}/announcements`),
       orderBy('createdAt', 'desc')
     );
   }, [firestore, user]);
-
-  const { data: announcements, isLoading, error } = useCollection<Announcement>(announcementsQuery);
 
   const openDeleteAlert = React.useCallback((announcement: AnnouncementWithId) =>
     setAlertState({ isOpen: true, announcementId: announcement.id }), []);
@@ -124,7 +122,7 @@ export default function AnnouncementsPage() {
   const closeDeleteAlert = () =>
     setAlertState({ isOpen: false, announcementId: undefined });
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!alertState.announcementId || !user || !firestore) {
       toast({
         variant: 'destructive',
@@ -151,14 +149,14 @@ export default function AnnouncementsPage() {
       timestamp: serverTimestamp(),
     });
 
-    batch.commit()
-      .then(() => {
+    try {
+        await batch.commit();
         toast({
           title: 'Announcement Deleted',
           description: 'The announcement has been removed.',
         });
-      })
-      .catch((serverError) => {
+        closeDeleteAlert();
+    } catch (serverError) {
         if (serverError instanceof FirebaseError && serverError.code === 'permission-denied') {
           const permissionError = new FirestorePermissionError({
             path: announcementRef.path,
@@ -171,11 +169,9 @@ export default function AnnouncementsPage() {
           title: 'Deletion Failed',
           description: serverError instanceof Error ? serverError.message : 'Could not delete the announcement.',
         });
-      })
-      .finally(() => {
+    } finally {
         setIsSubmitting(false);
-        closeDeleteAlert();
-      });
+    }
   };
 
   return (

@@ -49,7 +49,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { DataTablePagination } from '@/components/ui/data-table-pagination';
 import { useToast } from '@/hooks/use-toast';
-import { useCollection, useFirebase, useMemoFirebase, errorEmitter } from '@/firebase';
+import { useCollection, useFirebase, errorEmitter } from '@/firebase';
 import type { Student } from '@/lib/types';
 import { columns as studentColumns } from '@/components/admin/students/columns';
 import { Spinner } from '@/components/spinner';
@@ -94,7 +94,7 @@ export default function StudentsPage() {
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
 
-  const studentsQuery = useMemoFirebase(() => {
+  const { data: students, isLoading, error } = useCollection<Student>(() => {
     if (!firestore || !user) return null;
     const constraints = [];
     if (!showInactive) {
@@ -105,8 +105,6 @@ export default function StudentsPage() {
       ...constraints
     );
   }, [firestore, user, showInactive]);
-
-  const { data: students, isLoading, error } = useCollection<Student>(studentsQuery);
 
   const openModal = React.useCallback((student?: StudentWithId) => setModalState({ isOpen: true, student }), []);
 
@@ -140,7 +138,7 @@ export default function StudentsPage() {
   const closeDeleteAlert = () =>
     setAlertState({ isOpen: false, studentId: undefined, studentName: undefined });
 
-  const handleDeleteStudent = () => {
+  const handleDeleteStudent = async () => {
     if (!alertState.studentId || !user || !firestore) {
       toast({
         variant: 'destructive',
@@ -154,46 +152,48 @@ export default function StudentsPage() {
 
     const studentRef = doc(firestore, `libraries/${LIBRARY_ID}/students/${alertState.studentId!}`);
 
-    runTransaction(firestore, async (transaction) => {
-      const studentDoc = await transaction.get(studentRef);
+    try {
+        await runTransaction(firestore, async (transaction) => {
+          const studentDoc = await transaction.get(studentRef);
 
-      if (!studentDoc.exists()) throw new Error("Student not found.");
-      
-      const studentData = studentDoc.data() as Student;
+          if (!studentDoc.exists()) throw new Error("Student not found.");
+          
+          const studentData = studentDoc.data() as Student;
 
-      // Find and delete all future seat bookings for this student.
-      const bookingsQuery = query(
-          collection(firestore, `libraries/${LIBRARY_ID}/seatBookings`),
-          where('studentId', '==', alertState.studentId),
-          where('endTime', '>=', Timestamp.now())
-      );
-      const bookingsSnapshot = await getDocs(bookingsQuery);
-      bookingsSnapshot.forEach(bookingDoc => {
-          transaction.delete(bookingDoc.ref);
-      });
+          // Find and delete all future seat bookings for this student.
+          const bookingsQuery = query(
+              collection(firestore, `libraries/${LIBRARY_ID}/seatBookings`),
+              where('studentId', '==', alertState.studentId),
+              where('endTime', '>=', Timestamp.now())
+          );
+          const bookingsSnapshot = await getDocs(bookingsQuery);
+          bookingsSnapshot.forEach(bookingDoc => {
+              transaction.delete(bookingDoc.ref);
+          });
 
-      // Update student to inactive.
-      transaction.update(studentRef, {
-        status: 'inactive',
-        updatedAt: serverTimestamp(),
-        lastInteractionAt: serverTimestamp(),
-      });
+          // Update student to inactive.
+          transaction.update(studentRef, {
+            status: 'inactive',
+            updatedAt: serverTimestamp(),
+            lastInteractionAt: serverTimestamp(),
+          });
 
-      // Create activity log for the soft delete.
-      const logRef = doc(collection(firestore, `libraries/${LIBRARY_ID}/activityLogs`));
-      transaction.set(logRef, {
-        libraryId: LIBRARY_ID,
-        user: { id: user.uid, name: user.displayName || 'Admin' },
-        activityType: 'student_archived',
-        details: { studentId: alertState.studentId, studentName: studentData.name },
-        timestamp: serverTimestamp(),
-      });
-    }).then(() => {
-      toast({
-        title: 'Student Archived',
-        description: `${alertState.studentName} has been marked as inactive and their future bookings have been cancelled.`,
-      });
-    }).catch((serverError) => {
+          // Create activity log for the soft delete.
+          const logRef = doc(collection(firestore, `libraries/${LIBRARY_ID}/activityLogs`));
+          transaction.set(logRef, {
+            libraryId: LIBRARY_ID,
+            user: { id: user.uid, name: user.displayName || 'Admin' },
+            activityType: 'student_archived',
+            details: { studentId: alertState.studentId, studentName: studentData.name },
+            timestamp: serverTimestamp(),
+          });
+        });
+        toast({
+            title: 'Student Archived',
+            description: `${alertState.studentName} has been marked as inactive and their future bookings have been cancelled.`,
+        });
+        closeDeleteAlert();
+    } catch(serverError) {
         if (serverError instanceof FirebaseError && serverError.code === 'permission-denied') {
           const permissionError = new FirestorePermissionError({
             path: studentRef.path,
@@ -206,10 +206,9 @@ export default function StudentsPage() {
             title: 'Error',
             description: serverError instanceof Error ? serverError.message : 'Could not update the student status.',
         });
-    }).finally(() => {
+    } finally {
         setIsDeleting(false);
-        closeDeleteAlert();
-    });
+    }
   };
 
   return (

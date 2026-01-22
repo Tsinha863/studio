@@ -204,15 +204,3 @@ export const useUser = () => {
     const { user, userProfile, role, isLoading, error } = useFirebase();
     return { user, userProfile, role, isLoading, error };
 }
-
-
-// Keep useMemoFirebase as it is a good pattern and used throughout the app.
-export type MemoFirebase <T> = T & {__memo?: boolean};
-export function useMemoFirebase<T>(factory: () => T, deps: React.DependencyList): T | (MemoFirebase<T>) {
-  const memoized = useMemo(factory, deps);
-  
-  if(typeof memoized !== 'object' || memoized === null) return memoized;
-  (memoized as MemoFirebase<T>).__memo = true;
-  
-  return memoized;
-}

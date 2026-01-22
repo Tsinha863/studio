@@ -1,6 +1,6 @@
 'use client';
     
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   DocumentReference,
   onSnapshot,
@@ -27,20 +27,16 @@ export interface UseDocResult<T> {
 
 /**
  * React hook to subscribe to a single Firestore document in real-time.
- * Handles nullable references.
- * 
- * IMPORTANT! YOU MUST MEMOIZE the inputted memoizedTargetRefOrQuery or BAD THINGS WILL HAPPEN
- * use useMemo to memoize it per React guidence.  Also make sure that it's dependencies are stable
- * references
- *
+ * It encapsulates memoization to prevent infinite loops from unstable query objects.
  *
  * @template T Optional type for document data. Defaults to any.
- * @param {DocumentReference<DocumentData> | null | undefined} docRef -
- * The Firestore DocumentReference. Waits if null/undefined.
+ * @param {() => DocumentReference | null | undefined} docRefFactory - A function that returns the Firestore DocumentReference.
+ * @param {React.DependencyList} deps - Dependencies for the factory function, similar to `useMemo`.
  * @returns {UseDocResult<T>} Object with data, isLoading, error.
  */
 export function useDoc<T = any>(
-  memoizedDocRef: (DocumentReference<DocumentData> & {__memo?: boolean}) | null | undefined,
+  docRefFactory: () => DocumentReference<DocumentData> | null | undefined,
+  deps: React.DependencyList = []
 ): UseDocResult<T> {
   type StateDataType = WithId<T> | null;
 
@@ -48,10 +44,12 @@ export function useDoc<T = any>(
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<FirestoreError | null>(null);
 
+  const memoizedDocRef = useMemo(docRefFactory, deps);
+
   useEffect(() => {
     if (!memoizedDocRef) {
       setData(null);
-      setIsLoading(true); // Keep loading until a valid ref is provided
+      setIsLoading(false);
       setError(null);
       return;
     }
@@ -66,15 +64,12 @@ export function useDoc<T = any>(
         if (snapshot.exists()) {
           setData({ ...(snapshot.data() as T), id: snapshot.id });
         } else {
-          // Document does not exist
           setData(null);
         }
-        setError(null); // Clear any previous error on successful snapshot (even if doc doesn't exist)
+        setError(null);
         setIsLoading(false);
       },
       (serverError: FirestoreError) => {
-        // For read operations (listeners), we set a local error for the UI
-        // but also emit a global error for better debugging if it's a permission issue.
         setError(serverError);
         setData(null);
         setIsLoading(false);
@@ -90,7 +85,7 @@ export function useDoc<T = any>(
     );
 
     return () => unsubscribe();
-  }, [memoizedDocRef]); // Re-run if the memoizedDocRef changes.
+  }, [memoizedDocRef]);
 
   return { data, isLoading, error };
 }

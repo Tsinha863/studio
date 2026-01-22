@@ -33,7 +33,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Logo } from '@/components/logo';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
-import { useDoc, useFirebase, useMemoFirebase } from '@/firebase';
+import { useDoc, useFirebase } from '@/firebase';
 import { Student } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AuthGuard } from '@/components/auth/auth-guard';
@@ -48,12 +48,10 @@ function UserMenu() {
   // The student profile contains more detailed info (like name) than the user profile.
   // We fetch it here for the UI. The AuthGuard and redirects have already used the
   // core `role` from the user profile for security.
-  const studentDocRef = useMemoFirebase(() => {
+  const { data: student, isLoading: isLoadingStudent } = useDoc<Student>(() => {
     if (!firestore || !user?.uid) return null;
     return doc(firestore, `libraries/${LIBRARY_ID}/students`, user.uid);
   }, [firestore, user]);
-
-  const { data: student, isLoading: isLoadingStudent } = useDoc<Student>(studentDocRef);
 
   return (
     <DropdownMenu>

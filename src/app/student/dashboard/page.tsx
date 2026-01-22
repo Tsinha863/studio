@@ -5,7 +5,7 @@ import * as React from 'react';
 import dynamic from 'next/dynamic';
 import { collection, query, where, orderBy, doc, Timestamp } from 'firebase/firestore';
 
-import { useCollection, useDoc, useFirebase, useMemoFirebase } from '@/firebase';
+import { useCollection, useDoc, useFirebase } from '@/firebase';
 import type { Student, Payment, SeatBooking } from '@/lib/types';
 import { WelcomeHeader } from '@/components/student/dashboard/welcome-header';
 import { AssignedSeatCard } from '@/components/student/dashboard/assigned-seat-card';
@@ -32,15 +32,13 @@ export default function StudentDashboardPage() {
   // --- Data Fetching ---
   
   // 1. Get current student's data by their ID (UID)
-  const studentDocRef = useMemoFirebase(() => {
+  const { data: student, isLoading: isLoadingStudent } = useDoc<Student>(() => {
     if (!firestore || !studentId) return null;
     return doc(firestore, `libraries/${LIBRARY_ID}/students`, studentId);
   }, [firestore, studentId]);
 
-  const { data: student, isLoading: isLoadingStudent } = useDoc<Student>(studentDocRef);
-
   // 2. Get student's payments
-  const paymentsQuery = useMemoFirebase(() => {
+  const { data: payments, isLoading: isLoadingPayments } = useCollection<Payment>(() => {
     if (!firestore || !studentId) return null;
     return query(
       collection(firestore, `libraries/${LIBRARY_ID}/payments`),
@@ -49,10 +47,8 @@ export default function StudentDashboardPage() {
     );
   }, [firestore, studentId]);
 
-  const { data: payments, isLoading: isLoadingPayments } = useCollection<Payment>(paymentsQuery);
-
   // 3. Get student's upcoming seat bookings
-  const bookingsQuery = useMemoFirebase(() => {
+  const { data: bookings, isLoading: isLoadingBookings } = useCollection<SeatBooking>(() => {
     if (!firestore || !studentId) return null;
     return query(
         collection(firestore, `libraries/${LIBRARY_ID}/seatBookings`),
@@ -61,8 +57,6 @@ export default function StudentDashboardPage() {
         orderBy('endTime', 'asc')
     );
   }, [firestore, studentId]);
-
-  const { data: bookings, isLoading: isLoadingBookings } = useCollection<SeatBooking>(bookingsQuery);
 
   const upcomingPayment = React.useMemo(() => {
     return payments?.find(p => p.status === 'pending' || p.status === 'overdue');

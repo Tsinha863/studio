@@ -14,7 +14,7 @@ import {
   type ColumnFiltersState,
 } from '@tanstack/react-table';
 
-import { useCollection, useFirebase, useMemoFirebase, errorEmitter } from '@/firebase';
+import { useCollection, useFirebase, errorEmitter } from '@/firebase';
 import type { PrintRequest } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -59,15 +59,13 @@ export default function PrintRequestsPage() {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
 
-  const requestsQuery = useMemoFirebase(() => {
+  const { data: requests, isLoading, error } = useCollection<PrintRequest>(() => {
     if (!firestore || !user) return null;
     return query(
       collection(firestore, `libraries/${LIBRARY_ID}/printRequests`),
       orderBy('createdAt', 'desc')
     );
   }, [firestore, user]);
-
-  const { data: requests, isLoading, error } = useCollection<PrintRequest>(requestsQuery);
 
   const handleStatusUpdate = React.useCallback(async (requestId: string, newStatus: 'Approved' | 'Rejected', reason?: string) => {
     if (!user || !firestore) {
@@ -100,14 +98,13 @@ export default function PrintRequestsPage() {
         timestamp: serverTimestamp(),
     });
     
-    batch.commit()
-      .then(() => {
+    try {
+        await batch.commit();
         toast({
             title: `Request ${newStatus}`,
             description: 'The print request has been updated.',
         });
-      })
-      .catch((serverError) => {
+    } catch(serverError) {
         if (serverError instanceof FirebaseError && serverError.code === 'permission-denied') {
           const permissionError = new FirestorePermissionError({
             path: requestRef.path,
@@ -121,14 +118,13 @@ export default function PrintRequestsPage() {
           title: 'Update Failed',
           description: serverError instanceof Error ? serverError.message : 'Could not update the request.',
         });
-      })
-      .finally(() => {
-          setIsSubmitting(false);
-          if (newStatus === 'Rejected') {
-              setRejectionDialog({ isOpen: false });
-              setRejectionReason('');
-          }
-      });
+    } finally {
+        setIsSubmitting(false);
+        if (newStatus === 'Rejected') {
+            setRejectionDialog({ isOpen: false });
+            setRejectionReason('');
+        }
+    }
   }, [user, firestore, toast]);
 
   const approveRequest = React.useCallback((requestId: string) => {

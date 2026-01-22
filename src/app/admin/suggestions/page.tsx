@@ -24,7 +24,7 @@ import {
 
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { useCollection, useFirebase, useMemoFirebase, errorEmitter } from '@/firebase';
+import { useCollection, useFirebase, errorEmitter } from '@/firebase';
 import type { Suggestion } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { DataTablePagination } from '@/components/ui/data-table-pagination';
@@ -64,15 +64,13 @@ export default function SuggestionsPage() {
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
 
   // --- Data Fetching ---
-  const suggestionsQuery = useMemoFirebase(() => {
+  const { data: suggestions, isLoading: isLoadingSuggestions, error } = useCollection<Suggestion>(() => {
     if (!firestore || !user) return null;
     return query(
       collection(firestore, `libraries/${LIBRARY_ID}/suggestions`),
       orderBy('createdAt', 'desc')
     );
   }, [firestore, user]);
-
-  const { data: suggestions, isLoading: isLoadingSuggestions, error } = useCollection<Suggestion>(suggestionsQuery);
   
   // --- Data Processing ---
   const suggestionsWithDetails = React.useMemo(() => {
@@ -96,14 +94,13 @@ export default function SuggestionsPage() {
       updatedAt: serverTimestamp(),
     };
     
-    updateDoc(suggestionRef, payload)
-      .then(() => {
+    try {
+        await updateDoc(suggestionRef, payload);
         toast({
           title: 'Status Updated',
           description: "The suggestion's status has been changed.",
         });
-      })
-      .catch((serverError) => {
+    } catch(serverError) {
         if (serverError instanceof FirebaseError && serverError.code === 'permission-denied') {
           const permissionError = new FirestorePermissionError({
             path: suggestionRef.path,
@@ -117,7 +114,7 @@ export default function SuggestionsPage() {
           title: 'Update Failed',
           description: serverError instanceof Error ? serverError.message : "The status could not be updated.",
         });
-      });
+    }
   }, [user, firestore, toast]);
 
   const openDeleteAlert = React.useCallback((suggestionId: string) =>
@@ -125,7 +122,7 @@ export default function SuggestionsPage() {
 
   const closeDeleteAlert = () => setAlertState({ isOpen: false, suggestionId: undefined });
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!alertState.suggestionId || !user || !firestore) {
       toast({ variant: 'destructive', title: 'Error', description: 'User not authenticated or suggestion not found.'});
       return;
@@ -148,14 +145,14 @@ export default function SuggestionsPage() {
       timestamp: serverTimestamp(),
     });
 
-    batch.commit()
-      .then(() => {
+    try {
+        await batch.commit();
         toast({
           title: 'Suggestion Deleted',
           description: 'The suggestion has been removed.',
         });
-      })
-      .catch((serverError) => {
+        closeDeleteAlert();
+    } catch(serverError) {
         if (serverError instanceof FirebaseError && serverError.code === 'permission-denied') {
           const permissionError = new FirestorePermissionError({
             path: suggestionRef.path,
@@ -168,11 +165,9 @@ export default function SuggestionsPage() {
           title: 'Deletion Failed',
           description: serverError instanceof Error ? serverError.message : "Could not delete the suggestion.",
         });
-      })
-      .finally(() => {
+    } finally {
         setIsSubmitting(false);
-        closeDeleteAlert();
-      });
+    }
   };
 
   const memoizedColumns = React.useMemo(
