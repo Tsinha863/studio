@@ -102,8 +102,9 @@ export default function PaymentsPage() {
     };
     setIsPaying(payment.id);
 
-    const transactionPromise = runTransaction(firestore, async (transaction) => {
-      const paymentRef = doc(firestore, `libraries/${LIBRARY_ID}/payments/${payment.id}`);
+    const paymentRef = doc(firestore, `libraries/${LIBRARY_ID}/payments/${payment.id}`);
+
+    runTransaction(firestore, async (transaction) => {
       const studentRef = doc(firestore, `libraries/${LIBRARY_ID}/students/${payment.studentId!}`);
       
       const [paymentDoc, studentDoc] = await Promise.all([
@@ -115,7 +116,7 @@ export default function PaymentsPage() {
       if (!studentDoc.exists()) throw new Error('Student document not found.');
       
       const paymentData = paymentDoc.data() as Payment;
-      if (paymentData.status === 'paid') return { studentBeforeUpdate: studentDoc.data() as Student, wasOverdue: false, alreadyPaid: true }; 
+      if (paymentData.status === 'paid') return { studentBeforeUpdate: studentDoc.data() as Student, wasOverdue: false, alreadyPaid: true, paymentData }; 
       
       const wasOverdue = paymentData.status === 'overdue';
 
@@ -149,10 +150,10 @@ export default function PaymentsPage() {
       });
       
       return { studentBeforeUpdate: studentDoc.data() as Student, wasOverdue, alreadyPaid: false, paymentData };
-    });
-
-    transactionPromise
-      .then(async ({ studentBeforeUpdate, wasOverdue, alreadyPaid, paymentData }) => {
+    })
+      .then(async (result) => {
+        if (!result) return;
+        const { studentBeforeUpdate, wasOverdue, alreadyPaid, paymentData } = result;
         if (alreadyPaid) return;
 
         toast({
@@ -184,7 +185,7 @@ export default function PaymentsPage() {
     }).catch(serverError => {
       if (serverError instanceof FirebaseError && serverError.code === 'permission-denied') {
         const permissionError = new FirestorePermissionError({
-          path: `libraries/${LIBRARY_ID}/payments/${payment.id}`,
+          path: paymentRef.path,
           operation: 'update',
         });
         errorEmitter.emit('permission-error', permissionError);
@@ -222,14 +223,15 @@ export default function PaymentsPage() {
     if (!user || !firestore) return;
     setIsCreating(true);
 
+    const batch = writeBatch(firestore);
+    const paymentsCol = collection(firestore, `libraries/${LIBRARY_ID}/payments`);
+
     try {
-      const batch = writeBatch(firestore);
       const actor = { id: user.uid, name: user.displayName || 'Admin' };
       const today = new Date();
       const ninetyDaysAgo = new Date(today.getFullYear(), today.getMonth(), today.getDate() - INACTIVITY_THRESHOLD_DAYS);
       const dueDate = new Date(today.getFullYear(), today.getMonth() + 1, 0); // Last day of current month
   
-      const paymentsCol = collection(firestore, `libraries/${LIBRARY_ID}/payments`);
       const studentsCol = collection(firestore, `libraries/${LIBRARY_ID}/students`);
 
       // 1. Transition 'pending' payments to 'overdue'
@@ -307,10 +309,10 @@ export default function PaymentsPage() {
         title: 'Payments Generated',
         description: `${createdCount} new payment obligations were created.`,
       });
-    } catch(error) {
-       if (error instanceof FirebaseError && error.code === 'permission-denied') {
+    } catch(serverError) {
+       if (serverError instanceof FirebaseError && serverError.code === 'permission-denied') {
         const permissionError = new FirestorePermissionError({
-          path: `libraries/${LIBRARY_ID}/payments`,
+          path: paymentsCol.path,
           operation: 'write',
         });
         errorEmitter.emit('permission-error', permissionError);
@@ -318,7 +320,7 @@ export default function PaymentsPage() {
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: error instanceof Error ? error.message : "Could not create payments.",
+        description: serverError instanceof Error ? serverError.message : "Could not create payments.",
       });
     } finally {
       setIsCreating(false);
@@ -426,7 +428,7 @@ export default function PaymentsPage() {
               </Button>
             )}
           </div>
-          {error && <p className="text-sm font-medium text-destructive">Error loading payments: {error.message}</p>}
+           {error && <p className="text-sm font-medium text-destructive">Error: {error.message}</p>}
           <DataTable
             table={table}
             columns={memoizedColumns}

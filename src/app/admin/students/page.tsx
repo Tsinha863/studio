@@ -250,7 +250,7 @@ export default function StudentsPage() {
             </div>
           </div>
           
-          {error && <p className="text-sm font-medium text-destructive">Error loading students: {error.message}</p>}
+          {error && <p className="text-sm font-medium text-destructive">Error: {error.message}</p>}
 
           <DataTable
             table={table}

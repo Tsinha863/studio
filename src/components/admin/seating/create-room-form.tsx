@@ -38,7 +38,7 @@ export function CreateRoomForm({ libraryId, onSuccess }: CreateRoomFormProps) {
   const [tier, setTier] = React.useState<Seat['tier']>('standard');
   const [errors, setErrors] = React.useState<Partial<Record<keyof RoomFormValues, string>>>({});
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!user || !firestore) {
       toast({
         variant: 'destructive',
@@ -62,72 +62,72 @@ export function CreateRoomForm({ libraryId, onSuccess }: CreateRoomFormProps) {
     }
     
     setIsSubmitting(true);
-    
-    const validatedData = validation.data;
+
     const batch = writeBatch(firestore);
-    const actor = { id: user.uid, name: user.displayName || 'Admin' };
     const roomRef = doc(collection(firestore, `libraries/${libraryId}/rooms`));
-    const roomPayload = {
-      name: validatedData.name,
-      capacity: validatedData.capacity,
-      libraryId,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    };
-    batch.set(roomRef, roomPayload);
-
-    const seatsColRef = collection(firestore, `libraries/${libraryId}/rooms/${roomRef.id}/seats`);
-    for (let i = 1; i <= validatedData.capacity; i++) {
-      const seatRef = doc(seatsColRef, i.toString());
-      batch.set(seatRef, {
-        roomId: roomRef.id,
-        libraryId,
-        tier: validatedData.tier,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-    }
-
-    const logRef = doc(collection(firestore, `libraries/${libraryId}/activityLogs`));
-    batch.set(logRef, {
-      libraryId,
-      user: actor,
-      activityType: 'room_created',
-      details: {
-        roomId: roomRef.id,
+    
+    try {
+      const validatedData = validation.data;
+      const actor = { id: user.uid, name: user.displayName || 'Admin' };
+      const roomPayload = {
         name: validatedData.name,
         capacity: validatedData.capacity,
-      },
-      timestamp: serverTimestamp(),
-    });
-    
-    batch.commit()
-      .then(() => {
-        onSuccess();
-        // Reset form only after successful submission
-        setName('');
-        setCapacity(20);
-        setTier('standard');
-        setErrors({});
-      })
-      .catch((serverError) => {
-        if (serverError instanceof FirebaseError && serverError.code === 'permission-denied') {
-          const permissionError = new FirestorePermissionError({
-            path: roomRef.path,
-            operation: 'create',
-            requestResourceData: roomPayload,
-          });
-          errorEmitter.emit('permission-error', permissionError);
-        }
-        toast({
-          variant: 'destructive',
-          title: 'Room Creation Failed',
-          description: serverError instanceof Error ? serverError.message : "The room could not be created."
+        libraryId,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+      batch.set(roomRef, roomPayload);
+  
+      const seatsColRef = collection(firestore, `libraries/${libraryId}/rooms/${roomRef.id}/seats`);
+      for (let i = 1; i <= validatedData.capacity; i++) {
+        const seatRef = doc(seatsColRef, i.toString());
+        batch.set(seatRef, {
+          roomId: roomRef.id,
+          libraryId,
+          tier: validatedData.tier,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
         });
-      })
-      .finally(() => {
-        setIsSubmitting(false);
+      }
+  
+      const logRef = doc(collection(firestore, `libraries/${libraryId}/activityLogs`));
+      batch.set(logRef, {
+        libraryId,
+        user: actor,
+        activityType: 'room_created',
+        details: {
+          roomId: roomRef.id,
+          name: validatedData.name,
+          capacity: validatedData.capacity,
+        },
+        timestamp: serverTimestamp(),
       });
+      
+      await batch.commit();
+      
+      onSuccess();
+      // Reset form only after successful submission
+      setName('');
+      setCapacity(20);
+      setTier('standard');
+      setErrors({});
+
+    } catch (serverError) {
+      if (serverError instanceof FirebaseError && serverError.code === 'permission-denied') {
+        const permissionError = new FirestorePermissionError({
+          path: roomRef.path,
+          operation: 'create',
+        });
+        errorEmitter.emit('permission-error', permissionError);
+      }
+      toast({
+        variant: 'destructive',
+        title: 'Room Creation Failed',
+        description: serverError instanceof Error ? serverError.message : "The room could not be created."
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (

@@ -8,6 +8,9 @@ import {
   FirestoreError,
   DocumentSnapshot,
 } from 'firebase/firestore';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
+
 
 /** Utility type to add an 'id' field to a given type T. */
 type WithId<T> = T & { id: string };
@@ -69,12 +72,20 @@ export function useDoc<T = any>(
         setError(null); // Clear any previous error on successful snapshot (even if doc doesn't exist)
         setIsLoading(false);
       },
-      (error: FirestoreError) => {
-        // A listener failed. Set the local error state for the component
-        // to handle gracefully, but do not crash the app.
-        setError(error);
+      (serverError: FirestoreError) => {
+        // For read operations (listeners), we set a local error for the UI
+        // but also emit a global error for better debugging if it's a permission issue.
+        setError(serverError);
         setData(null);
         setIsLoading(false);
+        
+        if (serverError.code === 'permission-denied') {
+            const permissionError = new FirestorePermissionError({
+              path: memoizedDocRef.path,
+              operation: 'get',
+            });
+            errorEmitter.emit('permission-error', permissionError);
+        }
       }
     );
 

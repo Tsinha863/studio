@@ -9,6 +9,8 @@ import {
   QuerySnapshot,
   CollectionReference,
 } from 'firebase/firestore';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 /** Utility type to add an 'id' field to a given type T. */
 export type WithId<T> = T & { id: string };
@@ -69,12 +71,21 @@ export function useCollection<T = any>(
         setError(null);
         setIsLoading(false);
       },
-      (error: FirestoreError) => {
-        // A listener failed. Set the local error state for the component
-        // to handle gracefully, but do not crash the app.
-        setError(error);
+      (serverError: FirestoreError) => {
+        // For read operations (listeners), we set a local error for the UI
+        // but also emit a global error for better debugging if it's a permission issue.
+        setError(serverError);
         setData(null);
         setIsLoading(false);
+        
+        if (serverError.code === 'permission-denied') {
+            const permissionError = new FirestorePermissionError({
+              // The path for a collection query is its ID.
+              path: memoizedTargetRefOrQuery.id,
+              operation: 'list',
+            });
+            errorEmitter.emit('permission-error', permissionError);
+        }
       }
     );
 

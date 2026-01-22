@@ -14,8 +14,9 @@ import {
   Timestamp,
   deleteDoc,
 } from 'firebase/firestore';
+import { FirebaseError } from 'firebase/app';
 
-import { useFirebase } from '@/firebase';
+import { useFirebase, errorEmitter } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import {
@@ -49,6 +50,7 @@ import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import type { Seat, Student, SeatBooking } from '@/lib/types';
 import { Spinner } from '@/components/spinner';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 type SeatWithId = Seat & { id: string };
 type StudentWithId = Student & { id: string };
@@ -90,11 +92,12 @@ export function SeatBookingDialog({
   const [duration, setDuration] = React.useState(4);
   
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [isCancelling, setIsCancelling] = React.useState<string | false>(false);
   const [isComboboxOpen, setIsComboboxOpen] = React.useState(false);
 
   const activeStudents = React.useMemo(() => students.filter(s => s.status !== 'inactive'), [students]);
 
-  const handleBooking = async () => {
+  const handleBooking = () => {
     if (!firestore || !user || !selectedStudentId) {
       toast({ variant: 'destructive', title: 'Error', description: 'Please select a student.' });
       return;
@@ -113,76 +116,105 @@ export function SeatBookingDialog({
         endDateTime = setMinutes(setHours(selectedDate, 21), 0);
     }
     
-    try {
-      await runTransaction(firestore, async (transaction) => {
-        const bookingsRef = collection(firestore, `libraries/${libraryId}/seatBookings`);
-        
-        // 1. Check for overlapping bookings for the same SEAT
-        const seatOverlapQuery = query(bookingsRef, 
-            where('seatId', '==', seat.id),
-            where('roomId', '==', seat.roomId),
-            where('endTime', '>', Timestamp.fromDate(startDateTime))
-        );
-        const seatOverlapSnapshot = await getDocs(seatOverlapQuery);
-        const seatConflicts = seatOverlapSnapshot.docs.filter(doc => doc.data().startTime.toDate() < endDateTime);
-        if (seatConflicts.length > 0) {
-            throw new Error(`This seat is already booked from ${format(seatConflicts[0].data().startTime.toDate(), 'p')} to ${format(seatConflicts[0].data().endTime.toDate(), 'p')}.`);
-        }
+    const bookingPayload = {
+      libraryId,
+      roomId: seat.roomId,
+      seatId: seat.id,
+      studentId: selectedStudentId,
+      studentName: studentToAssign.name,
+      startTime: Timestamp.fromDate(startDateTime),
+      endTime: Timestamp.fromDate(endDateTime),
+      createdAt: serverTimestamp(),
+    };
 
-        // 2. Check for overlapping bookings for the same STUDENT
-        const studentOverlapQuery = query(bookingsRef,
-            where('studentId', '==', selectedStudentId),
-            where('endTime', '>', Timestamp.fromDate(startDateTime))
-        );
-        const studentOverlapSnapshot = await getDocs(studentOverlapQuery);
-        const studentConflicts = studentOverlapSnapshot.docs.filter(doc => doc.data().startTime.toDate() < endDateTime);
-        if (studentConflicts.length > 0) {
-            const conflict = studentConflicts[0].data();
-            throw new Error(`${studentToAssign.name} already has a booking for seat ${conflict.seatId} from ${format(conflict.startTime.toDate(), 'p')} to ${format(conflict.endTime.toDate(), 'p')}.`);
-        }
+    runTransaction(firestore, async (transaction) => {
+      const bookingsRef = collection(firestore, `libraries/${libraryId}/seatBookings`);
+      
+      // 1. Check for overlapping bookings for the same SEAT
+      const seatOverlapQuery = query(bookingsRef, 
+          where('seatId', '==', seat.id),
+          where('roomId', '==', seat.roomId),
+          where('endTime', '>', Timestamp.fromDate(startDateTime))
+      );
+      const seatOverlapSnapshot = await getDocs(seatOverlapQuery);
+      const seatConflicts = seatOverlapSnapshot.docs.filter(doc => doc.data().startTime.toDate() < endDateTime);
+      if (seatConflicts.length > 0) {
+          throw new Error(`This seat is already booked from ${format(seatConflicts[0].data().startTime.toDate(), 'p')} to ${format(seatConflicts[0].data().endTime.toDate(), 'p')}.`);
+      }
 
-        // 3. If no conflicts, create the booking
-        const newBookingRef = doc(bookingsRef);
-        transaction.set(newBookingRef, {
-          libraryId,
-          roomId: seat.roomId,
-          seatId: seat.id,
-          studentId: selectedStudentId,
-          studentName: studentToAssign.name,
-          startTime: Timestamp.fromDate(startDateTime),
-          endTime: Timestamp.fromDate(endDateTime),
-          createdAt: serverTimestamp(),
-        });
-      });
+      // 2. Check for overlapping bookings for the same STUDENT
+      const studentOverlapQuery = query(bookingsRef,
+          where('studentId', '==', selectedStudentId),
+          where('endTime', '>', Timestamp.fromDate(startDateTime))
+      );
+      const studentOverlapSnapshot = await getDocs(studentOverlapQuery);
+      const studentConflicts = studentOverlapSnapshot.docs.filter(doc => doc.data().startTime.toDate() < endDateTime);
+      if (studentConflicts.length > 0) {
+          const conflict = studentConflicts[0].data();
+          throw new Error(`${studentToAssign.name} already has a booking for seat ${conflict.seatId} from ${format(conflict.startTime.toDate(), 'p')} to ${format(conflict.endTime.toDate(), 'p')}.`);
+      }
 
+      // 3. If no conflicts, create the booking
+      const newBookingRef = doc(bookingsRef);
+      transaction.set(newBookingRef, bookingPayload);
+    }).then(() => {
       toast({ title: 'Seat Booked!', description: `Seat ${seat.id} booked for ${studentToAssign.name}.` });
       onSuccess();
-    } catch (error) {
+    }).catch((serverError) => {
+       if (serverError instanceof FirebaseError && serverError.code === 'permission-denied') {
+        const permissionError = new FirestorePermissionError({
+          path: `libraries/${libraryId}/seatBookings`,
+          operation: 'create',
+          requestResourceData: bookingPayload,
+        });
+        errorEmitter.emit('permission-error', permissionError);
+      }
       toast({
         variant: 'destructive',
         title: 'Booking Failed',
-        description: error instanceof Error ? error.message : 'An unknown error occurred.',
+        description: serverError instanceof Error ? serverError.message : 'An unknown error occurred.',
       });
-    } finally {
+    }).finally(() => {
       setIsSubmitting(false);
-    }
+    });
   };
 
-  const handleCancelBooking = async (bookingId: string) => {
-    if (!firestore || !user) return;
-    
-    try {
-      const bookingRef = doc(firestore, `libraries/${libraryId}/seatBookings/${bookingId}`);
-      await deleteDoc(bookingRef);
-      toast({ title: 'Booking Cancelled', description: 'The seat is now available for this time slot.' });
-      onSuccess();
-    } catch (error) {
-       toast({
+  const handleCancelBooking = (bookingId: string) => {
+    if (!firestore || !user) {
+      toast({
         variant: 'destructive',
-        title: 'Cancellation Failed',
-        description: error instanceof Error ? error.message : 'Could not cancel the booking.',
+        title: 'Error',
+        description: 'You must be logged in to perform this action.',
       });
+      return;
     }
+    
+    setIsCancelling(bookingId);
+
+    const bookingRef = doc(firestore, `libraries/${libraryId}/seatBookings`, bookingId);
+    
+    deleteDoc(bookingRef)
+      .then(() => {
+        toast({ title: 'Booking Cancelled', description: 'The seat is now available for this time slot.' });
+        onSuccess();
+      })
+      .catch((serverError) => {
+        if (serverError instanceof FirebaseError && serverError.code === 'permission-denied') {
+          const permissionError = new FirestorePermissionError({
+            path: bookingRef.path,
+            operation: 'delete',
+          });
+          errorEmitter.emit('permission-error', permissionError);
+        }
+        toast({
+          variant: 'destructive',
+          title: 'Cancellation Failed',
+          description: serverError instanceof Error ? serverError.message : 'Could not cancel the booking.',
+        });
+      })
+      .finally(() => {
+        setIsCancelling(false);
+      });
   };
   
   React.useEffect(() => {
@@ -194,6 +226,7 @@ export function SeatBookingDialog({
   }, [isOpen]);
 
   const selectedStudentName = students.find(s => s.id === selectedStudentId)?.name;
+  const isActionDisabled = isSubmitting || !!isCancelling;
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -219,8 +252,8 @@ export function SeatBookingDialog({
                                         {format(booking.startTime.toDate(), 'h:mm a')} - {format(booking.endTime.toDate(), 'h:mm a')}
                                     </span>
                                 </div>
-                                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleCancelBooking(booking.id)}>
-                                    <Trash2 className="h-4 w-4"/>
+                                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleCancelBooking(booking.id)} disabled={isActionDisabled}>
+                                  {isCancelling === booking.id ? <Spinner className="h-4 w-4" /> : <Trash2 className="h-4 w-4"/>}
                                 </Button>
                             </li>
                         ))}
@@ -240,7 +273,7 @@ export function SeatBookingDialog({
                         <Label>Student</Label>
                         <Popover open={isComboboxOpen} onOpenChange={setIsComboboxOpen}>
                             <PopoverTrigger asChild>
-                                <Button variant="outline" role="combobox" className="w-full justify-between" disabled={isSubmitting}>
+                                <Button variant="outline" role="combobox" className="w-full justify-between" disabled={isActionDisabled}>
                                     {selectedStudentId ? selectedStudentName : "Select a student..."}
                                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                 </Button>
@@ -267,11 +300,11 @@ export function SeatBookingDialog({
                     <div className="grid grid-cols-2 gap-4">
                          <div className="space-y-2">
                             <Label htmlFor="startTime">Start Time</Label>
-                            <Input id="startTime" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} disabled={isSubmitting || duration === 24}/>
+                            <Input id="startTime" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} disabled={isActionDisabled || duration === 24}/>
                          </div>
                          <div className="space-y-2">
                             <Label htmlFor="duration">Duration</Label>
-                            <Select value={String(duration)} onValueChange={(val) => setDuration(Number(val))} disabled={isSubmitting}>
+                            <Select value={String(duration)} onValueChange={(val) => setDuration(Number(val))} disabled={isActionDisabled}>
                                 <SelectTrigger id="duration">
                                     <SelectValue placeholder="Select duration" />
                                 </SelectTrigger>
@@ -289,9 +322,9 @@ export function SeatBookingDialog({
 
         <DialogFooter>
           <DialogClose asChild>
-            <Button type="button" variant="outline">Close</Button>
+            <Button type="button" variant="outline" disabled={isActionDisabled}>Close</Button>
           </DialogClose>
-          <Button type="button" onClick={handleBooking} disabled={isSubmitting || !selectedStudentId}>
+          <Button type="button" onClick={handleBooking} disabled={isActionDisabled || !selectedStudentId}>
             {isSubmitting && <Spinner className="mr-2" />}
             {isSubmitting ? 'Booking...' : 'Create Booking'}
           </Button>
