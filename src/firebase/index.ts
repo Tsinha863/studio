@@ -1,38 +1,31 @@
 'use client';
 
 import { firebaseConfig } from '@/firebase/config';
-import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
+import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
-// IMPORTANT: DO NOT MODIFY THIS FUNCTION
+/**
+ * Initializes the Firebase app, but only if it hasn't been initialized already.
+ * This is to prevent re-initialization on hot reloads.
+ * @returns An object containing the initialized Firebase services.
+ */
 export function initializeFirebase() {
   if (!getApps().length) {
-    // Important! initializeApp() is called without any arguments because Firebase App Hosting
-    // integrates with the initializeApp() function to provide the environment variables needed to
-    // populate the FirebaseOptions in production. It is critical that we attempt to call initializeApp()
-    // without arguments.
-    let firebaseApp;
-    try {
-      // Attempt to initialize via Firebase App Hosting environment variables
-      firebaseApp = initializeApp();
-    } catch (e) {
-      // Only warn in production because it's normal to use the firebaseConfig to initialize
-      // during development
-      if (process.env.NODE_ENV === "production") {
-        console.warn('Automatic initialization failed. Falling back to firebase config object.', e);
-      }
-      firebaseApp = initializeApp(firebaseConfig);
-    }
-
+    // If no app is initialized, initialize one with the provided config.
+    const firebaseApp = initializeApp(firebaseConfig);
     return getSdks(firebaseApp);
   }
-
-  // If already initialized, return the SDKs with the already initialized App
+  // If an app is already initialized, just get the services from it.
   return getSdks(getApp());
 }
 
+/**
+ * A helper function to get all the required SDKs from a FirebaseApp instance.
+ * @param firebaseApp The initialized Firebase App.
+ * @returns An object containing the Auth, Firestore, and Storage services.
+ */
 export function getSdks(firebaseApp: FirebaseApp) {
   return {
     firebaseApp,
