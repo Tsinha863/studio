@@ -15,6 +15,7 @@ import {
   Timestamp,
   deleteDoc,
 } from 'firebase/firestore';
+import { FirebaseError } from 'firebase/app';
 
 import { useFirebase, errorEmitter } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
@@ -92,6 +93,7 @@ export function SeatBookingDialog({
   const [duration, setDuration] = React.useState(4);
   
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [isCancelling, setIsCancelling] = React.useState<string | false>(false);
   const [isComboboxOpen, setIsComboboxOpen] = React.useState(false);
 
   const activeStudents = React.useMemo(() => students.filter(s => s.status !== 'inactive'), [students]);
@@ -160,7 +162,6 @@ export function SeatBookingDialog({
       toast({ title: 'Seat Booked!', description: `Seat ${seat.id} booked for ${studentToAssign.name}.` });
       onSuccess();
     } catch (error) {
-      console.error("CREATE BOOKING ERROR:", error);
       toast({
         variant: 'destructive',
         title: 'Booking Failed',
@@ -171,22 +172,41 @@ export function SeatBookingDialog({
     }
   };
 
-  const handleCancelBooking = (bookingId: string) => {
-    if (!firestore || !user) return;
+  const handleCancelBooking = async (bookingId: string) => {
+    if (!firestore || !user) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'You must be logged in to perform this action.',
+      });
+      return;
+    }
     
-    // Optimistic UI update
-    toast({ title: 'Booking Cancelled', description: 'The seat is now available for this time slot.' });
-    onSuccess();
+    setIsCancelling(bookingId);
 
-    const bookingRef = doc(firestore, `libraries/${libraryId}/seatBookings/${bookingId}`);
-    deleteDoc(bookingRef).catch((serverError) => {
-        console.error("CANCEL BOOKING ERROR:", serverError);
+    try {
+      const bookingRef = doc(firestore, `libraries/${libraryId}/seatBookings`, bookingId);
+      await deleteDoc(bookingRef);
+      
+      toast({ title: 'Booking Cancelled', description: 'The seat is now available for this time slot.' });
+      onSuccess();
+
+    } catch (serverError) {
+      if (serverError instanceof FirebaseError && serverError.code === 'permission-denied') {
         const permissionError = new FirestorePermissionError({
-          path: bookingRef.path,
+          path: `libraries/${libraryId}/seatBookings/${bookingId}`,
           operation: 'delete',
         });
         errorEmitter.emit('permission-error', permissionError);
-    });
+      }
+       toast({
+        variant: 'destructive',
+        title: 'Cancellation Failed',
+        description: serverError instanceof Error ? serverError.message : 'Could not cancel the booking.',
+      });
+    } finally {
+      setIsCancelling(false);
+    }
   };
   
   React.useEffect(() => {
@@ -198,6 +218,7 @@ export function SeatBookingDialog({
   }, [isOpen]);
 
   const selectedStudentName = students.find(s => s.id === selectedStudentId)?.name;
+  const isActionDisabled = isSubmitting || !!isCancelling;
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -223,8 +244,8 @@ export function SeatBookingDialog({
                                         {format(booking.startTime.toDate(), 'h:mm a')} - {format(booking.endTime.toDate(), 'h:mm a')}
                                     </span>
                                 </div>
-                                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleCancelBooking(booking.id)}>
-                                    <Trash2 className="h-4 w-4"/>
+                                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleCancelBooking(booking.id)} disabled={isActionDisabled}>
+                                  {isCancelling === booking.id ? <Spinner className="h-4 w-4" /> : <Trash2 className="h-4 w-4"/>}
                                 </Button>
                             </li>
                         ))}
@@ -244,7 +265,7 @@ export function SeatBookingDialog({
                         <Label>Student</Label>
                         <Popover open={isComboboxOpen} onOpenChange={setIsComboboxOpen}>
                             <PopoverTrigger asChild>
-                                <Button variant="outline" role="combobox" className="w-full justify-between" disabled={isSubmitting}>
+                                <Button variant="outline" role="combobox" className="w-full justify-between" disabled={isActionDisabled}>
                                     {selectedStudentId ? selectedStudentName : "Select a student..."}
                                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                 </Button>
@@ -271,11 +292,11 @@ export function SeatBookingDialog({
                     <div className="grid grid-cols-2 gap-4">
                          <div className="space-y-2">
                             <Label htmlFor="startTime">Start Time</Label>
-                            <Input id="startTime" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} disabled={isSubmitting || duration === 24}/>
+                            <Input id="startTime" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} disabled={isActionDisabled || duration === 24}/>
                          </div>
                          <div className="space-y-2">
                             <Label htmlFor="duration">Duration</Label>
-                            <Select value={String(duration)} onValueChange={(val) => setDuration(Number(val))} disabled={isSubmitting}>
+                            <Select value={String(duration)} onValueChange={(val) => setDuration(Number(val))} disabled={isActionDisabled}>
                                 <SelectTrigger id="duration">
                                     <SelectValue placeholder="Select duration" />
                                 </SelectTrigger>
@@ -293,9 +314,9 @@ export function SeatBookingDialog({
 
         <DialogFooter>
           <DialogClose asChild>
-            <Button type="button" variant="outline">Close</Button>
+            <Button type="button" variant="outline" disabled={isActionDisabled}>Close</Button>
           </DialogClose>
-          <Button type="button" onClick={handleBooking} disabled={isSubmitting || !selectedStudentId}>
+          <Button type="button" onClick={handleBooking} disabled={isActionDisabled || !selectedStudentId}>
             {isSubmitting && <Spinner className="mr-2" />}
             {isSubmitting ? 'Booking...' : 'Create Booking'}
           </Button>

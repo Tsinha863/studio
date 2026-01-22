@@ -173,7 +173,6 @@ export default function DashboardPage() {
         pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
         pdf.save(`dashboard-report-${Date.now()}.pdf`);
     } catch (error) {
-        console.error('Failed to export report:', error);
         toast({
             variant: 'destructive',
             title: 'Export Failed',

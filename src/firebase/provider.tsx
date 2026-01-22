@@ -132,7 +132,6 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
             setAuthState(prev => ({ ...prev, user: firebaseUser, userProfile: profile, role: profile.role as UserRole, isLoading: false, error: null }));
 
           } catch (e) {
-            console.error("FirebaseProvider: Error resolving user profile:", e);
             // Profile fetch/creation failed. Update state, set loading to false, and set the error.
             setAuthState(prev => ({ ...prev, user: firebaseUser, userProfile: null, role: null, isLoading: false, error: e instanceof Error ? e : new Error('Failed to resolve user profile') }));
           }
@@ -145,7 +144,6 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
         setAuthState(prev => ({ ...prev, user: null, userProfile: null, role: null, isLoading: false, error: null }));
       }
     }, (error) => {
-      console.error("FirebaseProvider: onAuthStateChanged error:", error);
       // An error occurred in the auth listener itself.
       setAuthState(prev => ({ ...prev, user: null, userProfile: null, role: null, isLoading: false, error }));
     });
