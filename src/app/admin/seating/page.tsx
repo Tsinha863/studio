@@ -20,14 +20,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CreateRoomForm } from '@/components/admin/seating/create-room-form';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
+import { LIBRARY_ID } from '@/lib/config';
 
 const SeatingPlan = dynamic(() => import('@/components/admin/seating/seating-plan').then(mod => mod.SeatingPlan), { 
   ssr: false,
   loading: () => <Skeleton className="h-48 w-full rounded-lg" />
 });
-
-// TODO: Replace with actual logged-in user's library
-const HARDCODED_LIBRARY_ID = 'library1';
 
 export default function SeatingPage() {
   const { firestore, user } = useFirebase();
@@ -36,7 +34,7 @@ export default function SeatingPage() {
   const roomsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(
-      collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/rooms`)
+      collection(firestore, `libraries/${LIBRARY_ID}/rooms`)
     );
   }, [firestore, user]);
 
@@ -65,7 +63,7 @@ export default function SeatingPage() {
         </CardHeader>
         <CardContent>
           <CreateRoomForm
-            libraryId={HARDCODED_LIBRARY_ID}
+            libraryId={LIBRARY_ID}
             onSuccess={onRoomCreated}
           />
         </CardContent>
@@ -88,7 +86,7 @@ export default function SeatingPage() {
             </TabsList>
             {rooms.map(room => (
               <TabsContent key={room.id} value={room.id} className="mt-6">
-                <SeatingPlan libraryId={HARDCODED_LIBRARY_ID} roomId={room.id} />
+                <SeatingPlan libraryId={LIBRARY_ID} roomId={room.id} />
               </TabsContent>
             ))}
           </Tabs>

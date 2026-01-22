@@ -8,9 +8,7 @@ import { useCollection, useDoc, useFirebase, useMemoFirebase } from '@/firebase'
 import type { Student, PrintRequest } from '@/lib/types';
 import { PrintRequestForm } from '@/components/student/print-on-desk/print-request-form';
 import { PrintHistoryTable } from '@/components/student/print-on-desk/print-history-table';
-
-// TODO: Replace with actual logged-in user's library
-const HARDCODED_LIBRARY_ID = 'library1';
+import { LIBRARY_ID } from '@/lib/config';
 
 export default function PrintOnDeskPage() {
   const { firestore, user } = useFirebase();
@@ -21,7 +19,7 @@ export default function PrintOnDeskPage() {
   // 1. Get current student's data
   const studentDocRef = useMemoFirebase(() => {
     if (!firestore || !studentId) return null;
-    return doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students`, studentId);
+    return doc(firestore, `libraries/${LIBRARY_ID}/students`, studentId);
   }, [firestore, studentId]);
 
   const { data: student, isLoading: isLoadingStudent } = useDoc<Student>(studentDocRef);
@@ -30,7 +28,7 @@ export default function PrintOnDeskPage() {
   const printRequestsQuery = useMemoFirebase(() => {
     if (!firestore || !studentId) return null;
     return query(
-      collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/printRequests`),
+      collection(firestore, `libraries/${LIBRARY_ID}/printRequests`),
       where('studentId', '==', studentId),
       orderBy('createdAt', 'desc')
     );
@@ -53,7 +51,7 @@ export default function PrintOnDeskPage() {
         <div className="lg:col-span-2">
             <PrintRequestForm
                 student={student as (Student & {id: string}) | null}
-                libraryId={HARDCODED_LIBRARY_ID}
+                libraryId={LIBRARY_ID}
                 isLoading={isLoadingStudent}
             />
         </div>

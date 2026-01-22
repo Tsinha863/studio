@@ -13,6 +13,7 @@ import { UpcomingPaymentCard } from '@/components/student/dashboard/upcoming-pay
 import { FibonacciStreakCard } from '@/components/student/dashboard/fibonacci-streak-card';
 import { SuggestionForm } from '@/components/student/dashboard/suggestion-form';
 import { Skeleton } from '@/components/ui/skeleton';
+import { LIBRARY_ID } from '@/lib/config';
 
 const PaymentHistoryTable = dynamic(
   () => import('@/components/student/dashboard/payment-history-table').then(mod => mod.PaymentHistoryTable),
@@ -21,9 +22,6 @@ const PaymentHistoryTable = dynamic(
     loading: () => <Skeleton className="h-[400px] w-full" /> 
   }
 );
-
-// TODO: Replace with actual logged-in user's library
-const HARDCODED_LIBRARY_ID = 'library1';
 
 export default function StudentDashboardPage() {
   const { firestore, user } = useFirebase();
@@ -36,7 +34,7 @@ export default function StudentDashboardPage() {
   // 1. Get current student's data by their ID (UID)
   const studentDocRef = useMemoFirebase(() => {
     if (!firestore || !studentId) return null;
-    return doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students`, studentId);
+    return doc(firestore, `libraries/${LIBRARY_ID}/students`, studentId);
   }, [firestore, studentId]);
 
   const { data: student, isLoading: isLoadingStudent } = useDoc<Student>(studentDocRef);
@@ -45,7 +43,7 @@ export default function StudentDashboardPage() {
   const paymentsQuery = useMemoFirebase(() => {
     if (!firestore || !studentId) return null;
     return query(
-      collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/payments`),
+      collection(firestore, `libraries/${LIBRARY_ID}/payments`),
       where('studentId', '==', studentId),
       orderBy('dueDate', 'desc')
     );
@@ -57,7 +55,7 @@ export default function StudentDashboardPage() {
   const bookingsQuery = useMemoFirebase(() => {
     if (!firestore || !studentId) return null;
     return query(
-        collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/seatBookings`),
+        collection(firestore, `libraries/${LIBRARY_ID}/seatBookings`),
         where('studentId', '==', studentId),
         where('endTime', '>=', Timestamp.now()),
         orderBy('endTime', 'asc')
@@ -85,7 +83,7 @@ export default function StudentDashboardPage() {
             <PaymentHistoryTable payments={payments || []} isLoading={isLoadingPayments} />
         </div>
         <div className="lg:col-span-2">
-            <SuggestionForm student={student as (Student & {id: string}) | null} libraryId={HARDCODED_LIBRARY_ID} isLoading={isLoadingStudent}/>
+            <SuggestionForm student={student as (Student & {id: string}) | null} libraryId={LIBRARY_ID} isLoading={isLoadingStudent}/>
         </div>
       </div>
     </div>

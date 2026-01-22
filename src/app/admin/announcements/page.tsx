@@ -50,6 +50,7 @@ import { columns as announcementColumns } from '@/components/admin/announcements
 import { FirestorePermissionError } from '@/firebase/errors';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/spinner';
+import { LIBRARY_ID } from '@/lib/config';
 
 const DataTable = dynamic(() => import('@/components/ui/data-table').then(mod => mod.DataTable), { 
     ssr: false,
@@ -73,9 +74,6 @@ type AlertState = {
   announcementId?: string;
 };
 
-// TODO: Replace with actual logged-in user's library
-const HARDCODED_LIBRARY_ID = 'library1';
-
 export default function AnnouncementsPage() {
   const { toast } = useToast();
   const { firestore, user } = useFirebase();
@@ -89,7 +87,7 @@ export default function AnnouncementsPage() {
   const announcementsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(
-      collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/announcements`),
+      collection(firestore, `libraries/${LIBRARY_ID}/announcements`),
       orderBy('createdAt', 'desc')
     );
   }, [firestore, user]);
@@ -143,13 +141,13 @@ export default function AnnouncementsPage() {
 
     const batch = writeBatch(firestore);
     const actor = { id: user.uid, name: user.displayName || 'Admin' };
-    const announcementRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/announcements/${alertState.announcementId}`);
+    const announcementRef = doc(firestore, `libraries/${LIBRARY_ID}/announcements/${alertState.announcementId}`);
     
     batch.delete(announcementRef);
 
-    const logRef = doc(collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/activityLogs`));
+    const logRef = doc(collection(firestore, `libraries/${LIBRARY_ID}/activityLogs`));
     batch.set(logRef, {
-      libraryId: HARDCODED_LIBRARY_ID,
+      libraryId: LIBRARY_ID,
       user: actor,
       activityType: 'announcement_deleted',
       details: { announcementId: alertState.announcementId },
@@ -215,7 +213,7 @@ export default function AnnouncementsPage() {
             </DialogDescription>
           </DialogHeader>
           <AnnouncementForm
-            libraryId={HARDCODED_LIBRARY_ID}
+            libraryId={LIBRARY_ID}
             onSuccess={() => {
               closeModal();
               toast({

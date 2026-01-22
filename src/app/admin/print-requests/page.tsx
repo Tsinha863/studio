@@ -36,15 +36,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Spinner } from '@/components/spinner';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { Skeleton } from '@/components/ui/skeleton';
+import { LIBRARY_ID } from '@/lib/config';
 
 const DataTable = dynamic(() => import('@/components/ui/data-table').then(mod => mod.DataTable), { 
     ssr: false,
     loading: () => <div className="rounded-md border"><Skeleton className="h-96 w-full" /></div>
 });
 
-
-// TODO: Replace with actual logged-in user's library
-const HARDCODED_LIBRARY_ID = 'library1';
 
 type RejectionDialogState = {
   isOpen: boolean;
@@ -64,7 +62,7 @@ export default function PrintRequestsPage() {
   const requestsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(
-      collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/printRequests`),
+      collection(firestore, `libraries/${LIBRARY_ID}/printRequests`),
       orderBy('createdAt', 'desc')
     );
   }, [firestore, user]);
@@ -102,7 +100,7 @@ export default function PrintRequestsPage() {
       setIsSubmitting(true);
     }
     
-    const requestRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/printRequests`, requestId);
+    const requestRef = doc(firestore, `libraries/${LIBRARY_ID}/printRequests`, requestId);
 
     toast({
         title: `Request ${newStatus}`,
@@ -122,9 +120,9 @@ export default function PrintRequestsPage() {
 
     batch.update(requestRef, updateData);
 
-    const logRef = doc(collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/activityLogs`));
+    const logRef = doc(collection(firestore, `libraries/${LIBRARY_ID}/activityLogs`));
     batch.set(logRef, {
-        libraryId: HARDCODED_LIBRARY_ID,
+        libraryId: LIBRARY_ID,
         user: actor,
         activityType: newStatus === 'Approved' ? 'print_request_approved' : 'print_request_rejected',
         details: { requestId, reason: reason || null },

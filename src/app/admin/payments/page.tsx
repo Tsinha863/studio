@@ -46,6 +46,7 @@ import { columns as paymentColumns } from '@/components/admin/payments/columns';
 import { Spinner } from '@/components/spinner';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { Skeleton } from '@/components/ui/skeleton';
+import { LIBRARY_ID } from '@/lib/config';
 
 const DataTable = dynamic(() => import('@/components/ui/data-table').then(mod => mod.DataTable), { 
     ssr: false,
@@ -57,8 +58,6 @@ const ReceiptDialog = dynamic(() => import('@/components/receipt-dialog').then(m
 });
 
 
-// TODO: Replace with actual logged-in user's library
-const HARDCODED_LIBRARY_ID = 'library1';
 const MONTHLY_FEE = 50.00;
 const INACTIVITY_THRESHOLD_DAYS = 90;
 
@@ -85,7 +84,7 @@ export default function PaymentsPage() {
   const paymentsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(
-      collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/payments`),
+      collection(firestore, `libraries/${LIBRARY_ID}/payments`),
       orderBy('dueDate', 'desc')
     );
   }, [firestore, user]);
@@ -127,8 +126,8 @@ export default function PaymentsPage() {
       const ninetyDaysAgo = new Date(today.getFullYear(), today.getMonth(), today.getDate() - INACTIVITY_THRESHOLD_DAYS);
       const dueDate = new Date(today.getFullYear(), today.getMonth() + 1, 0); // Last day of current month
   
-      const paymentsCol = collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/payments`);
-      const studentsCol = collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students`);
+      const paymentsCol = collection(firestore, `libraries/${LIBRARY_ID}/payments`);
+      const studentsCol = collection(firestore, `libraries/${LIBRARY_ID}/students`);
 
       // 1. Transition 'pending' payments to 'overdue'
       const pendingToOverdueQuery = query(
@@ -160,7 +159,7 @@ export default function PaymentsPage() {
         if (!studentsWithUnpaidBills.has(student.id)) {
           const paymentRef = doc(paymentsCol);
           batch.set(paymentRef, {
-            libraryId: HARDCODED_LIBRARY_ID,
+            libraryId: LIBRARY_ID,
             studentId: student.id,
             studentName: student.name,
             amount: MONTHLY_FEE,
@@ -182,14 +181,14 @@ export default function PaymentsPage() {
   
       // 5. Update students with newly overdue payments to 'at-risk'
       for (const studentId of newlyOverdueStudentIds) {
-        const studentDocRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students/${studentId}`);
+        const studentDocRef = doc(firestore, `libraries/${LIBRARY_ID}/students/${studentId}`);
         batch.update(studentDocRef, { status: 'at-risk', updatedAt: serverTimestamp() });
       }
   
       if (createdCount > 0) {
-          const logRef = doc(collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/activityLogs`));
+          const logRef = doc(collection(firestore, `libraries/${LIBRARY_ID}/activityLogs`));
           batch.set(logRef, {
-            libraryId: HARDCODED_LIBRARY_ID,
+            libraryId: LIBRARY_ID,
             user: actor,
             activityType: 'monthly_payments_created',
             details: { count: createdCount },
@@ -236,8 +235,8 @@ export default function PaymentsPage() {
     });
 
     const transactionPromise = runTransaction(firestore, async (transaction) => {
-      const paymentRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/payments/${payment.id}`);
-      const studentRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students/${payment.studentId!}`);
+      const paymentRef = doc(firestore, `libraries/${LIBRARY_ID}/payments/${payment.id}`);
+      const studentRef = doc(firestore, `libraries/${LIBRARY_ID}/students/${payment.studentId!}`);
       
       const [paymentDoc, studentDoc] = await Promise.all([
         transaction.get(paymentRef),
@@ -268,9 +267,9 @@ export default function PaymentsPage() {
       });
 
       // Create activity log
-      const logRef = doc(collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/activityLogs`));
+      const logRef = doc(collection(firestore, `libraries/${LIBRARY_ID}/activityLogs`));
       transaction.set(logRef, {
-        libraryId: HARDCODED_LIBRARY_ID,
+        libraryId: LIBRARY_ID,
         user: { id: user.uid, name: user.displayName || 'Admin' },
         activityType: 'payment_processed',
         details: {

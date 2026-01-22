@@ -9,9 +9,7 @@ import { FirebaseStorage } from 'firebase/storage';
 import { FirebaseErrorListener } from '@/components/FirebaseErrorListener';
 import type { User as UserProfileType } from '@/lib/types';
 import { ensureUserProfile } from '@/lib/user-profile';
-
-// TODO: Replace with actual logged-in user's library
-const HARDCODED_LIBRARY_ID = 'library1';
+import { LIBRARY_ID } from '@/lib/config';
 
 const VALID_ROLES = ["libraryOwner", "student"] as const;
 type UserRole = (typeof VALID_ROLES)[number];
@@ -78,7 +76,7 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
         // the loading state is only set to false once everything is complete.
         const resolveUserProfile = async () => {
           try {
-            const userDocRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/users`, firebaseUser.uid);
+            const userDocRef = doc(firestore, `libraries/${LIBRARY_ID}/users`, firebaseUser.uid);
             let docSnap = await getDoc(userDocRef);
             
             // If the user profile doesn't exist, this is a new signup or a demo user login for the first time.
@@ -95,15 +93,15 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
                   uid: firebaseUser.uid,
                   email: firebaseUser.email,
                   role: role,
-                  libraryId: HARDCODED_LIBRARY_ID,
+                  libraryId: LIBRARY_ID,
                   name: firebaseUser.displayName || (role === 'student' ? 'New Student' : 'Admin'),
               });
 
               // 2. If the user is a student, also create their detailed student record.
               if (role === 'student') {
-                const studentRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students`, firebaseUser.uid);
+                const studentRef = doc(firestore, `libraries/${LIBRARY_ID}/students`, firebaseUser.uid);
                 await setDoc(studentRef, {
-                    libraryId: HARDCODED_LIBRARY_ID,
+                    libraryId: LIBRARY_ID,
                     userId: firebaseUser.uid,
                     name: firebaseUser.displayName || 'New Student',
                     email: firebaseUser.email,

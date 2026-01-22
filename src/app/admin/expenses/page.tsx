@@ -50,6 +50,7 @@ import { columns as expenseColumns } from '@/components/admin/expenses/columns';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/spinner';
+import { LIBRARY_ID } from '@/lib/config';
 
 const DataTable = dynamic(() => import('@/components/ui/data-table').then(mod => mod.DataTable), { 
     ssr: false,
@@ -74,9 +75,6 @@ type AlertState = {
   expenseId?: string;
 };
 
-// TODO: Replace with actual logged-in user's library
-const HARDCODED_LIBRARY_ID = 'library1';
-
 export default function ExpensesPage() {
   const { toast } = useToast();
   const { firestore, user } = useFirebase();
@@ -90,7 +88,7 @@ export default function ExpensesPage() {
   const expensesQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(
-      collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/expenses`),
+      collection(firestore, `libraries/${LIBRARY_ID}/expenses`),
       orderBy('expenseDate', 'desc')
     );
   }, [firestore, user]);
@@ -141,13 +139,13 @@ export default function ExpensesPage() {
 
     const batch = writeBatch(firestore);
     const actor = { id: user.uid, name: user.displayName || 'Admin' };
-    const expenseRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/expenses/${alertState.expenseId}`);
+    const expenseRef = doc(firestore, `libraries/${LIBRARY_ID}/expenses/${alertState.expenseId}`);
     
     batch.delete(expenseRef);
 
-    const logRef = doc(collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/activityLogs`));
+    const logRef = doc(collection(firestore, `libraries/${LIBRARY_ID}/activityLogs`));
     batch.set(logRef, {
-      libraryId: HARDCODED_LIBRARY_ID,
+      libraryId: LIBRARY_ID,
       user: actor,
       activityType: 'expense_deleted',
       details: { expenseId: alertState.expenseId },
@@ -218,7 +216,7 @@ export default function ExpensesPage() {
           </DialogHeader>
           <ExpenseForm
             expense={modalState.expense}
-            libraryId={HARDCODED_LIBRARY_ID}
+            libraryId={LIBRARY_ID}
             onSuccess={() => {
               closeModal();
               toast({

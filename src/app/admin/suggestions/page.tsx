@@ -40,6 +40,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { Skeleton } from '@/components/ui/skeleton';
+import { LIBRARY_ID } from '@/lib/config';
 
 const DataTable = dynamic(() => import('@/components/ui/data-table').then(mod => mod.DataTable), { 
     ssr: false,
@@ -50,9 +51,6 @@ type AlertState = {
   isOpen: boolean;
   suggestionId?: string;
 };
-
-// TODO: Replace with actual logged-in user's library
-const HARDCODED_LIBRARY_ID = 'library1';
 
 export default function SuggestionsPage() {
   const { toast } = useToast();
@@ -66,7 +64,7 @@ export default function SuggestionsPage() {
   const suggestionsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(
-      collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/suggestions`),
+      collection(firestore, `libraries/${LIBRARY_ID}/suggestions`),
       orderBy('createdAt', 'desc')
     );
   }, [firestore, user]);
@@ -116,7 +114,7 @@ export default function SuggestionsPage() {
       description: "The suggestion's status has been changed.",
     });
 
-    const suggestionRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/suggestions/${suggestionId}`);
+    const suggestionRef = doc(firestore, `libraries/${LIBRARY_ID}/suggestions/${suggestionId}`);
     const batch = writeBatch(firestore);
     const actor = { id: user.uid, name: user.displayName || 'Admin' };
     
@@ -125,9 +123,9 @@ export default function SuggestionsPage() {
       updatedAt: serverTimestamp(),
     });
 
-    const logRef = doc(collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/activityLogs`));
+    const logRef = doc(collection(firestore, `libraries/${LIBRARY_ID}/activityLogs`));
     batch.set(logRef, {
-      libraryId: HARDCODED_LIBRARY_ID,
+      libraryId: LIBRARY_ID,
       user: actor,
       activityType: 'suggestion_status_updated',
       details: { suggestionId, newStatus: status },
@@ -164,13 +162,13 @@ export default function SuggestionsPage() {
 
     const batch = writeBatch(firestore);
     const actor = { id: user.uid, name: user.displayName || 'Admin' };
-    const suggestionRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/suggestions/${alertState.suggestionId}`);
+    const suggestionRef = doc(firestore, `libraries/${LIBRARY_ID}/suggestions/${alertState.suggestionId}`);
     
     batch.delete(suggestionRef);
 
-    const logRef = doc(collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/activityLogs`));
+    const logRef = doc(collection(firestore, `libraries/${LIBRARY_ID}/activityLogs`));
     batch.set(logRef, {
-      libraryId: HARDCODED_LIBRARY_ID,
+      libraryId: LIBRARY_ID,
       user: actor,
       activityType: 'suggestion_deleted',
       details: { suggestionId: alertState.suggestionId },

@@ -34,6 +34,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/spinner';
 import { useToast } from '@/hooks/use-toast';
+import { LIBRARY_ID } from '@/lib/config';
 
 const IncomeExpenseChart = dynamic(() => import('@/components/admin/dashboard/income-expense-chart').then(mod => mod.IncomeExpenseChart), { 
     ssr: false,
@@ -53,9 +54,6 @@ const ExpenseBreakdownChart = dynamic(() => import('@/components/admin/dashboard
 });
 
 
-// TODO: Replace with actual logged-in user's library
-const HARDCODED_LIBRARY_ID = 'library1';
-
 export default function DashboardPage() {
   const { firestore, user } = useFirebase();
   const { toast } = useToast();
@@ -66,14 +64,14 @@ export default function DashboardPage() {
   const allStudentsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(
-      collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students`)
+      collection(firestore, `libraries/${LIBRARY_ID}/students`)
     );
   }, [firestore, user]);
 
   const recentStudentsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(
-      collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students`),
+      collection(firestore, `libraries/${LIBRARY_ID}/students`),
       orderBy('createdAt', 'desc'),
       limit(5)
     );
@@ -82,7 +80,7 @@ export default function DashboardPage() {
   const activityQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(
-      collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/activityLogs`),
+      collection(firestore, `libraries/${LIBRARY_ID}/activityLogs`),
       orderBy('timestamp', 'desc'),
       limit(5)
     );
@@ -95,7 +93,7 @@ export default function DashboardPage() {
   const paymentsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(
-        collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/payments`),
+        collection(firestore, `libraries/${LIBRARY_ID}/payments`),
         where('paymentDate', '>=', sixMonthsAgoTimestamp)
     );
   }, [firestore, user]);
@@ -103,7 +101,7 @@ export default function DashboardPage() {
   const expensesQuery = useMemoFirebase(() => {
       if (!firestore || !user) return null;
       return query(
-          collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/expenses`),
+          collection(firestore, `libraries/${LIBRARY_ID}/expenses`),
           where('expenseDate', '>=', sixMonthsAgoTimestamp)
       );
   }, [firestore, user]);

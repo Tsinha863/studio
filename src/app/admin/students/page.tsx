@@ -54,6 +54,7 @@ import type { Student } from '@/lib/types';
 import { columns as studentColumns } from '@/components/admin/students/columns';
 import { Spinner } from '@/components/spinner';
 import { Skeleton } from '@/components/ui/skeleton';
+import { LIBRARY_ID } from '@/lib/config';
 
 const DataTable = dynamic(() => import('@/components/ui/data-table').then(mod => mod.DataTable), { 
     ssr: false,
@@ -79,9 +80,6 @@ type AlertState = {
   studentName?: string;
 };
 
-// TODO: Replace with actual logged-in user's library
-const HARDCODED_LIBRARY_ID = 'library1';
-
 export default function StudentsPage() {
   const { toast } = useToast();
   const { firestore, user } = useFirebase();
@@ -102,7 +100,7 @@ export default function StudentsPage() {
         constraints.push(where('status', 'in', ['active', 'at-risk']));
     }
     return query(
-      collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students`),
+      collection(firestore, `libraries/${LIBRARY_ID}/students`),
       ...constraints
     );
   }, [firestore, user, showInactive]);
@@ -156,7 +154,7 @@ export default function StudentsPage() {
     closeDeleteAlert();
 
     const transactionPromise = runTransaction(firestore, async (transaction) => {
-      const studentRef = doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students/${alertState.studentId!}`);
+      const studentRef = doc(firestore, `libraries/${LIBRARY_ID}/students/${alertState.studentId!}`);
       const studentDoc = await transaction.get(studentRef);
 
       if (!studentDoc.exists()) throw new Error("Student not found.");
@@ -165,7 +163,7 @@ export default function StudentsPage() {
 
       // 1. Find and delete all future seat bookings for this student.
       const bookingsQuery = query(
-          collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/seatBookings`),
+          collection(firestore, `libraries/${LIBRARY_ID}/seatBookings`),
           where('studentId', '==', alertState.studentId),
           where('endTime', '>=', Timestamp.now())
       );
@@ -185,9 +183,9 @@ export default function StudentsPage() {
       });
 
       // 3. Create activity log for the soft delete.
-      const logRef = doc(collection(firestore, `libraries/${HARDCODED_LIBRARY_ID}/activityLogs`));
+      const logRef = doc(collection(firestore, `libraries/${LIBRARY_ID}/activityLogs`));
       transaction.set(logRef, {
-        libraryId: HARDCODED_LIBRARY_ID,
+        libraryId: LIBRARY_ID,
         user: { id: user.uid, name: user.displayName || 'Admin' },
         activityType: 'student_archived',
         details: { studentId: alertState.studentId, studentName: studentData.name },
@@ -271,7 +269,7 @@ export default function StudentsPage() {
           </DialogHeader>
           <StudentForm
             student={modalState.student}
-            libraryId={HARDCODED_LIBRARY_ID}
+            libraryId={LIBRARY_ID}
             onSuccess={() => {
               closeModal();
               toast({

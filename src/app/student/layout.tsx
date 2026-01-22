@@ -39,9 +39,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { AuthGuard } from '@/components/auth/auth-guard';
 import { doc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
-
-// TODO: Replace with actual logged-in user's library
-const HARDCODED_LIBRARY_ID = 'library1';
+import { LIBRARY_ID } from '@/lib/config';
 
 function UserMenu() {
   const { firestore, user } = useFirebase();
@@ -52,7 +50,7 @@ function UserMenu() {
   // core `role` from the user profile for security.
   const studentDocRef = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
-    return doc(firestore, `libraries/${HARDCODED_LIBRARY_ID}/students`, user.uid);
+    return doc(firestore, `libraries/${LIBRARY_ID}/students`, user.uid);
   }, [firestore, user]);
 
   const { data: student, isLoading: isLoadingStudent } = useDoc<Student>(studentDocRef);
@@ -156,6 +154,7 @@ export default function StudentLayout({
                           {/* Can add breadcrumbs or page title here */}
                       </div>
                       <Button
+                        type="button"
                         variant="ghost"
                         size="icon"
                         className="rounded-full"
