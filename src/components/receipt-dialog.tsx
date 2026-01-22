@@ -61,7 +61,13 @@ export function ReceiptDialog({
             scale: 2, // Improve resolution
         });
         const imgData = canvas.toDataURL('image/png');
-        const fileName = `receipt-${studentName?.replace(/\s/g, '_').toLowerCase() || 'student'}-${Date.now()}`;
+
+        // Sanitize the filename to prevent any potential path traversal issues.
+        const safeStudentName = (studentName || 'student')
+            .replace(/[^a-zA-Z0-9\s-]/g, '') // Allow only safe characters
+            .trim()
+            .replace(/\s+/g, '_'); // Replace spaces with underscores
+        const fileName = `receipt-${safeStudentName}-${Date.now()}`;
 
         if (format === 'pdf') {
             const pdf = new jsPDF({
