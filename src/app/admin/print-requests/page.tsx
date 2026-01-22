@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -14,7 +13,7 @@ import {
   type ColumnFiltersState,
 } from '@tanstack/react-table';
 
-import { useCollection, useFirebase, useMemoFirebase, errorEmitter } from '@/firebase';
+import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
 import type { PrintRequest } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -34,7 +33,6 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Spinner } from '@/components/spinner';
-import { FirestorePermissionError } from '@/firebase/errors';
 import { Skeleton } from '@/components/ui/skeleton';
 import { LIBRARY_ID } from '@/lib/config';
 
@@ -95,54 +93,54 @@ export default function PrintRequestsPage() {
       return;
     }
     
-    // Optimistic UI update for rejection dialog
     if (newStatus === 'Rejected') {
       setIsSubmitting(true);
     }
     
-    const requestRef = doc(firestore, `libraries/${LIBRARY_ID}/printRequests`, requestId);
+    try {
+      const requestRef = doc(firestore, `libraries/${LIBRARY_ID}/printRequests`, requestId);
+      const batch = writeBatch(firestore);
+      const actor = { id: user.uid, name: user.displayName || 'Admin' };
+      
+      const updateData: any = {
+          status: newStatus,
+          updatedAt: serverTimestamp(),
+      };
+      if (newStatus === 'Rejected' && reason) {
+          updateData.rejectionReason = reason;
+      }
 
-    toast({
-        title: `Request ${newStatus}`,
-        description: 'The print request has been updated.',
-    });
+      batch.update(requestRef, updateData);
 
-    const batch = writeBatch(firestore);
-    const actor = { id: user.uid, name: user.displayName || 'Admin' };
-    
-    const updateData: any = {
-        status: newStatus,
-        updatedAt: serverTimestamp(),
-    };
-    if (newStatus === 'Rejected' && reason) {
-        updateData.rejectionReason = reason;
-    }
-
-    batch.update(requestRef, updateData);
-
-    const logRef = doc(collection(firestore, `libraries/${LIBRARY_ID}/activityLogs`));
-    batch.set(logRef, {
-        libraryId: LIBRARY_ID,
-        user: actor,
-        activityType: newStatus === 'Approved' ? 'print_request_approved' : 'print_request_rejected',
-        details: { requestId, reason: reason || null },
-        timestamp: serverTimestamp(),
-    });
-    
-    batch.commit().catch((serverError) => {
-      const permissionError = new FirestorePermissionError({
-        path: requestRef.path,
-        operation: 'update',
-        requestResourceData: updateData,
+      const logRef = doc(collection(firestore, `libraries/${LIBRARY_ID}/activityLogs`));
+      batch.set(logRef, {
+          libraryId: LIBRARY_ID,
+          user: actor,
+          activityType: newStatus === 'Approved' ? 'print_request_approved' : 'print_request_rejected',
+          details: { requestId, reason: reason || null },
+          timestamp: serverTimestamp(),
       });
-      errorEmitter.emit('permission-error', permissionError);
-    }).finally(() => {
+      
+      await batch.commit();
+
+      toast({
+          title: `Request ${newStatus}`,
+          description: 'The print request has been updated.',
+      });
+
+    } catch (serverError) {
+      toast({
+        variant: 'destructive',
+        title: 'Update Failed',
+        description: serverError instanceof Error ? serverError.message : 'Could not update the request.',
+      });
+    } finally {
         if (newStatus === 'Rejected') {
             setIsSubmitting(false);
             setRejectionDialog({ isOpen: false });
             setRejectionReason('');
         }
-    });
+    }
   };
 
   const openRejectionDialog = (requestId: string) => {

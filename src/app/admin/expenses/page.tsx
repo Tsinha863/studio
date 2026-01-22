@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -44,10 +43,9 @@ import {
 import { Input } from '@/components/ui/input';
 import { DataTablePagination } from '@/components/ui/data-table-pagination';
 import { useToast } from '@/hooks/use-toast';
-import { useCollection, useFirebase, useMemoFirebase, errorEmitter } from '@/firebase';
+import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
 import type { Expense } from '@/lib/types';
 import { columns as expenseColumns } from '@/components/admin/expenses/columns';
-import { FirestorePermissionError } from '@/firebase/errors';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/spinner';
 import { LIBRARY_ID } from '@/lib/config';
@@ -130,36 +128,37 @@ export default function ExpensesPage() {
       return;
     }
 
-    // Optimistic UI update
-    closeDeleteAlert();
-    toast({
-      title: 'Expense Deleted',
-      description: 'The expense has been removed from the system.',
-    });
+    try {
+      const batch = writeBatch(firestore);
+      const actor = { id: user.uid, name: user.displayName || 'Admin' };
+      const expenseRef = doc(firestore, `libraries/${LIBRARY_ID}/expenses/${alertState.expenseId}`);
+      
+      batch.delete(expenseRef);
 
-    const batch = writeBatch(firestore);
-    const actor = { id: user.uid, name: user.displayName || 'Admin' };
-    const expenseRef = doc(firestore, `libraries/${LIBRARY_ID}/expenses/${alertState.expenseId}`);
-    
-    batch.delete(expenseRef);
-
-    const logRef = doc(collection(firestore, `libraries/${LIBRARY_ID}/activityLogs`));
-    batch.set(logRef, {
-      libraryId: LIBRARY_ID,
-      user: actor,
-      activityType: 'expense_deleted',
-      details: { expenseId: alertState.expenseId },
-      timestamp: serverTimestamp(),
-    });
-
-    // Non-blocking commit with error handling
-    batch.commit().catch((serverError) => {
-      const permissionError = new FirestorePermissionError({
-        path: expenseRef.path,
-        operation: 'delete',
+      const logRef = doc(collection(firestore, `libraries/${LIBRARY_ID}/activityLogs`));
+      batch.set(logRef, {
+        libraryId: LIBRARY_ID,
+        user: actor,
+        activityType: 'expense_deleted',
+        details: { expenseId: alertState.expenseId },
+        timestamp: serverTimestamp(),
       });
-      errorEmitter.emit('permission-error', permissionError);
-    });
+
+      await batch.commit();
+
+      toast({
+        title: 'Expense Deleted',
+        description: 'The expense has been removed from the system.',
+      });
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Deletion Failed',
+        description: error instanceof Error ? error.message : 'Could not delete the expense.',
+      });
+    } finally {
+      closeDeleteAlert();
+    }
   };
 
   return (

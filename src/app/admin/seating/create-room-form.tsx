@@ -102,7 +102,7 @@ export function CreateRoomForm({ libraryId, onSuccess }: CreateRoomFormProps) {
       await batch.commit();
       
       onSuccess();
-      // Reset form on success
+      // Reset form only after successful submission
       setName('');
       setCapacity(20);
       setTier('standard');

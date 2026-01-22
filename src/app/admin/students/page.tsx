@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -134,7 +133,7 @@ export default function StudentsPage() {
   const closeDeleteAlert = () =>
     setAlertState({ isOpen: false, studentId: undefined, studentName: undefined });
 
-  const handleDeleteStudent = () => {
+  const handleDeleteStudent = async () => {
     if (!alertState.studentId || !user || !firestore) {
       toast({
         variant: 'destructive',
@@ -146,62 +145,61 @@ export default function StudentsPage() {
     
     setIsDeleting(true);
 
-    // Optimistic UI updates
-    toast({
-      title: 'Student Archived',
-      description: `${alertState.studentName} has been marked as inactive and their future bookings have been cancelled.`,
-    });
-    closeDeleteAlert();
+    try {
+        await runTransaction(firestore, async (transaction) => {
+          const studentRef = doc(firestore, `libraries/${LIBRARY_ID}/students/${alertState.studentId!}`);
+          const studentDoc = await transaction.get(studentRef);
 
-    const transactionPromise = runTransaction(firestore, async (transaction) => {
-      const studentRef = doc(firestore, `libraries/${LIBRARY_ID}/students/${alertState.studentId!}`);
-      const studentDoc = await transaction.get(studentRef);
+          if (!studentDoc.exists()) throw new Error("Student not found.");
+          
+          const studentData = studentDoc.data() as Student;
 
-      if (!studentDoc.exists()) throw new Error("Student not found.");
-      
-      const studentData = studentDoc.data() as Student;
+          // Find and delete all future seat bookings for this student.
+          // NOTE: A getDocs() call inside a transaction is an anti-pattern for large-scale apps,
+          // as it can lead to contention. For this app's scale, we accept the small risk.
+          const bookingsQuery = query(
+              collection(firestore, `libraries/${LIBRARY_ID}/seatBookings`),
+              where('studentId', '==', alertState.studentId),
+              where('endTime', '>=', Timestamp.now())
+          );
+          const bookingsSnapshot = await getDocs(bookingsQuery);
+          bookingsSnapshot.forEach(bookingDoc => {
+              transaction.delete(bookingDoc.ref);
+          });
 
-      // 1. Find and delete all future seat bookings for this student.
-      const bookingsQuery = query(
-          collection(firestore, `libraries/${LIBRARY_ID}/seatBookings`),
-          where('studentId', '==', alertState.studentId),
-          where('endTime', '>=', Timestamp.now())
-      );
-      // Transactions require all reads to be before writes. We can't use getDocs inside a transaction directly.
-      // We will perform this query outside the transaction for simplicity, though a more complex
-      // server-side function would be better for true atomicity.
-      const bookingsSnapshot = await getDocs(bookingsQuery);
-      bookingsSnapshot.forEach(bookingDoc => {
-          transaction.delete(bookingDoc.ref);
-      });
+          // Update student to inactive.
+          transaction.update(studentRef, {
+            status: 'inactive',
+            updatedAt: serverTimestamp(),
+            lastInteractionAt: serverTimestamp(),
+          });
 
-      // 2. Update student to inactive.
-      transaction.update(studentRef, {
-        status: 'inactive',
-        updatedAt: serverTimestamp(),
-        lastInteractionAt: serverTimestamp(),
-      });
+          // Create activity log for the soft delete.
+          const logRef = doc(collection(firestore, `libraries/${LIBRARY_ID}/activityLogs`));
+          transaction.set(logRef, {
+            libraryId: LIBRARY_ID,
+            user: { id: user.uid, name: user.displayName || 'Admin' },
+            activityType: 'student_archived',
+            details: { studentId: alertState.studentId, studentName: studentData.name },
+            timestamp: serverTimestamp(),
+          });
+        });
 
-      // 3. Create activity log for the soft delete.
-      const logRef = doc(collection(firestore, `libraries/${LIBRARY_ID}/activityLogs`));
-      transaction.set(logRef, {
-        libraryId: LIBRARY_ID,
-        user: { id: user.uid, name: user.displayName || 'Admin' },
-        activityType: 'student_archived',
-        details: { studentId: alertState.studentId, studentName: studentData.name },
-        timestamp: serverTimestamp(),
-      });
-    });
+        toast({
+          title: 'Student Archived',
+          description: `${alertState.studentName} has been marked as inactive and their future bookings have been cancelled.`,
+        });
 
-    transactionPromise.catch((error) => {
+    } catch (error) {
         toast({
             variant: 'destructive',
             title: 'Error',
             description: error instanceof Error ? error.message : 'Could not update the student status.',
         });
-    }).finally(() => {
+    } finally {
         setIsDeleting(false);
-    });
+        closeDeleteAlert();
+    }
   };
 
   return (
