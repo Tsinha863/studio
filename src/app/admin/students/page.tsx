@@ -106,7 +106,15 @@ export default function StudentsPage() {
 
   const { data: students, isLoading } = useCollection<Student>(studentsQuery);
 
-  const memoizedColumns = React.useMemo(() => studentColumns({ openModal, openDeleteAlert, toast }), [toast]);
+  const openModal = React.useCallback((student?: StudentWithId) => setModalState({ isOpen: true, student }), []);
+
+  const openDeleteAlert = React.useCallback((student: StudentWithId) =>
+    setAlertState({ isOpen: true, studentId: student.id, studentName: student.name }), []);
+
+  const memoizedColumns = React.useMemo(
+    () => studentColumns({ openModal, openDeleteAlert, toast }), 
+    [openModal, openDeleteAlert, toast]
+  );
 
   const table = useReactTable({
     data: students || [],
@@ -125,11 +133,8 @@ export default function StudentsPage() {
     },
   });
 
-  const openModal = (student?: StudentWithId) => setModalState({ isOpen: true, student });
   const closeModal = () => setModalState({ isOpen: false, student: undefined });
 
-  const openDeleteAlert = (student: StudentWithId) =>
-    setAlertState({ isOpen: true, studentId: student.id, studentName: student.name });
   const closeDeleteAlert = () =>
     setAlertState({ isOpen: false, studentId: undefined, studentName: undefined });
 
@@ -155,8 +160,6 @@ export default function StudentsPage() {
           const studentData = studentDoc.data() as Student;
 
           // Find and delete all future seat bookings for this student.
-          // NOTE: A getDocs() call inside a transaction is an anti-pattern for large-scale apps,
-          // as it can lead to contention. For this app's scale, we accept the small risk.
           const bookingsQuery = query(
               collection(firestore, `libraries/${LIBRARY_ID}/seatBookings`),
               where('studentId', '==', alertState.studentId),
@@ -290,7 +293,7 @@ export default function StudentsPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={closeDeleteAlert}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleDeleteStudent} disabled={isDeleting}>
               {isDeleting && <Spinner className="mr-2" />}
               Continue

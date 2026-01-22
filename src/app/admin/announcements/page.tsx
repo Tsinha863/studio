@@ -9,7 +9,6 @@ import {
   writeBatch,
   doc,
   serverTimestamp,
-  deleteDoc,
 } from 'firebase/firestore';
 import {
   useReactTable,
@@ -76,6 +75,7 @@ type AlertState = {
 export default function AnnouncementsPage() {
   const { toast } = useToast();
   const { firestore, user } = useFirebase();
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   const [modalState, setModalState] = React.useState<ModalState>({ isOpen: false });
   const [alertState, setAlertState] = React.useState<AlertState>({ isOpen: false });
@@ -93,9 +93,12 @@ export default function AnnouncementsPage() {
 
   const { data: announcements, isLoading } = useCollection<Announcement>(announcementsQuery);
 
+  const openDeleteAlert = React.useCallback((announcement: AnnouncementWithId) =>
+    setAlertState({ isOpen: true, announcementId: announcement.id }), []);
+
   const memoizedColumns = React.useMemo(
     () => announcementColumns({ openDeleteAlert }),
-    []
+    [openDeleteAlert]
   );
 
   const table = useReactTable({
@@ -116,8 +119,6 @@ export default function AnnouncementsPage() {
   const openModal = () => setModalState({ isOpen: true });
   const closeModal = () => setModalState({ isOpen: false });
 
-  const openDeleteAlert = (announcement: AnnouncementWithId) =>
-    setAlertState({ isOpen: true, announcementId: announcement.id });
   const closeDeleteAlert = () =>
     setAlertState({ isOpen: false, announcementId: undefined });
 
@@ -130,6 +131,8 @@ export default function AnnouncementsPage() {
       });
       return;
     }
+    
+    setIsSubmitting(true);
     
     try {
       const batch = writeBatch(firestore);
@@ -160,6 +163,7 @@ export default function AnnouncementsPage() {
         description: error instanceof Error ? error.message : 'Could not delete the announcement.',
       });
     } finally {
+      setIsSubmitting(false);
       closeDeleteAlert();
     }
   };
@@ -236,8 +240,9 @@ export default function AnnouncementsPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete}>
+            <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} disabled={isSubmitting}>
+              {isSubmitting && <Spinner className="mr-2" />}
               Continue
             </AlertDialogAction>
           </AlertDialogFooter>

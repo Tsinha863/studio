@@ -67,35 +67,13 @@ export default function PrintRequestsPage() {
 
   const { data: requests, isLoading } = useCollection<PrintRequest>(requestsQuery);
 
-  const memoizedColumns = React.useMemo(
-    () => printRequestColumns({ onApprove: (id) => handleStatusUpdate(id, 'Approved'), onReject: openRejectionDialog }),
-    []
-  );
-  
-  const table = useReactTable({
-    data: requests || [],
-    columns: memoizedColumns,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    onSortingChange: setSorting,
-    getSortedRowModel: getSortedRowModel(),
-    onColumnFiltersChange: setColumnFilters,
-    getFilteredRowModel: getFilteredRowModel(),
-    state: {
-      sorting,
-      columnFilters,
-    },
-  });
-
-  const handleStatusUpdate = async (requestId: string, newStatus: 'Approved' | 'Rejected', reason?: string) => {
+  const handleStatusUpdate = React.useCallback(async (requestId: string, newStatus: 'Approved' | 'Rejected', reason?: string) => {
     if (!user || !firestore) {
       toast({ variant: 'destructive', title: 'Error', description: 'You must be logged in.' });
       return;
     }
     
-    if (newStatus === 'Rejected') {
-      setIsSubmitting(true);
-    }
+    setIsSubmitting(true);
     
     try {
       const requestRef = doc(firestore, `libraries/${LIBRARY_ID}/printRequests`, requestId);
@@ -135,17 +113,41 @@ export default function PrintRequestsPage() {
         description: serverError instanceof Error ? serverError.message : 'Could not update the request.',
       });
     } finally {
+        setIsSubmitting(false);
         if (newStatus === 'Rejected') {
-            setIsSubmitting(false);
             setRejectionDialog({ isOpen: false });
             setRejectionReason('');
         }
     }
-  };
+  }, [user, firestore, toast]);
 
-  const openRejectionDialog = (requestId: string) => {
+  const approveRequest = React.useCallback((requestId: string) => {
+    handleStatusUpdate(requestId, 'Approved');
+  }, [handleStatusUpdate]);
+
+  const openRejectionDialog = React.useCallback((requestId: string) => {
     setRejectionDialog({ isOpen: true, requestId });
-  };
+  }, []);
+
+  const memoizedColumns = React.useMemo(
+    () => printRequestColumns({ onApprove: approveRequest, onReject: openRejectionDialog }),
+    [approveRequest, openRejectionDialog]
+  );
+  
+  const table = useReactTable({
+    data: requests || [],
+    columns: memoizedColumns,
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    onSortingChange: setSorting,
+    getSortedRowModel: getSortedRowModel(),
+    onColumnFiltersChange: setColumnFilters,
+    getFilteredRowModel: getFilteredRowModel(),
+    state: {
+      sorting,
+      columnFilters,
+    },
+  });
 
   const handleConfirmRejection = () => {
     if (rejectionDialog.requestId) {

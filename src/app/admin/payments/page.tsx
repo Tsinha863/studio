@@ -37,14 +37,13 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { useCollection, useFirebase, useMemoFirebase, errorEmitter } from '@/firebase';
+import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
 import type { Payment, Student } from '@/lib/types';
 import { generateSimulatedReceipt } from '@/ai/flows/generate-simulated-receipt';
 
 import { DataTablePagination } from '@/components/ui/data-table-pagination';
 import { columns as paymentColumns } from '@/components/admin/payments/columns';
 import { Spinner } from '@/components/spinner';
-import { FirestorePermissionError } from '@/firebase/errors';
 import { Skeleton } from '@/components/ui/skeleton';
 import { LIBRARY_ID } from '@/lib/config';
 
@@ -91,7 +90,107 @@ export default function PaymentsPage() {
 
   const { data: payments, isLoading: isLoadingPayments } = useCollection<Payment>(paymentsQuery);
   
-  const memoizedColumns = React.useMemo(() => paymentColumns({ handleMarkAsPaid, isPaying }), [isPaying]);
+  const handleMarkAsPaid = React.useCallback((payment: PaymentWithId) => {
+    if (!user || !firestore || !payment.studentId) {
+       toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: "Student ID not found. Cannot process payment.",
+      });
+      return;
+    };
+    setIsPaying(payment.id);
+
+    const transactionPromise = runTransaction(firestore, async (transaction) => {
+      const paymentRef = doc(firestore, `libraries/${LIBRARY_ID}/payments/${payment.id}`);
+      const studentRef = doc(firestore, `libraries/${LIBRARY_ID}/students/${payment.studentId!}`);
+      
+      const [paymentDoc, studentDoc] = await Promise.all([
+        transaction.get(paymentRef),
+        transaction.get(studentRef),
+      ]);
+
+      if (!paymentDoc.exists()) throw new Error('Payment document not found.');
+      if (!studentDoc.exists()) throw new Error('Student document not found.');
+      
+      const paymentData = paymentDoc.data() as Payment;
+      if (paymentData.status === 'paid') return { studentBeforeUpdate: studentDoc.data() as Student, wasOverdue: false, alreadyPaid: true }; 
+      
+      const wasOverdue = paymentData.status === 'overdue';
+
+      // Update payment
+      transaction.update(paymentRef, {
+        status: 'paid',
+        paymentDate: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      // Update student
+      transaction.update(studentRef, {
+        fibonacciStreak: wasOverdue ? 0 : increment(1),
+        status: 'active',
+        lastInteractionAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      // Create activity log
+      const logRef = doc(collection(firestore, `libraries/${LIBRARY_ID}/activityLogs`));
+      transaction.set(logRef, {
+        libraryId: LIBRARY_ID,
+        user: { id: user.uid, name: user.displayName || 'Admin' },
+        activityType: 'payment_processed',
+        details: {
+          studentName: studentDoc.data().name,
+          amount: paymentData.amount,
+          paymentId: payment.id,
+        },
+        timestamp: serverTimestamp(),
+      });
+      
+      return { studentBeforeUpdate: studentDoc.data() as Student, wasOverdue, alreadyPaid: false };
+    });
+
+    transactionPromise.then(async ({ studentBeforeUpdate, wasOverdue, alreadyPaid }) => {
+        if (alreadyPaid) return;
+
+        toast({
+          title: 'Payment Confirmed',
+          description: `${studentBeforeUpdate.name}'s payment of ${new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(payment.amount)} has been recorded.`,
+        });
+
+        const newFibonacciStreak = wasOverdue ? 0 : (studentBeforeUpdate.fibonacciStreak || 0) + 1;
+        
+        const receiptInput = {
+            studentName: studentBeforeUpdate.name,
+            paymentAmount: payment.amount,
+            paymentDate: new Date().toISOString().split('T')[0],
+            fibonacciStreak: newFibonacciStreak,
+            studentStatus: 'active',
+            paymentId: payment.id,
+        };
+        
+        try {
+            const { receiptText } = await generateSimulatedReceipt(receiptInput);
+            setReceiptState({ isOpen: true, receiptText, studentName: studentBeforeUpdate.name });
+        } catch (e) {
+            toast({
+                variant: "destructive",
+                title: "Receipt Generation Failed",
+                description: "Could not generate AI receipt, but payment was recorded."
+            })
+        }
+    }).catch(error => {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Could not process payment.',
+      });
+    }).finally(() => {
+      setIsPaying(false);
+    });
+  }, [firestore, user, toast]);
+
+  const memoizedColumns = React.useMemo(() => paymentColumns({ handleMarkAsPaid, isPaying }), [handleMarkAsPaid, isPaying]);
   
   const table = useReactTable({
     data: payments || [],
@@ -110,16 +209,11 @@ export default function PaymentsPage() {
     },
   });
 
-  const handleCreatePayments = () => {
+  const handleCreatePayments = async () => {
     if (!user || !firestore) return;
     setIsCreating(true);
 
-    toast({
-      title: 'Payment Generation Started',
-      description: 'Processing student payments in the background.',
-    });
-
-    const createPaymentsLogic = async () => {
+    try {
       const batch = writeBatch(firestore);
       const actor = { id: user.uid, name: user.displayName || 'Admin' };
       const today = new Date();
@@ -196,128 +290,21 @@ export default function PaymentsPage() {
           });
       }
       
-      return { count: createdCount };
-    };
+      await batch.commit();
 
-    // Run the logic and commit non-blockingly
-    createPaymentsLogic().then(({ count }) => {
       toast({
         title: 'Payments Generated',
-        description: `${count} new payment obligations were created.`,
+        description: `${createdCount} new payment obligations were created.`,
       });
-    }).catch(error => {
-      console.error("CREATE MONTHLY PAYMENTS ERROR:", error);
+    } catch(error) {
       toast({
         variant: 'destructive',
         title: 'Error',
         description: error instanceof Error ? error.message : "Could not create payments.",
       });
-    }).finally(() => {
+    } finally {
       setIsCreating(false);
-    });
-  };
-
-  const handleMarkAsPaid = (payment: PaymentWithId) => {
-    if (!user || !firestore || !payment.studentId) {
-       toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: "Student ID not found. Cannot process payment.",
-      });
-      return;
-    };
-    setIsPaying(payment.id);
-
-    // Optimistic UI updates
-    toast({
-      title: 'Payment Confirmed',
-      description: `${payment.studentName}'s payment of ${new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(payment.amount)} has been recorded.`,
-    });
-
-    const transactionPromise = runTransaction(firestore, async (transaction) => {
-      const paymentRef = doc(firestore, `libraries/${LIBRARY_ID}/payments/${payment.id}`);
-      const studentRef = doc(firestore, `libraries/${LIBRARY_ID}/students/${payment.studentId!}`);
-      
-      const [paymentDoc, studentDoc] = await Promise.all([
-        transaction.get(paymentRef),
-        transaction.get(studentRef),
-      ]);
-
-      if (!paymentDoc.exists()) throw new Error('Payment document not found.');
-      if (!studentDoc.exists()) throw new Error('Student document not found.');
-      
-      const paymentData = paymentDoc.data() as Payment;
-      if (paymentData.status === 'paid') return { studentBeforeUpdate: studentDoc.data() as Student, wasOverdue: false, alreadyPaid: true }; 
-      
-      const wasOverdue = paymentData.status === 'overdue';
-
-      // Update payment
-      transaction.update(paymentRef, {
-        status: 'paid',
-        paymentDate: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-
-      // Update student
-      transaction.update(studentRef, {
-        fibonacciStreak: wasOverdue ? 0 : increment(1),
-        status: 'active',
-        lastInteractionAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-
-      // Create activity log
-      const logRef = doc(collection(firestore, `libraries/${LIBRARY_ID}/activityLogs`));
-      transaction.set(logRef, {
-        libraryId: LIBRARY_ID,
-        user: { id: user.uid, name: user.displayName || 'Admin' },
-        activityType: 'payment_processed',
-        details: {
-          studentName: studentDoc.data().name,
-          amount: paymentData.amount,
-          paymentId: payment.id,
-        },
-        timestamp: serverTimestamp(),
-      });
-      
-      return { studentBeforeUpdate: studentDoc.data() as Student, wasOverdue, alreadyPaid: false };
-    });
-
-    transactionPromise.then(async ({ studentBeforeUpdate, wasOverdue, alreadyPaid }) => {
-        if (alreadyPaid) return;
-
-        const newFibonacciStreak = wasOverdue ? 0 : (studentBeforeUpdate.fibonacciStreak || 0) + 1;
-        
-        const receiptInput = {
-            studentName: studentBeforeUpdate.name,
-            paymentAmount: payment.amount,
-            paymentDate: new Date().toISOString().split('T')[0],
-            fibonacciStreak: newFibonacciStreak,
-            studentStatus: 'active',
-            paymentId: payment.id,
-        };
-        
-        try {
-            const { receiptText } = await generateSimulatedReceipt(receiptInput);
-            setReceiptState({ isOpen: true, receiptText, studentName: studentBeforeUpdate.name });
-        } catch (e) {
-            console.error("Receipt generation failed:", e);
-            toast({
-                variant: "destructive",
-                title: "Receipt Generation Failed",
-                description: "Could not generate AI receipt, but payment was recorded."
-            })
-        }
-    }).catch(error => {
-      console.error("MARK AS PAID ERROR:", error);
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Could not process payment.',
-      });
-    }).finally(() => {
-      setIsPaying(false);
-    });
+    }
   };
   
   const closeReceiptDialog = () => setReceiptState({ isOpen: false });

@@ -76,6 +76,7 @@ type AlertState = {
 export default function ExpensesPage() {
   const { toast } = useToast();
   const { firestore, user } = useFirebase();
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   const [modalState, setModalState] = React.useState<ModalState>({ isOpen: false });
   const [alertState, setAlertState] = React.useState<AlertState>({ isOpen: false });
@@ -93,7 +94,14 @@ export default function ExpensesPage() {
 
   const { data: expenses, isLoading } = useCollection<Expense>(expensesQuery);
   
-  const memoizedColumns = React.useMemo(() => expenseColumns({ openModal, openDeleteAlert }), []);
+  const openModal = React.useCallback((expense?: ExpenseWithId) => setModalState({ isOpen: true, expense }), []);
+  
+  const openDeleteAlert = React.useCallback((expense: ExpenseWithId) =>
+    setAlertState({ isOpen: true, expenseId: expense.id }), []);
+  
+  const memoizedColumns = React.useMemo(
+    () => expenseColumns({ openModal, openDeleteAlert }), 
+    [openModal, openDeleteAlert]);
   
   const table = useReactTable({
     data: expenses || [],
@@ -110,11 +118,8 @@ export default function ExpensesPage() {
     },
   });
 
-  const openModal = (expense?: ExpenseWithId) => setModalState({ isOpen: true, expense });
   const closeModal = () => setModalState({ isOpen: false, expense: undefined });
 
-  const openDeleteAlert = (expense: ExpenseWithId) =>
-    setAlertState({ isOpen: true, expenseId: expense.id });
   const closeDeleteAlert = () =>
     setAlertState({ isOpen: false, expenseId: undefined });
 
@@ -127,6 +132,8 @@ export default function ExpensesPage() {
       });
       return;
     }
+    
+    setIsSubmitting(true);
 
     try {
       const batch = writeBatch(firestore);
@@ -157,6 +164,7 @@ export default function ExpensesPage() {
         description: error instanceof Error ? error.message : 'Could not delete the expense.',
       });
     } finally {
+      setIsSubmitting(false);
       closeDeleteAlert();
     }
   };
@@ -237,8 +245,9 @@ export default function ExpensesPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteExpense}>
+            <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteExpense} disabled={isSubmitting}>
+              {isSubmitting && <Spinner className="mr-2" />}
               Continue
             </AlertDialogAction>
           </AlertDialogFooter>

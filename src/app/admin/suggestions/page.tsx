@@ -39,6 +39,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Spinner } from '@/components/spinner';
 import { LIBRARY_ID } from '@/lib/config';
 
 const DataTable = dynamic(() => import('@/components/ui/data-table').then(mod => mod.DataTable), { 
@@ -55,6 +56,7 @@ export default function SuggestionsPage() {
   const { toast } = useToast();
   const { firestore, user } = useFirebase();
   const [alertState, setAlertState] = React.useState<AlertState>({ isOpen: false });
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
@@ -75,34 +77,12 @@ export default function SuggestionsPage() {
     if (!suggestions) return [];
     return suggestions.map((s) => ({
       ...s,
-      // studentName is denormalized on the suggestion document.
-      // Fallback for any legacy data that might not have it.
       studentName: s.studentName || 'Unknown Student',
     }));
   }, [suggestions]);
 
-  const memoizedColumns = React.useMemo(
-    () => suggestionColumns({ onStatusChange: handleStatusChange, onDelete: openDeleteAlert }),
-    []
-  );
-
-  const table = useReactTable({
-    data: suggestionsWithDetails,
-    columns: memoizedColumns,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    onSortingChange: setSorting,
-    getSortedRowModel: getSortedRowModel(),
-    onColumnFiltersChange: setColumnFilters,
-    getFilteredRowModel: getFilteredRowModel(),
-    state: {
-      sorting,
-      columnFilters,
-    },
-  });
-
   // --- Handlers ---
-  const handleStatusChange = async (suggestionId: string, status: Suggestion['status']) => {
+  const handleStatusChange = React.useCallback(async (suggestionId: string, status: Suggestion['status']) => {
     if (!user || !firestore) {
       toast({ variant: 'destructive', title: 'Error', description: 'You must be logged in to perform this action.'});
       return;
@@ -126,10 +106,11 @@ export default function SuggestionsPage() {
         description: error instanceof Error ? error.message : "The status could not be updated.",
       });
     }
-  };
+  }, [user, firestore, toast]);
 
-  const openDeleteAlert = (suggestionId: string) =>
-    setAlertState({ isOpen: true, suggestionId });
+  const openDeleteAlert = React.useCallback((suggestionId: string) =>
+    setAlertState({ isOpen: true, suggestionId }), []);
+
   const closeDeleteAlert = () => setAlertState({ isOpen: false, suggestionId: undefined });
 
   const handleDelete = async () => {
@@ -137,10 +118,11 @@ export default function SuggestionsPage() {
       toast({ variant: 'destructive', title: 'Error', description: 'User not authenticated or suggestion not found.'});
       return;
     }
+    
+    setIsSubmitting(true);
 
     const suggestionRef = doc(firestore, `libraries/${LIBRARY_ID}/suggestions/${alertState.suggestionId}`);
     try {
-      await writeBatch(firestore);
       const batch = writeBatch(firestore);
       const actor = { id: user.uid, name: user.displayName || 'Admin' };
       
@@ -168,9 +150,30 @@ export default function SuggestionsPage() {
         description: error instanceof Error ? error.message : "Could not delete the suggestion.",
       });
     } finally {
+      setIsSubmitting(false);
       closeDeleteAlert();
     }
   };
+
+  const memoizedColumns = React.useMemo(
+    () => suggestionColumns({ onStatusChange: handleStatusChange, onDelete: openDeleteAlert }),
+    [handleStatusChange, openDeleteAlert]
+  );
+
+  const table = useReactTable({
+    data: suggestionsWithDetails,
+    columns: memoizedColumns,
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    onSortingChange: setSorting,
+    getSortedRowModel: getSortedRowModel(),
+    onColumnFiltersChange: setColumnFilters,
+    getFilteredRowModel: getFilteredRowModel(),
+    state: {
+      sorting,
+      columnFilters,
+    },
+  });
 
   return (
     <div className="flex flex-col gap-6">
@@ -218,8 +221,9 @@ export default function SuggestionsPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete}>
+            <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} disabled={isSubmitting}>
+              {isSubmitting && <Spinner className="mr-2" />}
               Continue
             </AlertDialogAction>
           </AlertDialogFooter>
