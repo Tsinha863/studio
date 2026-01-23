@@ -46,6 +46,10 @@
           "type": "string",
           "description": "Reference to Library. Identifies the library to which the user belongs."
         },
+        "name": {
+          "type": "string",
+          "description": "The user's display name."
+        },
         "email": {
           "type": "string",
           "description": "Email address of the user.",
@@ -58,11 +62,6 @@
             "libraryOwner",
             "student"
           ]
-        },
-        "profile": {
-          "type": "string",
-          "description": "User profile information (e.g., name, phone number).",
-          "format": "uri"
         },
         "createdAt": {
           "type": "string",
@@ -78,6 +77,7 @@
       "required": [
         "id",
         "libraryId",
+        "name",
         "email",
         "role",
         "createdAt",

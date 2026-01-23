@@ -7,11 +7,9 @@ export interface User {
   id: string;
   libraryId: string;
   role: 'libraryOwner' | 'student';
-  profile: {
-    name: string;
-    email: string;
-    avatarUrl?: string;
-  };
+  name: string;
+  email: string;
+  avatarUrl?: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -137,3 +135,5 @@ export interface PrintRequest {
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
+
+    

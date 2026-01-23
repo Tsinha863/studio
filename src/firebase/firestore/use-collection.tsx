@@ -45,10 +45,10 @@ export function useCollection<T = any>(
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<FirestoreError | null>(null);
 
-  const memoizedTargetRefOrQuery = useMemo(queryFactory, deps);
+  const memoizedQuery = useMemo(queryFactory, deps);
 
   useEffect(() => {
-    if (!memoizedTargetRefOrQuery) {
+    if (!memoizedQuery) {
       setData(null);
       setIsLoading(false); 
       setError(null);
@@ -60,7 +60,7 @@ export function useCollection<T = any>(
     setData(null); // Clear previous data
 
     const unsubscribe = onSnapshot(
-      memoizedTargetRefOrQuery,
+      memoizedQuery,
       (snapshot: QuerySnapshot<DocumentData>) => {
         const results: ResultItemType[] = [];
         for (const doc of snapshot.docs) {
@@ -75,26 +75,33 @@ export function useCollection<T = any>(
         setData(null);
         setIsLoading(false);
         
-        if (serverError.code === 'permission-denied' && memoizedTargetRefOrQuery) {
+        if (serverError.code === 'permission-denied' && memoizedQuery) {
           // Safely try to get the path for the error context.
           // This works for CollectionReferences but not for complex Queries,
-          // which is a limitation of the Firebase JS SDK.
-          let path = 'unknown collection';
-          if ('path' in memoizedTargetRefOrQuery && typeof (memoizedTargetRefOrQuery as any).path === 'string') {
-            path = (memoizedTargetRefOrQuery as any).path;
+          // which is a limitation of the Firebase JS SDK. For queries, we report a placeholder.
+          let path = 'unknown-collection (from a query)';
+          if ('path' in memoizedQuery && typeof (memoizedQuery as any).path === 'string') {
+            path = (memoizedQuery as any).path;
           }
           
-          const permissionError = new FirestorePermissionError({
-            path: path,
-            operation: 'list',
-          });
-          errorEmitter.emit('permission-error', permissionError);
+          try {
+            const permissionError = new FirestorePermissionError({
+              path: path,
+              operation: 'list',
+            });
+            errorEmitter.emit('permission-error', permissionError);
+          } catch(e) {
+            // This catch block prevents a crash if the FirestorePermissionError constructor itself fails,
+            // for example if getAuth() isn't ready. The original error will still be in the `error` state.
+          }
         }
       }
     );
 
     return () => unsubscribe();
-  }, [memoizedTargetRefOrQuery]);
+  }, [memoizedQuery]);
   
   return { data, isLoading, error };
 }
+
+    

@@ -42,8 +42,11 @@ import { PlaceHolderImages } from '@/lib/placeholder-images';
 import Link from 'next/link';
 import { AuthGuard } from '@/components/auth/auth-guard';
 import { useToast } from '@/hooks/use-toast';
+import { useFirebase } from '@/firebase';
+import { Skeleton } from '@/components/ui/skeleton';
 
 function UserMenu() {
+  const { user, userProfile, isLoading } = useFirebase();
   const userAvatar = PlaceHolderImages.find((p) => p.id === 'user-avatar');
   return (
     <DropdownMenu>
@@ -64,12 +67,19 @@ function UserMenu() {
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-56" align="end" forceMount>
         <DropdownMenuLabel className="font-normal">
-          <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">Admin</p>
-            <p className="text-xs leading-none text-muted-foreground">
-              admin@campushub.com
-            </p>
-          </div>
+          {isLoading ? (
+            <div className="flex flex-col space-y-2">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-3 w-32" />
+            </div>
+          ) : (
+            <div className="flex flex-col space-y-1">
+              <p className="text-sm font-medium leading-none">{userProfile?.name || 'Admin'}</p>
+              <p className="text-xs leading-none text-muted-foreground">
+                {userProfile?.email || ''}
+              </p>
+            </div>
+          )}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
@@ -209,3 +219,5 @@ export default function AdminLayout({
     </AuthGuard>
   );
 }
+
+    
