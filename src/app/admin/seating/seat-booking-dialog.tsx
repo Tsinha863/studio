@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { Check, ChevronsUpDown, Trash2 } from 'lucide-react';
-import { format, setHours, setMinutes } from 'date-fns';
+import { format, setHours, setMinutes, addMonths, addYears } from 'date-fns';
 import {
   collection,
   runTransaction,
@@ -68,10 +68,15 @@ interface SeatBookingDialogProps {
 }
 
 const durationOptions = [
-  { label: '4 Hours', value: 4 },
-  { label: '6 Hours', value: 6 },
-  { label: '12 Hours', value: 12 },
-  { label: 'Full Day (9am-9pm)', value: 24 }, // Special case
+    { label: '4 Hours', value: '4h' },
+    { label: '6 Hours', value: '6h' },
+    { label: '12 Hours', value: '12h' },
+    { label: '24 Hours', value: '24h' },
+    { label: 'Full Day (9am-9pm)', value: 'fullday' },
+    { label: '1 Month', value: '1m' },
+    { label: '3 Months', value: '3m' },
+    { label: '6 Months', value: '6m' },
+    { label: '1 Year', value: '1y' },
 ];
 
 export function SeatBookingDialog({
@@ -89,7 +94,7 @@ export function SeatBookingDialog({
   
   const [selectedStudentId, setSelectedStudentId] = React.useState<string | undefined>();
   const [startTime, setStartTime] = React.useState('09:00');
-  const [duration, setDuration] = React.useState(4);
+  const [duration, setDuration] = React.useState('4h');
   
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isCancelling, setIsCancelling] = React.useState<string | false>(false);
@@ -106,16 +111,36 @@ export function SeatBookingDialog({
     if (!studentToAssign) return;
 
     setIsSubmitting(true);
-
-    const [hours, minutes] = startTime.split(':').map(Number);
-    let startDateTime = setMinutes(setHours(selectedDate, hours), minutes);
-    let endDateTime = new Date(startDateTime.getTime() + duration * 60 * 60 * 1000);
-
-    if (duration === 24) { // Full day case
-        startDateTime = setMinutes(setHours(selectedDate, 9), 0);
-        endDateTime = setMinutes(setHours(selectedDate, 21), 0);
-    }
     
+    const isLongBooking = duration.endsWith('m') || duration.endsWith('y');
+    let startDateTime: Date;
+
+    if (duration === 'fullday' || isLongBooking) {
+        startDateTime = setMinutes(setHours(selectedDate, 9), 0);
+    } else {
+        const [hours, minutes] = startTime.split(':').map(Number);
+        startDateTime = setMinutes(setHours(selectedDate, hours), minutes);
+    }
+
+    let endDateTime: Date;
+
+    if (duration === 'fullday') {
+        endDateTime = setMinutes(setHours(selectedDate, 21), 0);
+    } else if (duration.endsWith('h')) {
+        const d = parseInt(duration.replace('h', ''), 10);
+        endDateTime = new Date(startDateTime.getTime() + d * 60 * 60 * 1000);
+    } else if (duration.endsWith('m')) {
+        const d = parseInt(duration.replace('m', ''), 10);
+        endDateTime = addMonths(startDateTime, d);
+    } else if (duration.endsWith('y')) {
+        const d = parseInt(duration.replace('y', ''), 10);
+        endDateTime = addYears(startDateTime, d);
+    } else {
+        toast({ variant: 'destructive', title: 'Invalid Duration', description: 'Please select a valid booking duration.' });
+        setIsSubmitting(false);
+        return;
+    }
+
     const bookingPayload = {
       libraryId,
       roomId: seat.roomId,
@@ -130,7 +155,6 @@ export function SeatBookingDialog({
     try {
       const bookingsRef = collection(firestore, `libraries/${libraryId}/seatBookings`);
 
-      // 1. Check for overlapping bookings for the same SEAT
       const seatOverlapQuery = query(bookingsRef, 
           where('seatId', '==', seat.id),
           where('roomId', '==', seat.roomId),
@@ -142,7 +166,6 @@ export function SeatBookingDialog({
           throw new Error(`This seat is already booked from ${format(seatConflicts[0].data().startTime.toDate(), 'p')} to ${format(seatConflicts[0].data().endTime.toDate(), 'p')}.`);
       }
 
-      // 2. Check for overlapping bookings for the same STUDENT
       const studentOverlapQuery = query(bookingsRef,
           where('studentId', '==', selectedStudentId),
           where('endTime', '>', Timestamp.fromDate(startDateTime))
@@ -154,7 +177,6 @@ export function SeatBookingDialog({
           throw new Error(`${studentToAssign.name} already has a booking for seat ${conflict.seatId} from ${format(conflict.startTime.toDate(), 'p')} to ${format(conflict.endTime.toDate(), 'p')}.`);
       }
 
-      // 3. If no conflicts, create the booking
       await runTransaction(firestore, async (transaction) => {
         const newBookingRef = doc(bookingsRef);
         transaction.set(newBookingRef, bookingPayload);
@@ -163,23 +185,26 @@ export function SeatBookingDialog({
       toast({ title: 'Seat Booked!', description: `Seat ${seat.id} booked for ${studentToAssign.name}.` });
       onSuccess();
     } catch (serverError) {
-       const permissionError = new FirestorePermissionError({
+       if (serverError instanceof FirebaseError && serverError.code === 'permission-denied') {
+        const permissionError = new FirestorePermissionError({
           path: `libraries/${libraryId}/seatBookings`,
           operation: 'create',
           requestResourceData: bookingPayload,
         });
         errorEmitter.emit('permission-error', permissionError);
-      toast({
-        variant: 'destructive',
-        title: 'Booking Failed',
-        description: serverError instanceof Error ? serverError.message : 'An unknown error occurred.',
-      });
+      } else {
+        toast({
+            variant: 'destructive',
+            title: 'Booking Failed',
+            description: serverError instanceof Error ? serverError.message : 'An unknown error occurred.',
+        });
+      }
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleCancelBooking = async (bookingId: string) => {
+  const handleCancelBooking = (bookingId: string) => {
     if (!firestore || !user) {
       toast({
         variant: 'destructive',
@@ -193,30 +218,40 @@ export function SeatBookingDialog({
 
     const bookingRef = doc(firestore, `libraries/${libraryId}/seatBookings`, bookingId);
     
-    try {
-        await deleteDoc(bookingRef);
-        toast({ title: 'Booking Cancelled', description: 'The seat is now available for this time slot.' });
-        onSuccess();
-      } catch (serverError) {
-        const permissionError = new FirestorePermissionError({
-          path: bookingRef.path,
-          operation: 'delete',
+    deleteDoc(bookingRef)
+        .then(() => {
+            toast({ title: 'Booking Cancelled', description: 'The seat is now available for this time slot.' });
+            onSuccess();
+        })
+        .catch((serverError) => {
+            if (serverError instanceof FirebaseError && serverError.code === 'permission-denied') {
+                const permissionError = new FirestorePermissionError({
+                    path: bookingRef.path,
+                    operation: 'delete',
+                });
+                errorEmitter.emit('permission-error', permissionError);
+            } else {
+                toast({
+                    variant: 'destructive',
+                    title: 'Cancellation Failed',
+                    description: serverError instanceof Error ? serverError.message : 'Could not cancel the booking.',
+                });
+            }
+        })
+        .finally(() => {
+            setIsCancelling(false);
         });
-        errorEmitter.emit('permission-error', permissionError);
-      } finally {
-        setIsCancelling(false);
-      }
   };
   
   React.useEffect(() => {
     if (!isOpen) {
         setSelectedStudentId(undefined);
         setStartTime('09:00');
-        setDuration(4);
+        setDuration('4h');
     }
   }, [isOpen]);
 
-  const selectedStudentName = students.find(s => s.id === selectedStudentId)?.name;
+  const isLongBooking = duration.endsWith('m') || duration.endsWith('y') || duration === 'fullday';
   const isActionDisabled = isSubmitting || !!isCancelling;
 
   return (
@@ -230,7 +265,6 @@ export function SeatBookingDialog({
         </DialogHeader>
         
         <div className="flex flex-col gap-6 py-4">
-            {/* Existing Bookings */}
             <div>
                 <h3 className="text-sm font-semibold mb-2">Existing Bookings</h3>
                 {bookingsForSeat.length > 0 ? (
@@ -240,7 +274,7 @@ export function SeatBookingDialog({
                                 <div>
                                     <span className="font-medium">{booking.studentName}</span>
                                     <span className="text-muted-foreground ml-2">
-                                        {format(booking.startTime.toDate(), 'h:mm a')} - {format(booking.endTime.toDate(), 'h:mm a')}
+                                        {format(booking.startTime.toDate(), 'MMM d, p')} - {format(booking.endTime.toDate(), 'MMM d, p')}
                                     </span>
                                 </div>
                                 <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleCancelBooking(booking.id)} disabled={isActionDisabled}>
@@ -256,7 +290,6 @@ export function SeatBookingDialog({
 
             <Separator />
             
-            {/* New Booking Form */}
             <div>
                  <h3 className="text-sm font-semibold mb-3">Create New Booking</h3>
                  <div className="space-y-4">
@@ -265,7 +298,9 @@ export function SeatBookingDialog({
                         <Popover open={isComboboxOpen} onOpenChange={setIsComboboxOpen}>
                             <PopoverTrigger asChild>
                                 <Button variant="outline" role="combobox" className="w-full justify-between" disabled={isActionDisabled}>
-                                    {selectedStudentId ? selectedStudentName : "Select a student..."}
+                                    {selectedStudentId
+                                        ? students.find((student) => student.id === selectedStudentId)?.name
+                                        : "Select a student..."}
                                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                 </Button>
                             </PopoverTrigger>
@@ -276,7 +311,14 @@ export function SeatBookingDialog({
                                     <CommandEmpty>No available students found.</CommandEmpty>
                                     <CommandGroup>
                                     {activeStudents.map((student) => (
-                                        <CommandItem key={student.id} value={student.name} onSelect={() => { setSelectedStudentId(student.id); setIsComboboxOpen(false); }}>
+                                        <CommandItem
+                                            key={student.id}
+                                            value={student.id}
+                                            onSelect={(currentValue) => {
+                                                setSelectedStudentId(currentValue);
+                                                setIsComboboxOpen(false);
+                                            }}
+                                        >
                                             <Check className={cn("mr-2 h-4 w-4", selectedStudentId === student.id ? "opacity-100" : "opacity-0")} />
                                             {student.name}
                                         </CommandItem>
@@ -291,11 +333,11 @@ export function SeatBookingDialog({
                     <div className="grid grid-cols-2 gap-4">
                          <div className="space-y-2">
                             <Label htmlFor="startTime">Start Time</Label>
-                            <Input id="startTime" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} disabled={isActionDisabled || duration === 24}/>
+                            <Input id="startTime" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} disabled={isActionDisabled || isLongBooking}/>
                          </div>
                          <div className="space-y-2">
                             <Label htmlFor="duration">Duration</Label>
-                            <Select value={String(duration)} onValueChange={(val) => setDuration(Number(val))} disabled={isActionDisabled}>
+                            <Select value={duration} onValueChange={(val) => setDuration(val)} disabled={isActionDisabled}>
                                 <SelectTrigger id="duration">
                                     <SelectValue placeholder="Select duration" />
                                 </SelectTrigger>
