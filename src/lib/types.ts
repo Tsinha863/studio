@@ -1,7 +1,9 @@
 'use client';
 
 import { Timestamp } from "firebase/firestore";
+import type { BookingDuration as EngineBookingDuration } from './booking-engine';
 
+export type BookingDuration = EngineBookingDuration;
 export interface User {
   id: string;
   libraryId: string;
@@ -83,11 +85,8 @@ export interface SeatBooking {
   studentName: string;
   startTime: Timestamp;
   endTime: Timestamp;
-  bookingType: 'hourly' | 'daily' | 'monthly' | 'yearly' | 'custom';
-  durationMeta: {
-    hours?: number;
-    months?: number;
-  };
+  duration: BookingDuration;
+  seatTier: 'basic' | 'standard' | 'premium';
   status: 'active' | 'completed' | 'cancelled';
   linkedPaymentId: string | null;
   createdAt: Timestamp;
@@ -142,4 +141,3 @@ export interface PrintRequest {
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
-
