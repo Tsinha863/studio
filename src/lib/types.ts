@@ -31,10 +31,11 @@ export interface Payment {
   libraryId: string;
   studentId: string; // The custom student ID
   studentName: string;
+  bookingId?: string;
   amount: number;
   paymentDate: Timestamp | null; // Null if not paid
   dueDate: Timestamp;
-  status: 'paid' | 'pending' | 'overdue';
+  status: 'paid' | 'pending' | 'overdue' | 'cancelled';
   method: 'Online' | 'Cash';
   createdAt: Timestamp;
   updatedAt: Timestamp;
@@ -74,7 +75,7 @@ export interface Seat {
 }
 
 export interface SeatBooking {
-  id?: string;
+  id: string;
   libraryId: string;
   roomId: string;
   seatId: string;
@@ -83,12 +84,12 @@ export interface SeatBooking {
   startTime: Timestamp;
   endTime: Timestamp;
   bookingType: 'hourly' | 'daily' | 'monthly' | 'yearly' | 'custom';
-  durationMeta?: {
+  durationMeta: {
     hours?: number;
     months?: number;
   };
   status: 'active' | 'completed' | 'cancelled';
-  linkedPaymentId?: string | null;
+  linkedPaymentId: string | null;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -141,3 +142,4 @@ export interface PrintRequest {
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
+

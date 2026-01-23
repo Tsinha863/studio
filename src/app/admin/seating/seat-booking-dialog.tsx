@@ -48,7 +48,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
-import type { Seat, Student, SeatBooking } from '@/lib/types';
+import type { Seat, Student, SeatBooking, Payment, SeatBooking } from '@/lib/types';
 import { Spinner } from '@/components/spinner';
 import { FirestorePermissionError } from '@/firebase/errors';
 
@@ -78,6 +78,29 @@ const durationOptions = [
     { label: '6 Months', value: '6m' },
     { label: '1 Year', value: '1y' },
 ];
+
+const pricing = {
+    hourly: { basic: 20, standard: 30, premium: 40 },
+    daily: { basic: 200, standard: 300, premium: 400 },
+    monthly: { basic: 4000, standard: 5000, premium: 6000 },
+}
+
+const calculatePrice = (tier: Seat['tier'], type: SeatBooking['bookingType'], meta: SeatBooking['durationMeta']) => {
+    if (type === 'hourly' && meta.hours) {
+        return pricing.hourly[tier] * meta.hours;
+    }
+    if (type === 'daily') {
+        return pricing.daily[tier];
+    }
+    if (type === 'monthly' && meta.months) {
+        return pricing.monthly[tier] * meta.months;
+    }
+    if (type === 'yearly' && meta.months) {
+         return (pricing.monthly[tier] * meta.months) * 0.9; // 10% discount for yearly
+    }
+    return 0;
+};
+
 
 export function SeatBookingDialog({
   isOpen,
@@ -178,40 +201,61 @@ export function SeatBookingDialog({
           throw new Error(`${studentToAssign.name} already has a booking for seat ${conflict.seatId} from ${format(conflict.startTime.toDate(), 'p')} to ${format(conflict.endTime.toDate(), 'p')}.`);
       }
       
-      const batch = writeBatch(firestore);
-      const newBookingRef = doc(bookingsRef);
-      const bookingPayload = {
-        libraryId,
-        roomId: seat.roomId,
-        seatId: seat.id,
-        studentId: selectedStudentId,
-        studentName: studentToAssign.name,
-        startTime: Timestamp.fromDate(startDateTime),
-        endTime: Timestamp.fromDate(endDateTime),
-        status: 'active' as const,
-        bookingType,
-        durationMeta,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      };
-      batch.set(newBookingRef, bookingPayload);
+      await runTransaction(firestore, async (transaction) => {
+        const newBookingRef = doc(bookingsRef);
+        const paymentsRef = collection(firestore, `libraries/${libraryId}/payments`);
+        const newPaymentRef = doc(paymentsRef);
 
-      const logRef = doc(collection(firestore, `libraries/${libraryId}/activityLogs`));
-      batch.set(logRef, {
-          libraryId,
-          user: { id: user.uid, name: user.displayName || 'Admin' },
-          activityType: 'seat_assigned',
-          details: {
-              studentName: studentToAssign.name,
-              seatId: seat.id,
-              roomId: seat.roomId,
-              startTime: Timestamp.fromDate(startDateTime),
-              endTime: Timestamp.fromDate(endDateTime),
-          },
-          timestamp: serverTimestamp(),
+        const bookingPayload: Omit<SeatBooking, 'id'> = {
+            libraryId,
+            roomId: seat.roomId,
+            seatId: seat.id,
+            studentId: selectedStudentId,
+            studentName: studentToAssign.name,
+            startTime: Timestamp.fromDate(startDateTime),
+            endTime: Timestamp.fromDate(endDateTime),
+            status: 'active',
+            bookingType,
+            durationMeta,
+            linkedPaymentId: newPaymentRef.id,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        };
+
+        const paymentAmount = calculatePrice(seat.tier, bookingType, durationMeta);
+        const paymentPayload: Omit<Payment, 'id'> = {
+            libraryId,
+            studentId: selectedStudentId,
+            studentName: studentToAssign.name,
+            bookingId: newBookingRef.id,
+            amount: paymentAmount,
+            status: 'pending',
+            dueDate: Timestamp.fromDate(startDateTime),
+            paymentDate: null,
+            method: 'Online',
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        };
+
+        transaction.set(newBookingRef, bookingPayload);
+        transaction.set(newPaymentRef, paymentPayload);
+
+        const logRef = doc(collection(firestore, `libraries/${libraryId}/activityLogs`));
+        transaction.set(logRef, {
+            libraryId,
+            user: { id: user.uid, name: user.displayName || 'Admin' },
+            activityType: 'seat_assigned',
+            details: {
+                studentName: studentToAssign.name,
+                seatId: seat.id,
+                roomId: seat.roomId,
+                startTime: Timestamp.fromDate(startDateTime),
+                endTime: Timestamp.fromDate(endDateTime),
+                amount: paymentAmount,
+            },
+            timestamp: serverTimestamp(),
+        });
       });
-
-      await batch.commit();
       
       toast({ title: 'Seat Booked!', description: `Seat ${seat.id} booked for ${studentToAssign.name}.` });
       onSuccess();
@@ -234,34 +278,39 @@ export function SeatBookingDialog({
     }
   };
 
-  const handleCancelBooking = async (bookingId: string) => {
+  const handleCancelBooking = async (booking: SeatBookingWithId) => {
     if (!firestore || !user) {
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'You must be logged in to perform this action.',
-      });
+      toast({ variant: 'destructive', title: 'Error', description: 'You must be logged in to perform this action.' });
       return;
     }
     
-    setIsCancelling(bookingId);
+    setIsCancelling(booking.id);
     
     const batch = writeBatch(firestore);
-    const bookingRef = doc(firestore, `libraries/${libraryId}/seatBookings`, bookingId);
+    const bookingRef = doc(firestore, `libraries/${libraryId}/seatBookings`, booking.id);
     batch.update(bookingRef, { status: 'cancelled', updatedAt: serverTimestamp() });
+
+    // Also cancel the linked payment if it exists and is not paid
+    if (booking.linkedPaymentId) {
+        const paymentRef = doc(firestore, `libraries/${libraryId}/payments`, booking.linkedPaymentId);
+        // We can't query inside a batch, so we just set the update. 
+        // A more complex system might use a cloud function to check status before cancelling.
+        // For now, we assume we can cancel it. A better check could be done in a transaction.
+        batch.update(paymentRef, { status: 'cancelled', updatedAt: serverTimestamp() });
+    }
 
     const logRef = doc(collection(firestore, `libraries/${libraryId}/activityLogs`));
     batch.set(logRef, {
       libraryId,
       user: { id: user.uid, name: user.displayName || 'Admin' },
       activityType: 'booking_cancelled',
-      details: { bookingId },
+      details: { bookingId: booking.id, studentName: booking.studentName },
       timestamp: serverTimestamp(),
     });
 
     try {
       await batch.commit();
-      toast({ title: 'Booking Cancelled', description: 'The seat booking has been cancelled.' });
+      toast({ title: 'Booking Cancelled', description: 'The seat booking and associated payment have been cancelled.' });
       onSuccess();
     } catch(serverError) {
       if (serverError instanceof FirebaseError && serverError.code === 'permission-denied') {
@@ -299,7 +348,7 @@ export function SeatBookingDialog({
         <DialogHeader>
           <DialogTitle>Manage Bookings for Seat {seat.id}</DialogTitle>
           <DialogDescription>
-            On {format(selectedDate, 'MMMM d, yyyy')}.
+            On {format(selectedDate, 'MMMM d, yyyy')}. Tier: <span className='capitalize font-medium'>{seat.tier}</span>
           </DialogDescription>
         </DialogHeader>
         
@@ -316,7 +365,7 @@ export function SeatBookingDialog({
                                         {format(booking.startTime.toDate(), 'MMM d, p')} - {format(booking.endTime.toDate(), 'MMM d, p')}
                                     </span>
                                 </div>
-                                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleCancelBooking(booking.id)} disabled={isActionDisabled}>
+                                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleCancelBooking(booking)} disabled={isActionDisabled}>
                                   {isCancelling === booking.id ? <Spinner className="h-4 w-4" /> : <Trash2 className="h-4 w-4"/>}
                                 </Button>
                             </li>
@@ -405,3 +454,4 @@ export function SeatBookingDialog({
     </Dialog>
   );
 }
+

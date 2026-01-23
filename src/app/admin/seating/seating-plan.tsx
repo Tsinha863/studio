@@ -200,3 +200,4 @@ export function SeatingPlan({ libraryId, roomId }: SeatingPlanProps) {
     </TooltipProvider>
   );
 }
+
