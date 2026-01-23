@@ -82,7 +82,15 @@ export interface SeatBooking {
   studentName: string;
   startTime: Timestamp;
   endTime: Timestamp;
+  bookingType: 'hourly' | 'daily' | 'monthly' | 'yearly' | 'custom';
+  durationMeta?: {
+    hours?: number;
+    months?: number;
+  };
+  status: 'active' | 'completed' | 'cancelled';
+  linkedPaymentId?: string | null;
   createdAt: Timestamp;
+  updatedAt: Timestamp;
 }
 
 export interface Announcement {

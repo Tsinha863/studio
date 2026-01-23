@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { Check, ChevronsUpDown, Trash2 } from 'lucide-react';
-import { format, setHours, setMinutes, addMonths, addYears } from 'date-fns';
+import { format, setHours, setMinutes, addHours, addMonths, addYears } from 'date-fns';
 import {
   collection,
   runTransaction,
@@ -12,7 +12,7 @@ import {
   where,
   getDocs,
   Timestamp,
-  deleteDoc,
+  writeBatch,
 } from 'firebase/firestore';
 import { FirebaseError } from 'firebase/app';
 
@@ -112,10 +112,13 @@ export function SeatBookingDialog({
 
     setIsSubmitting(true);
     
-    const isLongBooking = duration.endsWith('m') || duration.endsWith('y');
-    let startDateTime: Date;
+    let bookingType: SeatBooking['bookingType'] = 'hourly';
+    let durationMeta: SeatBooking['durationMeta'] = {};
 
-    if (duration === 'fullday' || isLongBooking) {
+    let startDateTime: Date;
+    const isLongBooking = duration.endsWith('m') || duration.endsWith('y') || duration === 'fullday';
+    
+    if (isLongBooking) {
         startDateTime = setMinutes(setHours(selectedDate, 9), 0);
     } else {
         const [hours, minutes] = startTime.split(':').map(Number);
@@ -125,15 +128,22 @@ export function SeatBookingDialog({
     let endDateTime: Date;
 
     if (duration === 'fullday') {
+        bookingType = 'daily';
         endDateTime = setMinutes(setHours(selectedDate, 21), 0);
     } else if (duration.endsWith('h')) {
+        bookingType = 'hourly';
         const d = parseInt(duration.replace('h', ''), 10);
-        endDateTime = new Date(startDateTime.getTime() + d * 60 * 60 * 1000);
+        durationMeta.hours = d;
+        endDateTime = addHours(startDateTime, d);
     } else if (duration.endsWith('m')) {
+        bookingType = 'monthly';
         const d = parseInt(duration.replace('m', ''), 10);
+        durationMeta.months = d;
         endDateTime = addMonths(startDateTime, d);
     } else if (duration.endsWith('y')) {
+        bookingType = 'yearly';
         const d = parseInt(duration.replace('y', ''), 10);
+        durationMeta.months = d * 12;
         endDateTime = addYears(startDateTime, d);
     } else {
         toast({ variant: 'destructive', title: 'Invalid Duration', description: 'Please select a valid booking duration.' });
@@ -141,23 +151,13 @@ export function SeatBookingDialog({
         return;
     }
 
-    const bookingPayload = {
-      libraryId,
-      roomId: seat.roomId,
-      seatId: seat.id,
-      studentId: selectedStudentId,
-      studentName: studentToAssign.name,
-      startTime: Timestamp.fromDate(startDateTime),
-      endTime: Timestamp.fromDate(endDateTime),
-      createdAt: serverTimestamp(),
-    };
-
     try {
       const bookingsRef = collection(firestore, `libraries/${libraryId}/seatBookings`);
-
+      
       const seatOverlapQuery = query(bookingsRef, 
           where('seatId', '==', seat.id),
           where('roomId', '==', seat.roomId),
+          where('status', '==', 'active'),
           where('endTime', '>', Timestamp.fromDate(startDateTime))
       );
       const seatOverlapSnapshot = await getDocs(seatOverlapQuery);
@@ -168,6 +168,7 @@ export function SeatBookingDialog({
 
       const studentOverlapQuery = query(bookingsRef,
           where('studentId', '==', selectedStudentId),
+          where('status', '==', 'active'),
           where('endTime', '>', Timestamp.fromDate(startDateTime))
       );
       const studentOverlapSnapshot = await getDocs(studentOverlapQuery);
@@ -176,11 +177,41 @@ export function SeatBookingDialog({
           const conflict = studentConflicts[0].data();
           throw new Error(`${studentToAssign.name} already has a booking for seat ${conflict.seatId} from ${format(conflict.startTime.toDate(), 'p')} to ${format(conflict.endTime.toDate(), 'p')}.`);
       }
+      
+      const batch = writeBatch(firestore);
+      const newBookingRef = doc(bookingsRef);
+      const bookingPayload = {
+        libraryId,
+        roomId: seat.roomId,
+        seatId: seat.id,
+        studentId: selectedStudentId,
+        studentName: studentToAssign.name,
+        startTime: Timestamp.fromDate(startDateTime),
+        endTime: Timestamp.fromDate(endDateTime),
+        status: 'active' as const,
+        bookingType,
+        durationMeta,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+      batch.set(newBookingRef, bookingPayload);
 
-      await runTransaction(firestore, async (transaction) => {
-        const newBookingRef = doc(bookingsRef);
-        transaction.set(newBookingRef, bookingPayload);
+      const logRef = doc(collection(firestore, `libraries/${libraryId}/activityLogs`));
+      batch.set(logRef, {
+          libraryId,
+          user: { id: user.uid, name: user.displayName || 'Admin' },
+          activityType: 'seat_assigned',
+          details: {
+              studentName: studentToAssign.name,
+              seatId: seat.id,
+              roomId: seat.roomId,
+              startTime: Timestamp.fromDate(startDateTime),
+              endTime: Timestamp.fromDate(endDateTime),
+          },
+          timestamp: serverTimestamp(),
       });
+
+      await batch.commit();
       
       toast({ title: 'Seat Booked!', description: `Seat ${seat.id} booked for ${studentToAssign.name}.` });
       onSuccess();
@@ -189,7 +220,6 @@ export function SeatBookingDialog({
         const permissionError = new FirestorePermissionError({
           path: `libraries/${libraryId}/seatBookings`,
           operation: 'create',
-          requestResourceData: bookingPayload,
         });
         errorEmitter.emit('permission-error', permissionError);
       } else {
@@ -204,7 +234,7 @@ export function SeatBookingDialog({
     }
   };
 
-  const handleCancelBooking = (bookingId: string) => {
+  const handleCancelBooking = async (bookingId: string) => {
     if (!firestore || !user) {
       toast({
         variant: 'destructive',
@@ -215,32 +245,41 @@ export function SeatBookingDialog({
     }
     
     setIsCancelling(bookingId);
-
-    const bookingRef = doc(firestore, `libraries/${libraryId}/seatBookings`, bookingId);
     
-    deleteDoc(bookingRef)
-        .then(() => {
-            toast({ title: 'Booking Cancelled', description: 'The seat is now available for this time slot.' });
-            onSuccess();
-        })
-        .catch((serverError) => {
-            if (serverError instanceof FirebaseError && serverError.code === 'permission-denied') {
-                const permissionError = new FirestorePermissionError({
-                    path: bookingRef.path,
-                    operation: 'delete',
-                });
-                errorEmitter.emit('permission-error', permissionError);
-            } else {
-                toast({
-                    variant: 'destructive',
-                    title: 'Cancellation Failed',
-                    description: serverError instanceof Error ? serverError.message : 'Could not cancel the booking.',
-                });
-            }
-        })
-        .finally(() => {
-            setIsCancelling(false);
-        });
+    const batch = writeBatch(firestore);
+    const bookingRef = doc(firestore, `libraries/${libraryId}/seatBookings`, bookingId);
+    batch.update(bookingRef, { status: 'cancelled', updatedAt: serverTimestamp() });
+
+    const logRef = doc(collection(firestore, `libraries/${libraryId}/activityLogs`));
+    batch.set(logRef, {
+      libraryId,
+      user: { id: user.uid, name: user.displayName || 'Admin' },
+      activityType: 'booking_cancelled',
+      details: { bookingId },
+      timestamp: serverTimestamp(),
+    });
+
+    try {
+      await batch.commit();
+      toast({ title: 'Booking Cancelled', description: 'The seat booking has been cancelled.' });
+      onSuccess();
+    } catch(serverError) {
+      if (serverError instanceof FirebaseError && serverError.code === 'permission-denied') {
+          const permissionError = new FirestorePermissionError({
+              path: bookingRef.path,
+              operation: 'update',
+          });
+          errorEmitter.emit('permission-error', permissionError);
+      } else {
+          toast({
+              variant: 'destructive',
+              title: 'Cancellation Failed',
+              description: serverError instanceof Error ? serverError.message : 'Could not cancel the booking.',
+          });
+      }
+    } finally {
+      setIsCancelling(false);
+    }
   };
   
   React.useEffect(() => {
@@ -251,7 +290,7 @@ export function SeatBookingDialog({
     }
   }, [isOpen]);
 
-  const isLongBooking = duration.endsWith('m') || duration.endsWith('y') || duration === 'fullday';
+  const isLongDuration = duration.endsWith('m') || duration.endsWith('y') || duration === 'fullday';
   const isActionDisabled = isSubmitting || !!isCancelling;
 
   return (
@@ -284,7 +323,7 @@ export function SeatBookingDialog({
                         ))}
                     </ul>
                 ) : (
-                    <p className="text-sm text-muted-foreground">No bookings for this seat today.</p>
+                    <p className="text-sm text-muted-foreground">No active bookings for this seat today.</p>
                 )}
             </div>
 
@@ -315,7 +354,7 @@ export function SeatBookingDialog({
                                             key={student.id}
                                             value={student.id}
                                             onSelect={(currentValue) => {
-                                                setSelectedStudentId(currentValue);
+                                                setSelectedStudentId(currentValue === selectedStudentId ? undefined : currentValue);
                                                 setIsComboboxOpen(false);
                                             }}
                                         >
@@ -333,7 +372,7 @@ export function SeatBookingDialog({
                     <div className="grid grid-cols-2 gap-4">
                          <div className="space-y-2">
                             <Label htmlFor="startTime">Start Time</Label>
-                            <Input id="startTime" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} disabled={isActionDisabled || isLongBooking}/>
+                            <Input id="startTime" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} disabled={isActionDisabled || isLongDuration}/>
                          </div>
                          <div className="space-y-2">
                             <Label htmlFor="duration">Duration</Label>
