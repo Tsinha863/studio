@@ -69,11 +69,11 @@ export default function StudentSelect({
     };
   }, [libraryId, firestore]);
 
-  /* ───────────────────────────── */
+  const selectClassName = "flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
 
   if (loading) {
     return (
-      <select disabled className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-muted px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 animate-pulse">
+      <select disabled className={cn(selectClassName, "animate-pulse")}>
         <option>Loading students…</option>
       </select>
     );
@@ -81,7 +81,7 @@ export default function StudentSelect({
 
   if (!students.length) {
     return (
-      <select disabled className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
+      <select disabled className={selectClassName}>
         <option>No active students found</option>
       </select>
     );
@@ -89,12 +89,12 @@ export default function StudentSelect({
 
   return (
     <select
-      className={cn("flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50")}
+      className={selectClassName}
       value={value ?? ""}
       onChange={(e) => {
-        const selectedId = e.target.value;
-        const student = students.find((s) => s.id === selectedId) || null;
-        onChange(student);
+          const selectedId = e.target.value;
+          const student = students.find((s) => s.id === selectedId) || null;
+          onChange(student);
       }}
     >
       <option value="" disabled>
