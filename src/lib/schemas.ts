@@ -1,4 +1,3 @@
-
 'use client';
 
 import { z } from 'zod';
@@ -57,3 +56,24 @@ export const printRequestFormSchema = z.object({
 });
 
 export type PrintRequestFormValues = z.infer<typeof printRequestFormSchema>;
+
+export const signupSchema = z
+  .object({
+    name: z
+      .string()
+      .min(2, { message: 'Name must be at least 2 characters long.' }),
+    email: z.string().email({ message: 'Please enter a valid email address.' }),
+    password: z
+      .string()
+      .min(8, { message: 'Password must be at least 8 characters long.' }),
+    confirmPassword: z.string(),
+    role: z.enum(['student', 'libraryOwner'], {
+      required_error: 'You must select a role.',
+    }),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords don't match",
+    path: ['confirmPassword'],
+  });
+
+export type SignupFormValues = z.infer<typeof signupSchema>;

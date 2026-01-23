@@ -2,9 +2,7 @@
 
 import * as React from 'react';
 import Image from 'next/image';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { z } from 'zod';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
@@ -15,6 +13,7 @@ import {
 import { FirebaseError } from 'firebase/app';
 import { writeBatch, doc, serverTimestamp } from 'firebase/firestore';
 
+import { signupSchema, type SignupFormValues } from '@/lib/schemas';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -33,6 +32,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { useFirebase } from '@/firebase';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
@@ -40,36 +40,29 @@ import { Logo } from '@/components/logo';
 import { Spinner } from '@/components/spinner';
 import { LIBRARY_ID } from '@/lib/config';
 
-const signupSchema = z
-  .object({
-    name: z
-      .string()
-      .min(2, { message: 'Name must be at least 2 characters long.' }),
-    email: z.string().email({ message: 'Please enter a valid email address.' }),
-    password: z
-      .string()
-      .min(8, { message: 'Password must be at least 8 characters long.' }),
-    confirmPassword: z.string(),
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: "Passwords don't match",
-    path: ['confirmPassword'],
-  });
-
-type SignupFormValues = z.infer<typeof signupSchema>;
-
 function SignupForm() {
   const router = useRouter();
   const { toast } = useToast();
   const { auth, firestore } = useFirebase();
 
   const form = useForm<SignupFormValues>({
-    resolver: zodResolver(signupSchema),
+    resolver: (values, context, options) => {
+      // Basic zodResolver logic
+      const result = signupSchema.safeParse(values);
+      if (!result.success) {
+        return {
+          values: {},
+          errors: result.error.formErrors.fieldErrors,
+        };
+      }
+      return { values: result.data, errors: {} };
+    },
     defaultValues: {
       name: '',
       email: '',
       password: '',
       confirmPassword: '',
+      role: 'student',
     },
   });
 
@@ -97,49 +90,55 @@ function SignupForm() {
       );
       const { user } = userCredential;
 
-      // 2. Atomically create the user's profile and student documents in Firestore.
+      // 2. Update the auth profile's display name for consistency.
+      await updateProfile(user, { displayName: data.name });
+
+      // 3. Atomically create the user's profile documents in Firestore.
       const batch = writeBatch(firestore);
 
-      // Create User profile document
-      const userDocRef = doc(firestore, `libraries/${LIBRARY_ID}/users`, user.uid);
+      // Create User profile document (for role management)
+      const userDocRef = doc(
+        firestore,
+        `libraries/${LIBRARY_ID}/users`,
+        user.uid
+      );
       batch.set(userDocRef, {
         id: user.uid,
         name: data.name,
         email: data.email,
-        role: 'student', // All new signups are students
+        role: data.role,
         libraryId: LIBRARY_ID,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
 
-      // Create Student profile document
-      const studentRef = doc(
-        firestore,
-        `libraries/${LIBRARY_ID}/students`,
-        user.uid
-      );
-      batch.set(studentRef, {
-        libraryId: LIBRARY_ID,
-        userId: user.uid,
-        name: data.name,
-        email: data.email,
-        status: 'active',
-        fibonacciStreak: 0,
-        paymentDue: 0,
-        notes: [],
-        tags: [],
-        lastInteractionAt: serverTimestamp(),
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-      
+      // If the user is a student, create the student-specific profile
+      if (data.role === 'student') {
+        const studentRef = doc(
+          firestore,
+          `libraries/${LIBRARY_ID}/students`,
+          user.uid
+        );
+        batch.set(studentRef, {
+          libraryId: LIBRARY_ID,
+          userId: user.uid,
+          name: data.name,
+          email: data.email,
+          status: 'active',
+          fibonacciStreak: 0,
+          paymentDue: 0,
+          notes: [],
+          tags: [],
+          lastInteractionAt: serverTimestamp(),
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
+
       // Commit the atomic write.
       await batch.commit();
 
-      // 3. Update the auth profile's display name for consistency.
-      await updateProfile(user, { displayName: data.name });
-
-      // 4. Redirect. The FirebaseProvider will now find the created profile.
+      // 4. Redirect to loading page, which will resolve role and redirect to dashboard.
       router.push('/loading');
     } catch (error) {
       let title = 'Sign-up failed';
@@ -157,7 +156,6 @@ function SignupForm() {
             description =
               'The password is not strong enough. Please choose a stronger password.';
             break;
-
           default:
             description = error.message;
             break;
@@ -258,6 +256,41 @@ function SignupForm() {
                 </FormItem>
               )}
             />
+            <FormField
+              control={form.control}
+              name="role"
+              render={({ field }) => (
+                <FormItem className="space-y-3">
+                  <FormLabel>I am a...</FormLabel>
+                  <FormControl>
+                    <RadioGroup
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                      className="flex flex-col space-y-1"
+                      disabled={isSubmitting}
+                    >
+                      <FormItem className="flex items-center space-x-3 space-y-0">
+                        <FormControl>
+                          <RadioGroupItem value="student" />
+                        </FormControl>
+                        <FormLabel className="font-normal">
+                          Student
+                        </FormLabel>
+                      </FormItem>
+                      <FormItem className="flex items-center space-x-3 space-y-0">
+                        <FormControl>
+                          <RadioGroupItem value="libraryOwner" />
+                        </FormControl>
+                        <FormLabel className="font-normal">
+                          Library Owner (Admin)
+                        </FormLabel>
+                      </FormItem>
+                    </RadioGroup>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
           </CardContent>
           <CardFooter className="flex flex-col gap-4">
             <Button type="submit" className="w-full" disabled={isSubmitting}>
@@ -324,5 +357,3 @@ export default function SignupPage() {
     </main>
   );
 }
-
-    
