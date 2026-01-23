@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, ReactNode, useMemo, useState, useEffect } from 'react';
 import { FirebaseApp } from 'firebase/app';
-import { Firestore, doc, getDoc } from 'firebase/firestore';
+import { Firestore, doc, getDoc, setDoc } from 'firebase/firestore';
 import { Auth, User, onAuthStateChanged, signOut } from 'firebase/auth';
 import { FirebaseStorage } from 'firebase/storage';
 import { FirebaseErrorListener } from '@/components/FirebaseErrorListener';
@@ -69,17 +69,24 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
           // 1. Resolve libraryId from the top-level users collection
           const userMappingRef = doc(firestore, 'users', firebaseUser.uid);
           const userMappingSnap = await getDoc(userMappingRef);
+          let libraryId: string | undefined = userMappingSnap.data()?.libraryId;
 
-          if (!userMappingSnap.exists()) {
-            // This can happen if signup fails after auth creation but before firestore writes.
-            // Safest action is to sign out.
-            await signOut(auth);
-            throw new Error(`User mapping not found for uid: ${firebaseUser.uid}. The user has been signed out.`);
-          }
-          const libraryId = userMappingSnap.data()?.libraryId;
           if (!libraryId) {
-             await signOut(auth);
-             throw new Error(`Library ID not found in user mapping for uid: ${firebaseUser.uid}.`);
+            // MIGRATION: Mapping doesn't exist. Check for a legacy profile in 'library1'
+            const legacyProfileRef = doc(firestore, 'libraries', 'library1', 'users', firebaseUser.uid);
+            const legacyProfileSnap = await getDoc(legacyProfileRef);
+            
+            if (legacyProfileSnap.exists()) {
+                // Legacy user found. Create the mapping document for them now.
+                libraryId = 'library1';
+                await setDoc(userMappingRef, { libraryId });
+            }
+          }
+
+          if (!libraryId) {
+            // If still no libraryId after migration check, then it's an invalid user.
+            await signOut(auth);
+            throw new Error(`User account is not associated with a library. UID: ${firebaseUser.uid}.`);
           }
 
           // 2. Now that we have the libraryId, get the user's full profile
@@ -178,5 +185,3 @@ export const useUser = () => {
     const { user, userProfile, role, isLoading, error } = useFirebase();
     return { user, userProfile, role, isLoading, error };
 }
-
-    
