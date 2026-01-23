@@ -46,7 +46,7 @@ export function useDoc<T = any>(
     // Critical guard: do nothing if the document reference isn't ready.
     if (!docRef) {
       setData(null);
-      setIsLoading(false);
+      setIsLoading(true); // Keep loading until a valid docRef is provided
       setError(null);
       return;
     }
@@ -80,7 +80,7 @@ export function useDoc<T = any>(
                 });
                 errorEmitter.emit('permission-error', permissionError);
             } catch (e) {
-                // Prevent crash if error constructor fails.
+                // Failsafe to prevent crash in error constructor
             }
         }
       }

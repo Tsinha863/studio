@@ -44,11 +44,12 @@ export function useCollection<T = any>(
   const [error, setError] = useState<FirestoreError | null>(null);
 
   useEffect(() => {
-    // This is the critical guard. If the query is not ready (e.g., waiting for a user ID),
-    // we reset the state and do nothing. This prevents invalid queries from executing.
+    // This is the critical guard. If the query is null or undefined,
+    // we reset the state and wait. This prevents invalid queries
+    // from executing while dependencies (like user auth) are loading.
     if (!query) {
       setData(null);
-      setIsLoading(false); 
+      setIsLoading(true); // Keep loading until a valid query is provided
       setError(null);
       return;
     }
@@ -86,8 +87,8 @@ export function useCollection<T = any>(
             });
             errorEmitter.emit('permission-error', permissionError);
           } catch(e) {
-            // This catch block prevents a crash if the FirestorePermissionError constructor itself fails,
-            // for example if getAuth() isn't ready. The original error will still be in the `error` state.
+            // This failsafe prevents a crash in the error constructor itself,
+            // e.g., if getAuth() isn't ready. The original error remains in state.
           }
         }
       }
