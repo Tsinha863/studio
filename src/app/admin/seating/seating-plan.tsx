@@ -6,7 +6,7 @@ import { User as UserIcon, Calendar as CalendarIcon } from 'lucide-react';
 import { format } from 'date-fns';
 
 import { useCollection, useFirebase } from '@/firebase';
-import type { Seat, Student, SeatBooking } from '@/lib/types';
+import type { Seat, SeatBooking } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -22,7 +22,6 @@ interface SeatingPlanProps {
 }
 
 type SeatWithId = Seat & { id: string };
-type StudentWithId = Student & { id: string };
 type SeatBookingWithId = SeatBooking & { id: string };
 
 const tierStyles = {
@@ -48,12 +47,6 @@ export function SeatingPlan({ libraryId, roomId }: SeatingPlanProps) {
     return query(collection(firestore, `libraries/${libraryId}/rooms/${roomId}/seats`));
   }, [firestore, user, libraryId, roomId]);
   const { data: seats, isLoading: isLoadingSeats } = useCollection<Seat>(seatsQuery);
-
-  const studentsQuery = React.useMemo(() => {
-    if (!firestore || !user) return null;
-    return query(collection(firestore, `libraries/${libraryId}/students`));
-  }, [firestore, user, libraryId]);
-  const { data: students, isLoading: isLoadingStudents } = useCollection<Student>(studentsQuery);
 
   const bookingsQuery = React.useMemo(() => {
     if (!firestore || !user || !roomId) return null;
@@ -190,7 +183,6 @@ export function SeatingPlan({ libraryId, roomId }: SeatingPlanProps) {
           isOpen={isBookingDialogOpen}
           onOpenChange={setIsBookingDialogOpen}
           seat={selectedSeat}
-          students={students as StudentWithId[] || []}
           bookingsForSeat={bookingsBySeatId.get(selectedSeat.id) ?? []}
           libraryId={libraryId}
           selectedDate={selectedDate}
@@ -200,4 +192,3 @@ export function SeatingPlan({ libraryId, roomId }: SeatingPlanProps) {
     </TooltipProvider>
   );
 }
-

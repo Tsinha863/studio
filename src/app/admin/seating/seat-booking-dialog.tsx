@@ -1,24 +1,18 @@
 'use client';
 
 import * as React from 'react';
-import { Check, ChevronsUpDown, Trash2 } from 'lucide-react';
-import { format, setHours, setMinutes, addHours, addMonths, addYears } from 'date-fns';
+import { Trash2 } from 'lucide-react';
+import { format, setHours, setMinutes } from 'date-fns';
 import {
   collection,
-  runTransaction,
+  writeBatch,
   serverTimestamp,
   doc,
-  query,
-  where,
-  getDocs,
-  Timestamp,
-  writeBatch,
 } from 'firebase/firestore';
 import { FirebaseError } from 'firebase/app';
 
 import { useFirebase, errorEmitter } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
-import { cn } from '@/lib/utils';
 import {
   Dialog,
   DialogContent,
@@ -29,15 +23,6 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@/components/ui/command';
 import {
   Select,
   SelectContent,
@@ -48,19 +33,20 @@ import {
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
-import type { Seat, Student, SeatBooking, Payment, SeatBooking } from '@/lib/types';
+import type { Seat, SeatBooking } from '@/lib/types';
 import { Spinner } from '@/components/spinner';
 import { FirestorePermissionError } from '@/firebase/errors';
+import { createSeatBooking, type BookingDuration } from '@/lib/booking-engine';
+import StudentSelect from './StudentSelect';
+
 
 type SeatWithId = Seat & { id: string };
-type StudentWithId = Student & { id: string };
 type SeatBookingWithId = SeatBooking & { id: string };
 
 interface SeatBookingDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   seat: SeatWithId;
-  students: StudentWithId[];
   bookingsForSeat: SeatBookingWithId[];
   libraryId: string;
   selectedDate: Date;
@@ -79,34 +65,11 @@ const durationOptions = [
     { label: '1 Year', value: '1y' },
 ];
 
-const pricing = {
-    hourly: { basic: 20, standard: 30, premium: 40 },
-    daily: { basic: 200, standard: 300, premium: 400 },
-    monthly: { basic: 4000, standard: 5000, premium: 6000 },
-}
-
-const calculatePrice = (tier: Seat['tier'], type: SeatBooking['bookingType'], meta: SeatBooking['durationMeta']) => {
-    if (type === 'hourly' && meta.hours) {
-        return pricing.hourly[tier] * meta.hours;
-    }
-    if (type === 'daily') {
-        return pricing.daily[tier];
-    }
-    if (type === 'monthly' && meta.months) {
-        return pricing.monthly[tier] * meta.months;
-    }
-    if (type === 'yearly' && meta.months) {
-         return (pricing.monthly[tier] * meta.months) * 0.9; // 10% discount for yearly
-    }
-    return 0;
-};
-
 
 export function SeatBookingDialog({
   isOpen,
   onOpenChange,
   seat,
-  students,
   bookingsForSeat,
   libraryId,
   selectedDate,
@@ -115,28 +78,36 @@ export function SeatBookingDialog({
   const { firestore, user } = useFirebase();
   const { toast } = useToast();
   
-  const [selectedStudentId, setSelectedStudentId] = React.useState<string | undefined>();
+  const [selectedStudent, setSelectedStudent] = React.useState<{ id: string; name: string } | null>(null);
   const [startTime, setStartTime] = React.useState('09:00');
   const [duration, setDuration] = React.useState('4h');
   
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isCancelling, setIsCancelling] = React.useState<string | false>(false);
-  const [isComboboxOpen, setIsComboboxOpen] = React.useState(false);
 
-  const activeStudents = React.useMemo(() => students.filter(s => s.status !== 'inactive'), [students]);
 
   const handleBooking = async () => {
-    if (!firestore || !user || !selectedStudentId) {
+    if (!firestore || !user || !selectedStudent) {
       toast({ variant: 'destructive', title: 'Error', description: 'Please select a student.' });
       return;
     }
-    const studentToAssign = students.find(s => s.id === selectedStudentId);
-    if (!studentToAssign) return;
 
     setIsSubmitting(true);
     
-    let bookingType: SeatBooking['bookingType'] = 'hourly';
-    let durationMeta: SeatBooking['durationMeta'] = {};
+    let bookingDuration: BookingDuration;
+    if (duration === 'fullday') {
+        bookingDuration = { type: 'daily' };
+    } else if (duration.endsWith('h')) {
+        bookingDuration = { type: 'hourly', hours: parseInt(duration.replace('h', ''), 10) as 4 | 6 | 12 | 24 };
+    } else if (duration.endsWith('m')) {
+        bookingDuration = { type: 'monthly', months: parseInt(duration.replace('m', ''), 10) };
+    } else if (duration.endsWith('y')) {
+        bookingDuration = { type: 'yearly' };
+    } else {
+        toast({ variant: 'destructive', title: 'Invalid Duration' });
+        setIsSubmitting(false);
+        return;
+    }
 
     let startDateTime: Date;
     const isLongBooking = duration.endsWith('m') || duration.endsWith('y') || duration === 'fullday';
@@ -148,116 +119,19 @@ export function SeatBookingDialog({
         startDateTime = setMinutes(setHours(selectedDate, hours), minutes);
     }
 
-    let endDateTime: Date;
-
-    if (duration === 'fullday') {
-        bookingType = 'daily';
-        endDateTime = setMinutes(setHours(selectedDate, 21), 0);
-    } else if (duration.endsWith('h')) {
-        bookingType = 'hourly';
-        const d = parseInt(duration.replace('h', ''), 10);
-        durationMeta.hours = d;
-        endDateTime = addHours(startDateTime, d);
-    } else if (duration.endsWith('m')) {
-        bookingType = 'monthly';
-        const d = parseInt(duration.replace('m', ''), 10);
-        durationMeta.months = d;
-        endDateTime = addMonths(startDateTime, d);
-    } else if (duration.endsWith('y')) {
-        bookingType = 'yearly';
-        const d = parseInt(duration.replace('y', ''), 10);
-        durationMeta.months = d * 12;
-        endDateTime = addYears(startDateTime, d);
-    } else {
-        toast({ variant: 'destructive', title: 'Invalid Duration', description: 'Please select a valid booking duration.' });
-        setIsSubmitting(false);
-        return;
-    }
-
     try {
-      const bookingsRef = collection(firestore, `libraries/${libraryId}/seatBookings`);
-      
-      const seatOverlapQuery = query(bookingsRef, 
-          where('seatId', '==', seat.id),
-          where('roomId', '==', seat.roomId),
-          where('status', '==', 'active'),
-          where('endTime', '>', Timestamp.fromDate(startDateTime))
-      );
-      const seatOverlapSnapshot = await getDocs(seatOverlapQuery);
-      const seatConflicts = seatOverlapSnapshot.docs.filter(doc => doc.data().startTime.toDate() < endDateTime);
-      if (seatConflicts.length > 0) {
-          throw new Error(`This seat is already booked from ${format(seatConflicts[0].data().startTime.toDate(), 'p')} to ${format(seatConflicts[0].data().endTime.toDate(), 'p')}.`);
-      }
-
-      const studentOverlapQuery = query(bookingsRef,
-          where('studentId', '==', selectedStudentId),
-          where('status', '==', 'active'),
-          where('endTime', '>', Timestamp.fromDate(startDateTime))
-      );
-      const studentOverlapSnapshot = await getDocs(studentOverlapQuery);
-      const studentConflicts = studentOverlapSnapshot.docs.filter(doc => doc.data().startTime.toDate() < endDateTime);
-      if (studentConflicts.length > 0) {
-          const conflict = studentConflicts[0].data();
-          throw new Error(`${studentToAssign.name} already has a booking for seat ${conflict.seatId} from ${format(conflict.startTime.toDate(), 'p')} to ${format(conflict.endTime.toDate(), 'p')}.`);
-      }
-      
-      await runTransaction(firestore, async (transaction) => {
-        const newBookingRef = doc(bookingsRef);
-        const paymentsRef = collection(firestore, `libraries/${libraryId}/payments`);
-        const newPaymentRef = doc(paymentsRef);
-
-        const bookingPayload: Omit<SeatBooking, 'id'> = {
-            libraryId,
-            roomId: seat.roomId,
-            seatId: seat.id,
-            studentId: selectedStudentId,
-            studentName: studentToAssign.name,
-            startTime: Timestamp.fromDate(startDateTime),
-            endTime: Timestamp.fromDate(endDateTime),
-            status: 'active',
-            bookingType,
-            durationMeta,
-            linkedPaymentId: newPaymentRef.id,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-        };
-
-        const paymentAmount = calculatePrice(seat.tier, bookingType, durationMeta);
-        const paymentPayload: Omit<Payment, 'id'> = {
-            libraryId,
-            studentId: selectedStudentId,
-            studentName: studentToAssign.name,
-            bookingId: newBookingRef.id,
-            amount: paymentAmount,
-            status: 'pending',
-            dueDate: Timestamp.fromDate(startDateTime),
-            paymentDate: null,
-            method: 'Online',
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-        };
-
-        transaction.set(newBookingRef, bookingPayload);
-        transaction.set(newPaymentRef, paymentPayload);
-
-        const logRef = doc(collection(firestore, `libraries/${libraryId}/activityLogs`));
-        transaction.set(logRef, {
-            libraryId,
-            user: { id: user.uid, name: user.displayName || 'Admin' },
-            activityType: 'seat_assigned',
-            details: {
-                studentName: studentToAssign.name,
-                seatId: seat.id,
-                roomId: seat.roomId,
-                startTime: Timestamp.fromDate(startDateTime),
-                endTime: Timestamp.fromDate(endDateTime),
-                amount: paymentAmount,
-            },
-            timestamp: serverTimestamp(),
-        });
+      await createSeatBooking(firestore, {
+        libraryId,
+        roomId: seat.roomId,
+        seatId: seat.id,
+        studentId: selectedStudent.id,
+        studentName: selectedStudent.name,
+        startTime: startDateTime,
+        duration: bookingDuration,
+        seatTier: seat.tier,
       });
       
-      toast({ title: 'Seat Booked!', description: `Seat ${seat.id} booked for ${studentToAssign.name}.` });
+      toast({ title: 'Seat Booked!', description: `Seat ${seat.id} booked for ${selectedStudent.name}.` });
       onSuccess();
     } catch (serverError) {
        if (serverError instanceof FirebaseError && serverError.code === 'permission-denied') {
@@ -290,12 +164,8 @@ export function SeatBookingDialog({
     const bookingRef = doc(firestore, `libraries/${libraryId}/seatBookings`, booking.id);
     batch.update(bookingRef, { status: 'cancelled', updatedAt: serverTimestamp() });
 
-    // Also cancel the linked payment if it exists and is not paid
     if (booking.linkedPaymentId) {
         const paymentRef = doc(firestore, `libraries/${libraryId}/payments`, booking.linkedPaymentId);
-        // We can't query inside a batch, so we just set the update. 
-        // A more complex system might use a cloud function to check status before cancelling.
-        // For now, we assume we can cancel it. A better check could be done in a transaction.
         batch.update(paymentRef, { status: 'cancelled', updatedAt: serverTimestamp() });
     }
 
@@ -333,7 +203,7 @@ export function SeatBookingDialog({
   
   React.useEffect(() => {
     if (!isOpen) {
-        setSelectedStudentId(undefined);
+        setSelectedStudent(null);
         setStartTime('09:00');
         setDuration('4h');
     }
@@ -383,39 +253,11 @@ export function SeatBookingDialog({
                  <div className="space-y-4">
                     <div className="space-y-2">
                         <Label>Student</Label>
-                        <Popover open={isComboboxOpen} onOpenChange={setIsComboboxOpen}>
-                            <PopoverTrigger asChild>
-                                <Button variant="outline" role="combobox" className="w-full justify-between" disabled={isActionDisabled}>
-                                    {selectedStudentId
-                                        ? students.find((student) => student.id === selectedStudentId)?.name
-                                        : "Select a student..."}
-                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                                <Command>
-                                <CommandInput placeholder="Search student..." />
-                                <CommandList>
-                                    <CommandEmpty>No available students found.</CommandEmpty>
-                                    <CommandGroup>
-                                    {activeStudents.map((student) => (
-                                        <CommandItem
-                                            key={student.id}
-                                            value={student.id}
-                                            onSelect={(currentValue) => {
-                                                setSelectedStudentId(currentValue === selectedStudentId ? undefined : currentValue);
-                                                setIsComboboxOpen(false);
-                                            }}
-                                        >
-                                            <Check className={cn("mr-2 h-4 w-4", selectedStudentId === student.id ? "opacity-100" : "opacity-0")} />
-                                            {student.name}
-                                        </CommandItem>
-                                    ))}
-                                    </CommandGroup>
-                                </CommandList>
-                                </Command>
-                            </PopoverContent>
-                        </Popover>
+                        <StudentSelect
+                            libraryId={libraryId}
+                            value={selectedStudent?.id ?? null}
+                            onChange={setSelectedStudent}
+                        />
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
@@ -445,7 +287,7 @@ export function SeatBookingDialog({
           <DialogClose asChild>
             <Button type="button" variant="outline" disabled={isActionDisabled}>Close</Button>
           </DialogClose>
-          <Button type="button" onClick={handleBooking} disabled={isActionDisabled || !selectedStudentId}>
+          <Button type="button" onClick={handleBooking} disabled={isActionDisabled || !selectedStudent}>
             {isSubmitting && <Spinner className="mr-2" />}
             {isSubmitting ? 'Booking...' : 'Create Booking'}
           </Button>
@@ -454,4 +296,3 @@ export function SeatBookingDialog({
     </Dialog>
   );
 }
-
