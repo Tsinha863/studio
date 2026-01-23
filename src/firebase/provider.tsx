@@ -1,10 +1,9 @@
-
 'use client';
 
 import React, { createContext, useContext, ReactNode, useMemo, useState, useEffect } from 'react';
 import { FirebaseApp } from 'firebase/app';
-import { Firestore, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { Auth, User, onAuthStateChanged } from 'firebase/auth';
+import { Firestore, doc, getDoc } from 'firebase/firestore';
+import { Auth, User, onAuthStateChanged, signOut } from 'firebase/auth';
 import { FirebaseStorage } from 'firebase/storage';
 import { FirebaseErrorListener } from '@/components/FirebaseErrorListener';
 import type { User as UserProfileType } from '@/lib/types';
@@ -12,10 +11,6 @@ import { LIBRARY_ID } from '@/lib/config';
 
 const VALID_ROLES = ["libraryOwner", "student"] as const;
 type UserRole = (typeof VALID_ROLES)[number];
-
-// Demo credentials used for profile healing
-const DEMO_ADMIN_EMAIL = 'admin@campushub.com';
-const DEMO_STUDENT_EMAIL = 'student@campushub.com';
 
 // Combined state for the Firebase context
 export interface FirebaseContextState {
@@ -68,38 +63,34 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
   });
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        // When a user is authenticated, we must resolve their profile from Firestore.
-        const resolveUserProfile = async () => {
-          try {
-            const userDocRef = doc(firestore, `libraries/${LIBRARY_ID}/users`, firebaseUser.uid);
-            const docSnap = await getDoc(userDocRef);
-            
-            if (!docSnap.exists()) {
-              // The user profile is expected to be created atomically during the signup or first demo login.
-              // If it's missing, it represents a critical failure in the application logic.
-              throw new Error(`User profile not found for uid: ${firebaseUser.uid}. The profile should have been created during signup.`);
-            }
-            
-            const profile = docSnap.data() as UserProfileType;
-
-            if (!profile.role || !VALID_ROLES.includes(profile.role as UserRole)) {
-                 throw new Error(`User ${firebaseUser.uid} has an invalid or missing role.`);
-            }
-
-            // Profile and role resolved successfully. Update state and set loading to false.
-            setAuthState(prev => ({ ...prev, user: firebaseUser, userProfile: profile, role: profile.role as UserRole, isLoading: false, error: null }));
-
-          } catch (e) {
-            // Any failure in this process is a critical error.
-            // Set the error state and stop loading.
-            setAuthState(prev => ({ ...prev, user: firebaseUser, userProfile: null, role: null, isLoading: false, error: e instanceof Error ? e : new Error('Failed to resolve user profile') }));
+        try {
+          const userDocRef = doc(firestore, `libraries/${LIBRARY_ID}/users`, firebaseUser.uid);
+          const docSnap = await getDoc(userDocRef);
+          
+          if (!docSnap.exists()) {
+            // This is a critical error state. A user record exists in Auth, but not in Firestore.
+            // This indicates a violation of the application's core invariant.
+            // The safest action is to sign the user out to prevent an inconsistent state.
+            await signOut(auth);
+            throw new Error(`User profile not found for uid: ${firebaseUser.uid}. The user has been signed out.`);
           }
-        };
+          
+          const profile = docSnap.data() as UserProfileType;
 
-        resolveUserProfile();
+          if (!profile.role || !VALID_ROLES.includes(profile.role as UserRole)) {
+               throw new Error(`User ${firebaseUser.uid} has an invalid or missing role.`);
+          }
 
+          // Profile and role resolved successfully. Update state and set loading to false.
+          setAuthState(prev => ({ ...prev, user: firebaseUser, userProfile: profile, role: profile.role as UserRole, isLoading: false, error: null }));
+
+        } catch (e) {
+          // Any failure in this process is a critical error.
+          // Set the error state and stop loading.
+          setAuthState(prev => ({ ...prev, user: firebaseUser, userProfile: null, role: null, isLoading: false, error: e instanceof Error ? e : new Error('Failed to resolve user profile') }));
+        }
       } else {
         // No user is signed in. Clear all user-related state and set loading to false.
         setAuthState(prev => ({ ...prev, user: null, userProfile: null, role: null, isLoading: false, error: null }));

@@ -96,14 +96,12 @@ export default function SuggestionsPage() {
           description: "The suggestion's status has been changed.",
         });
     } catch(serverError) {
-        if (serverError instanceof FirebaseError && serverError.code === 'permission-denied') {
-          const permissionError = new FirestorePermissionError({
-            path: suggestionRef.path,
-            operation: 'update',
-            requestResourceData: payload,
-          });
-          errorEmitter.emit('permission-error', permissionError);
-        }
+      const permissionError = new FirestorePermissionError({
+        path: suggestionRef.path,
+        operation: 'update',
+        requestResourceData: payload,
+      });
+      errorEmitter.emit('permission-error', permissionError);
     }
   }, [user, firestore, toast]);
 
@@ -140,13 +138,11 @@ export default function SuggestionsPage() {
         });
         closeDeleteAlert();
     } catch(serverError) {
-        if (serverError instanceof FirebaseError && serverError.code === 'permission-denied') {
-          const permissionError = new FirestorePermissionError({
-            path: suggestionRef.path,
-            operation: 'delete',
-          });
-          errorEmitter.emit('permission-error', permissionError);
-        }
+      const permissionError = new FirestorePermissionError({
+        path: suggestionRef.path,
+        operation: 'delete',
+      });
+      errorEmitter.emit('permission-error', permissionError);
     } finally {
         setIsSubmitting(false);
     }

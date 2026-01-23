@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -33,23 +32,14 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Logo } from '@/components/logo';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
-import { useDoc, useFirebase } from '@/firebase';
-import { Student } from '@/lib/types';
+import { useFirebase, useUser } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AuthGuard } from '@/components/auth/auth-guard';
-import { doc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
-import { LIBRARY_ID } from '@/lib/config';
 
 function UserMenu() {
-  const { firestore, user } = useFirebase();
+  const { userProfile, isLoading } = useUser();
   const userAvatar = PlaceHolderImages.find((p) => p.id === 'user-avatar');
-  
-  const studentDocRef = React.useMemo(() => {
-    if (!firestore || !user?.uid) return null;
-    return doc(firestore, `libraries/${LIBRARY_ID}/students`, user.uid);
-  }, [firestore, user]);
-  const { data: student, isLoading: isLoadingStudent } = useDoc<Student>(studentDocRef);
 
   return (
     <DropdownMenu>
@@ -70,16 +60,16 @@ function UserMenu() {
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-56" align="end" forceMount>
         <DropdownMenuLabel className="font-normal">
-          {isLoadingStudent ? (
+          {isLoading ? (
             <div className="flex flex-col space-y-2">
               <Skeleton className="h-4 w-24" />
               <Skeleton className="h-3 w-32" />
             </div>
           ) : (
             <div className="flex flex-col space-y-1">
-              <p className="text-sm font-medium leading-none">{student?.name || 'Student'}</p>
+              <p className="text-sm font-medium leading-none">{userProfile?.name || 'Student'}</p>
               <p className="text-xs leading-none text-muted-foreground">
-                {student?.email || user?.email || 'No email'}
+                {userProfile?.email || 'No email'}
               </p>
             </div>
           )}

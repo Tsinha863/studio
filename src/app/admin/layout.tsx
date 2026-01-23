@@ -46,7 +46,7 @@ import { useFirebase } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 
 function UserMenu() {
-  const { user, userProfile, isLoading } = useFirebase();
+  const { userProfile, isLoading } = useFirebase();
   const userAvatar = PlaceHolderImages.find((p) => p.id === 'user-avatar');
   return (
     <DropdownMenu>
@@ -74,7 +74,7 @@ function UserMenu() {
             </div>
           ) : (
             <div className="flex flex-col space-y-1">
-              <p className="text-sm font-medium leading-none">{userProfile?.name || 'Admin'}</p>
+              <p className="text-sm font-medium leading-none">{userProfile?.name || ''}</p>
               <p className="text-xs leading-none text-muted-foreground">
                 {userProfile?.email || ''}
               </p>
@@ -219,5 +219,3 @@ export default function AdminLayout({
     </AuthGuard>
   );
 }
-
-    

@@ -44,12 +44,9 @@ export function useCollection<T = any>(
   const [error, setError] = useState<FirestoreError | null>(null);
 
   useEffect(() => {
-    // This is the critical guard. If the query is null or undefined,
-    // we reset the state and wait. This prevents invalid queries
-    // from executing while dependencies (like user auth) are loading.
     if (!query) {
       setData(null);
-      setIsLoading(true); // Keep loading until a valid query is provided
+      setIsLoading(true);
       setError(null);
       return;
     }
@@ -75,10 +72,10 @@ export function useCollection<T = any>(
         setIsLoading(false);
         
         if (serverError.code === 'permission-denied') {
-          // This works for CollectionReferences. For complex Queries, the SDK does not expose the path.
-          const path = 'path' in query && typeof (query as any).path === 'string'
-            ? (query as any).path
-            : 'unknown-collection (from a query)';
+          let path = 'unknown-collection (from a query)';
+          if (query instanceof CollectionReference) {
+              path = query.path;
+          }
           
           try {
             const permissionError = new FirestorePermissionError({
@@ -94,9 +91,8 @@ export function useCollection<T = any>(
       }
     );
 
-    // Unsubscribe from the listener when the component unmounts or the query changes.
     return () => unsubscribe();
-  }, [query]); // The effect re-runs only when the memoized query object changes.
+  }, [query]); 
   
   return { data, isLoading, error };
 }

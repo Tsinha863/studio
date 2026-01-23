@@ -152,13 +152,11 @@ export default function ExpensesPage() {
         });
         closeDeleteAlert();
     } catch(serverError) {
-        if (serverError instanceof FirebaseError && serverError.code === 'permission-denied') {
-          const permissionError = new FirestorePermissionError({
-            path: expenseRef.path,
-            operation: 'delete',
-          });
-          errorEmitter.emit('permission-error', permissionError);
-        }
+      const permissionError = new FirestorePermissionError({
+        path: expenseRef.path,
+        operation: 'delete',
+      });
+      errorEmitter.emit('permission-error', permissionError);
     } finally {
         setIsSubmitting(false);
     }

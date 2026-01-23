@@ -103,14 +103,12 @@ export default function PrintRequestsPage() {
             description: 'The print request has been updated.',
         });
     } catch(serverError) {
-        if (serverError instanceof FirebaseError && serverError.code === 'permission-denied') {
-          const permissionError = new FirestorePermissionError({
-            path: requestRef.path,
-            operation: 'update',
-            requestResourceData: updateData,
-          });
-          errorEmitter.emit('permission-error', permissionError);
-        }
+      const permissionError = new FirestorePermissionError({
+        path: requestRef.path,
+        operation: 'update',
+        requestResourceData: updateData,
+      });
+      errorEmitter.emit('permission-error', permissionError);
     } finally {
         setIsSubmitting(false);
         if (newStatus === 'Rejected') {

@@ -90,7 +90,7 @@ export default function PaymentsPage() {
   }, [firestore, user]);
   const { data: payments, isLoading: isLoadingPayments, error } = useCollection<Payment>(paymentsQuery);
   
-  const handleMarkAsPaid = React.useCallback((payment: PaymentWithId) => {
+  const handleMarkAsPaid = React.useCallback(async (payment: PaymentWithId) => {
     if (!user || !firestore || !payment.studentId) {
        toast({
         variant: 'destructive',
@@ -104,52 +104,53 @@ export default function PaymentsPage() {
     const paymentRef = doc(firestore, `libraries/${LIBRARY_ID}/payments/${payment.id}`);
     const studentRef = doc(firestore, `libraries/${LIBRARY_ID}/students/${payment.studentId!}`);
 
-    runTransaction(firestore, async (transaction) => {
-      const [paymentDoc, studentDoc] = await Promise.all([
-        transaction.get(paymentRef),
-        transaction.get(studentRef),
-      ]);
+    try {
+        const result = await runTransaction(firestore, async (transaction) => {
+            const [paymentDoc, studentDoc] = await Promise.all([
+                transaction.get(paymentRef),
+                transaction.get(studentRef),
+            ]);
 
-      if (!paymentDoc.exists()) throw new Error('Payment document not found.');
-      if (!studentDoc.exists()) throw new Error('Student document not found.');
-      
-      const paymentData = paymentDoc.data() as Payment;
-      if (paymentData.status === 'paid') return { studentBeforeUpdate: studentDoc.data() as Student, wasOverdue: false, alreadyPaid: true, paymentData }; 
-      
-      const wasOverdue = paymentData.status === 'overdue';
+            if (!paymentDoc.exists()) throw new Error('Payment document not found.');
+            if (!studentDoc.exists()) throw new Error('Student document not found.');
+            
+            const paymentData = paymentDoc.data() as Payment;
+            if (paymentData.status === 'paid') return { studentBeforeUpdate: studentDoc.data() as Student, wasOverdue: false, alreadyPaid: true, paymentData }; 
+            
+            const wasOverdue = paymentData.status === 'overdue';
 
-      // Update payment
-      transaction.update(paymentRef, {
-        status: 'paid',
-        paymentDate: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+            // Update payment
+            transaction.update(paymentRef, {
+                status: 'paid',
+                paymentDate: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+            });
 
-      // Update student
-      transaction.update(studentRef, {
-        fibonacciStreak: wasOverdue ? 0 : increment(1),
-        status: 'active',
-        lastInteractionAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+            // Update student
+            transaction.update(studentRef, {
+                fibonacciStreak: wasOverdue ? 0 : increment(1),
+                status: 'active',
+                lastInteractionAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+            });
 
-      // Create activity log
-      const logRef = doc(collection(firestore, `libraries/${LIBRARY_ID}/activityLogs`));
-      transaction.set(logRef, {
-        libraryId: LIBRARY_ID,
-        user: { id: user.uid, name: user.displayName || 'Admin' },
-        activityType: 'payment_processed',
-        details: {
-          studentName: studentDoc.data().name,
-          amount: paymentData.amount,
-          paymentId: payment.id,
-        },
-        timestamp: serverTimestamp(),
-      });
-      
-      return { studentBeforeUpdate: studentDoc.data() as Student, wasOverdue, alreadyPaid: false, paymentData };
-    })
-      .then(async (result) => {
+            // Create activity log
+            const logRef = doc(collection(firestore, `libraries/${LIBRARY_ID}/activityLogs`));
+            transaction.set(logRef, {
+                libraryId: LIBRARY_ID,
+                user: { id: user.uid, name: user.displayName || 'Admin' },
+                activityType: 'payment_processed',
+                details: {
+                studentName: studentDoc.data().name,
+                amount: paymentData.amount,
+                paymentId: payment.id,
+                },
+                timestamp: serverTimestamp(),
+            });
+            
+            return { studentBeforeUpdate: studentDoc.data() as Student, wasOverdue, alreadyPaid: false, paymentData };
+        });
+
         if (!result || result.alreadyPaid) return;
         const { studentBeforeUpdate, wasOverdue, paymentData } = result;
 
@@ -177,17 +178,15 @@ export default function PaymentsPage() {
                 description: "Could not generate AI receipt, but payment was recorded."
             })
         }
-    }).catch(serverError => {
-      if (serverError instanceof FirebaseError && serverError.code === 'permission-denied') {
-        const permissionError = new FirestorePermissionError({
+    } catch (serverError) {
+      const permissionError = new FirestorePermissionError({
           path: paymentRef.path,
           operation: 'update',
         });
-        errorEmitter.emit('permission-error', permissionError);
-      }
-    }).finally(() => {
+      errorEmitter.emit('permission-error', permissionError);
+    } finally {
       setIsPaying(false);
-    });
+    }
   }, [firestore, user, toast]);
 
   const memoizedColumns = React.useMemo(() => paymentColumns({ handleMarkAsPaid, isPaying }), [handleMarkAsPaid, isPaying]);
@@ -300,13 +299,11 @@ export default function PaymentsPage() {
         description: `${createdCount} new payment obligations were created.`,
       });
     } catch(serverError) {
-       if (serverError instanceof FirebaseError && serverError.code === 'permission-denied') {
-        const permissionError = new FirestorePermissionError({
+       const permissionError = new FirestorePermissionError({
           path: paymentsCol.path,
           operation: 'write',
         });
         errorEmitter.emit('permission-error', permissionError);
-      }
     } finally {
       setIsCreating(false);
     }

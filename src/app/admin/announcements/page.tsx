@@ -151,13 +151,11 @@ export default function AnnouncementsPage() {
         });
         closeDeleteAlert();
     } catch (serverError) {
-        if (serverError instanceof FirebaseError && serverError.code === 'permission-denied') {
-          const permissionError = new FirestorePermissionError({
-            path: announcementRef.path,
-            operation: 'delete',
-          });
-          errorEmitter.emit('permission-error', permissionError);
-        }
+      const permissionError = new FirestorePermissionError({
+        path: announcementRef.path,
+        operation: 'delete',
+      });
+      errorEmitter.emit('permission-error', permissionError);
     } finally {
         setIsSubmitting(false);
     }

@@ -187,14 +187,12 @@ export default function StudentsPage() {
         });
         closeDeleteAlert();
     } catch(serverError) {
-        if (serverError instanceof FirebaseError && serverError.code === 'permission-denied') {
-          const studentRef = doc(firestore, `libraries/${LIBRARY_ID}/students/${alertState.studentId!}`);
-          const permissionError = new FirestorePermissionError({
-            path: studentRef.path,
-            operation: 'update',
-          });
-          errorEmitter.emit('permission-error', permissionError);
-        }
+      const studentRef = doc(firestore, `libraries/${LIBRARY_ID}/students/${alertState.studentId!}`);
+      const permissionError = new FirestorePermissionError({
+        path: studentRef.path,
+        operation: 'update',
+      });
+      errorEmitter.emit('permission-error', permissionError);
     } finally {
         setIsDeleting(false);
     }

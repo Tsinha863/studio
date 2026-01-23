@@ -1,4 +1,3 @@
-
 'use client';
 
 import { Timestamp } from "firebase/firestore";
@@ -9,7 +8,6 @@ export interface User {
   role: 'libraryOwner' | 'student';
   name: string;
   email: string;
-  avatarUrl?: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -135,5 +133,3 @@ export interface PrintRequest {
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
-
-    
