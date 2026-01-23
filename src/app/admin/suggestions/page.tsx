@@ -73,7 +73,6 @@ export default function SuggestionsPage() {
   const { data: suggestions, isLoading: isLoadingSuggestions, error } = useCollection<Suggestion>(suggestionsQuery);
   
   const suggestionsWithDetails = React.useMemo(() => {
-    if (!suggestions) return [];
     return suggestions.map((s) => ({
       ...s,
       studentName: s.studentName || 'Unknown Student',

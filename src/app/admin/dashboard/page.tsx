@@ -120,7 +120,7 @@ export default function DashboardPage() {
         return { month: d.toLocaleString('default', { month: 'short' }), income: 0, expenses: 0 };
     }).reverse();
 
-    payments?.forEach(p => {
+    payments.forEach(p => {
         const paymentDate = p.paymentDate?.toDate();
         if (paymentDate) {
             const month = paymentDate.toLocaleString('default', { month: 'short' });
@@ -131,7 +131,7 @@ export default function DashboardPage() {
         }
     });
 
-    expenses?.forEach(e => {
+    expenses.forEach(e => {
         const expenseDate = e.expenseDate.toDate();
         const month = expenseDate.toLocaleString('default', { month: 'short' });
         const monthData = months.find(m => m.month === month);
@@ -143,15 +143,15 @@ export default function DashboardPage() {
     return months;
   }, [payments, expenses]);
 
-  const totalRevenue = React.useMemo(() => payments?.filter(p => p.status === 'paid').reduce((acc, p) => acc + p.amount, 0) || 0, [payments]);
-  const totalExpenses = React.useMemo(() => expenses?.reduce((acc, e) => acc + e.amount, 0) || 0, [expenses]);
-  const activeStudentCount = React.useMemo(() => allStudents?.filter(s => s.status === 'active').length || 0, [allStudents]);
+  const totalRevenue = React.useMemo(() => payments.filter(p => p.status === 'paid').reduce((acc, p) => acc + p.amount, 0), [payments]);
+  const totalExpenses = React.useMemo(() => expenses.reduce((acc, e) => acc + e.amount, 0), [expenses]);
+  const activeStudentCount = React.useMemo(() => allStudents.filter(s => s.status === 'active').length, [allStudents]);
   
   const newStudentsThisMonth = React.useMemo(() => {
     const startOfMonth = new Date();
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
-    return allStudents?.filter(s => s.createdAt.toDate() >= startOfMonth).length || 0;
+    return allStudents.filter(s => s.createdAt.toDate() >= startOfMonth).length;
   }, [allStudents]);
 
   const handleExportReport = async () => {
@@ -217,7 +217,7 @@ export default function DashboardPage() {
         <KpiCard
           title="Active Students"
           value={`${activeStudentCount}`}
-          change={`${allStudents?.filter(s => s.status === 'at-risk').length || 0} at-risk`}
+          change={`${allStudents.filter(s => s.status === 'at-risk').length} at-risk`}
           icon={<Users />}
           isLoading={isKpiLoading}
         />
@@ -250,7 +250,7 @@ export default function DashboardPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <ExpenseBreakdownChart data={expenses || []} />
+            <ExpenseBreakdownChart data={expenses} />
           </CardContent>
         </Card>
       </div>
@@ -264,7 +264,7 @@ export default function DashboardPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <RecentStudents students={recentStudents || []} isLoading={isLoadingRecentStudents} />
+            <RecentStudents students={recentStudents} isLoading={isLoadingRecentStudents} />
           </CardContent>
         </Card>
         <Card className="lg:col-span-2">
@@ -275,7 +275,7 @@ export default function DashboardPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <ActivityFeed logs={activityLogs || []} isLoading={isLoadingActivityLogs} />
+            <ActivityFeed logs={activityLogs} isLoading={isLoadingActivityLogs} />
           </CardContent>
         </Card>
       </div>

@@ -105,7 +105,7 @@ export default function ExpensesPage() {
     [openModal, openDeleteAlert]);
   
   const table = useReactTable({
-    data: expenses || [],
+    data: expenses,
     columns: memoizedColumns,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),

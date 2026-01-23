@@ -50,7 +50,7 @@ export default function PrintOnDeskPage() {
         </div>
         <div className="lg:col-span-3">
             <PrintHistoryTable
-                requests={printRequests || []}
+                requests={printRequests}
                 isLoading={isLoadingPrintRequests}
             />
         </div>

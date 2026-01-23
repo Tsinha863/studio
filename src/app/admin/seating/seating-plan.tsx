@@ -75,7 +75,7 @@ export function SeatingPlan({ libraryId, roomId }: SeatingPlanProps) {
   // --- Memoized Data ---
   const bookingsBySeatId = React.useMemo(() => {
     const map = new Map<string, SeatBookingWithId[]>();
-    bookings?.forEach(booking => {
+    bookings.forEach(booking => {
       if (!map.has(booking.seatId)) {
         map.set(booking.seatId, []);
       }
@@ -85,14 +85,14 @@ export function SeatingPlan({ libraryId, roomId }: SeatingPlanProps) {
   }, [bookings]);
 
   const sortedSeats = React.useMemo(() => {
-    return seats?.sort((a, b) => {
+    return [...seats].sort((a, b) => {
       const numA = parseInt(a.id, 10);
       const numB = parseInt(b.id, 10);
       if (!isNaN(numA) && !isNaN(numB)) {
         return numA - numB;
       }
       return a.id.localeCompare(b.id);
-    }) ?? [];
+    });
   }, [seats]);
 
   // --- Handlers ---
@@ -117,7 +117,7 @@ export function SeatingPlan({ libraryId, roomId }: SeatingPlanProps) {
     );
   }
 
-  if (!seats || seats.length === 0) {
+  if (seats.length === 0) {
     return <p className="text-muted-foreground text-center py-8">No seats found for this room.</p>;
   }
 
@@ -190,7 +190,7 @@ export function SeatingPlan({ libraryId, roomId }: SeatingPlanProps) {
           isOpen={isBookingDialogOpen}
           onOpenChange={setIsBookingDialogOpen}
           seat={selectedSeat}
-          students={students as StudentWithId[] || []}
+          students={students as StudentWithId[]}
           bookingsForSeat={bookingsBySeatId.get(selectedSeat.id) ?? []}
           libraryId={libraryId}
           selectedDate={selectedDate}

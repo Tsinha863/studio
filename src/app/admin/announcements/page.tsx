@@ -103,7 +103,7 @@ export default function AnnouncementsPage() {
   );
 
   const table = useReactTable({
-    data: announcements || [],
+    data: announcements,
     columns: memoizedColumns,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),

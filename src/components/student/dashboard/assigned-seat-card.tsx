@@ -25,7 +25,7 @@ export function AssignedSeatCard({ bookings, isLoading }: AssignedSeatCardProps)
             <Skeleton className="h-8 w-1/2" />
             <Skeleton className="mt-2 h-4 w-1/4" />
           </div>
-        ) : bookings && bookings.length > 0 ? (
+        ) : bookings.length > 0 ? (
             <ul className="space-y-3">
                 {bookings.slice(0, 2).map((booking, index) => (
                     <li key={`${booking.seatId}-${booking.id}-${index}`}>

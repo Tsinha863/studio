@@ -119,7 +119,7 @@ export default function StudentsPage() {
   );
 
   const table = useReactTable({
-    data: students || [],
+    data: students,
     columns: memoizedColumns,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),

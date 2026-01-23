@@ -132,7 +132,7 @@ export default function PrintRequestsPage() {
   );
   
   const table = useReactTable({
-    data: requests || [],
+    data: requests,
     columns: memoizedColumns,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
@@ -178,7 +178,7 @@ export default function PrintRequestsPage() {
           <DataTable
             table={table}
             columns={memoizedColumns}
-            data={requests || []}
+            data={requests}
             isLoading={isLoading}
             noResultsMessage="No pending requests."
           />

@@ -54,7 +54,7 @@ export default function StudentDashboardPage() {
   const { data: bookings, isLoading: isLoadingBookings } = useCollection<SeatBooking>(bookingsQuery);
 
   const upcomingPayment = React.useMemo(() => {
-    return payments?.find(p => p.status === 'pending' || p.status === 'overdue');
+    return payments.find(p => p.status === 'pending' || p.status === 'overdue');
   }, [payments]);
 
   return (
@@ -62,14 +62,14 @@ export default function StudentDashboardPage() {
       <WelcomeHeader studentName={student?.name} isLoading={isLoadingStudent} />
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        <AssignedSeatCard bookings={bookings || []} isLoading={isLoadingBookings} />
+        <AssignedSeatCard bookings={bookings} isLoading={isLoadingBookings} />
         <UpcomingPaymentCard payment={upcomingPayment} isLoading={isLoadingPayments} />
         <FibonacciStreakCard streak={student?.fibonacciStreak || 0} isLoading={isLoadingStudent} />
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
         <div className="lg:col-span-3">
-            <PaymentHistoryTable payments={payments || []} isLoading={isLoadingPayments} />
+            <PaymentHistoryTable payments={payments} isLoading={isLoadingPayments} />
         </div>
         <div className="lg:col-span-2">
             <SuggestionForm student={student as (Student & {id: string}) | null} libraryId={LIBRARY_ID} isLoading={isLoadingStudent}/>

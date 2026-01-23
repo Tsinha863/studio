@@ -20,45 +20,43 @@ export type WithId<T> = T & { id: string };
  * @template T Type of the document data.
  */
 export interface UseCollectionResult<T> {
-  data: WithId<T>[] | null; // Document data with ID, or null.
-  isLoading: boolean;       // True if loading.
-  error: FirestoreError | null; // Error object, or null.
+  data: WithId<T>[];
+  isLoading: boolean;
+  error: FirestoreError | null;
 }
 
 /**
  * React hook to subscribe to a Firestore collection or query in real-time.
  * It requires a memoized query object to prevent infinite re-renders.
- * 
+ *
  * @template T Optional type for document data. Defaults to any.
  * @param {CollectionReference | Query | null | undefined} query - The memoized Firestore query, created with React.useMemo.
  * @returns {UseCollectionResult<T>} Object with data, isLoading, error.
  */
 export function useCollection<T = any>(
-    query: CollectionReference<DocumentData> | Query<DocumentData> | null | undefined,
+  query: CollectionReference<DocumentData> | Query<DocumentData> | null | undefined
 ): UseCollectionResult<T> {
-  type ResultItemType = WithId<T>;
-  type StateDataType = ResultItemType[] | null;
-
-  const [data, setData] = useState<StateDataType>(null);
+  const [data, setData] = useState<WithId<T>[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<FirestoreError | null>(null);
 
   useEffect(() => {
+    // 🔒 HARD STOP — ROOT FIX: If the query is not ready, return a stable, non-loading state.
     if (!query) {
-      setData(null);
-      setIsLoading(true);
+      setData([]);
+      setIsLoading(false);
       setError(null);
       return;
     }
 
     setIsLoading(true);
     setError(null);
-    setData(null); // Clear previous data on new query
+    setData([]);
 
     const unsubscribe = onSnapshot(
       query,
       (snapshot: QuerySnapshot<DocumentData>) => {
-        const results: ResultItemType[] = snapshot.docs.map(doc => ({
+        const results: WithId<T>[] = snapshot.docs.map((doc) => ({
           ...(doc.data() as T),
           id: doc.id,
         }));
@@ -68,22 +66,22 @@ export function useCollection<T = any>(
       },
       (serverError: FirestoreError) => {
         setError(serverError);
-        setData(null);
+        setData([]);
         setIsLoading(false);
-        
+
         if (serverError.code === 'permission-denied') {
           let path = 'unknown-collection (from a query)';
           if (query instanceof CollectionReference) {
-              path = query.path;
+            path = query.path;
           }
-          
+
           try {
             const permissionError = new FirestorePermissionError({
               path: path,
               operation: 'list',
             });
             errorEmitter.emit('permission-error', permissionError);
-          } catch(e) {
+          } catch (e) {
             // This failsafe prevents a crash in the error constructor itself,
             // e.g., if getAuth() isn't ready. The original error remains in state.
           }
@@ -92,7 +90,7 @@ export function useCollection<T = any>(
     );
 
     return () => unsubscribe();
-  }, [query]); 
-  
+  }, [query]);
+
   return { data, isLoading, error };
 }

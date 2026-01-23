@@ -192,7 +192,7 @@ export default function PaymentsPage() {
   const memoizedColumns = React.useMemo(() => paymentColumns({ handleMarkAsPaid, isPaying }), [handleMarkAsPaid, isPaying]);
   
   const table = useReactTable({
-    data: payments || [],
+    data: payments,
     columns: memoizedColumns,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
