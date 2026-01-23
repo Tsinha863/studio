@@ -6,7 +6,7 @@ import { User as UserIcon, Calendar as CalendarIcon } from 'lucide-react';
 import { format } from 'date-fns';
 
 import { useCollection, useFirebase } from '@/firebase';
-import type { Seat, SeatBooking } from '@/lib/types';
+import type { Seat, Student, SeatBooking } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -22,6 +22,7 @@ interface SeatingPlanProps {
 }
 
 type SeatWithId = Seat & { id: string };
+type StudentWithId = Student & { id: string };
 type SeatBookingWithId = SeatBooking & { id: string };
 
 const tierStyles = {
@@ -47,6 +48,12 @@ export function SeatingPlan({ libraryId, roomId }: SeatingPlanProps) {
     return query(collection(firestore, `libraries/${libraryId}/rooms/${roomId}/seats`));
   }, [firestore, user, libraryId, roomId]);
   const { data: seats, isLoading: isLoadingSeats } = useCollection<Seat>(seatsQuery);
+
+  const studentsQuery = React.useMemo(() => {
+    if (!firestore || !user) return null;
+    return query(collection(firestore, `libraries/${libraryId}/students`), where('status', '==', 'active'));
+  }, [firestore, user, libraryId]);
+  const { data: students, isLoading: isLoadingStudents } = useCollection<Student>(studentsQuery);
 
   const bookingsQuery = React.useMemo(() => {
     if (!firestore || !user || !roomId) return null;
@@ -100,7 +107,7 @@ export function SeatingPlan({ libraryId, roomId }: SeatingPlanProps) {
   };
 
   // --- Render Logic ---
-  if (isLoadingSeats) {
+  if (isLoadingSeats || isLoadingStudents) {
     return (
       <div className="grid grid-cols-4 gap-2 sm:grid-cols-8 sm:gap-4 md:grid-cols-10 lg:grid-cols-12">
         {Array.from({ length: 20 }).map((_, i) => (
@@ -183,6 +190,7 @@ export function SeatingPlan({ libraryId, roomId }: SeatingPlanProps) {
           isOpen={isBookingDialogOpen}
           onOpenChange={setIsBookingDialogOpen}
           seat={selectedSeat}
+          students={students as StudentWithId[] || []}
           bookingsForSeat={bookingsBySeatId.get(selectedSeat.id) ?? []}
           libraryId={libraryId}
           selectedDate={selectedDate}

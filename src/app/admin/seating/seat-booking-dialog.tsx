@@ -8,9 +8,6 @@ import {
   writeBatch,
   serverTimestamp,
   doc,
-  query,
-  where,
-  getDocs,
 } from 'firebase/firestore';
 import { FirebaseError } from 'firebase/app';
 
@@ -60,6 +57,7 @@ interface SeatBookingDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   seat: SeatWithId;
+  students: StudentWithId[];
   bookingsForSeat: SeatBookingWithId[];
   libraryId: string;
   selectedDate: Date;
@@ -88,12 +86,11 @@ export function SeatBookingDialog({
   libraryId,
   selectedDate,
   onSuccess,
+  students,
 }: SeatBookingDialogProps) {
   const { firestore, user } = useFirebase();
   const { toast } = useToast();
   
-  const [students, setStudents] = React.useState<{id: string, name: string}[]>([]);
-  const [isLoadingStudents, setIsLoadingStudents] = React.useState(false);
   const [selectedStudent, setSelectedStudent] = React.useState<{ id: string; name: string } | null>(null);
   const [isComboboxOpen, setIsComboboxOpen] = React.useState(false);
   
@@ -103,28 +100,6 @@ export function SeatBookingDialog({
   
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isCancelling, setIsCancelling] = React.useState<string | false>(false);
-
-  React.useEffect(() => {
-    if (!firestore || !libraryId || !isOpen) return;
-
-    const fetchStudents = async () => {
-      setIsLoadingStudents(true);
-      try {
-        const studentsRef = collection(firestore, `libraries/${libraryId}/students`);
-        const q = query(studentsRef, where('status', '==', 'active'));
-        const querySnapshot = await getDocs(q);
-        const studentList = querySnapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name as string }));
-        setStudents(studentList);
-      } catch (e) {
-        toast({ variant: 'destructive', title: 'Error', description: 'Could not load students.' });
-      } finally {
-        setIsLoadingStudents(false);
-      }
-    };
-
-    fetchStudents();
-  }, [firestore, libraryId, isOpen, toast]);
-
 
   const handleBooking = async () => {
     if (!firestore || !user || !selectedStudent) {
@@ -304,10 +279,8 @@ export function SeatBookingDialog({
                         <Label>Student</Label>
                         <Popover open={isComboboxOpen} onOpenChange={setIsComboboxOpen}>
                             <PopoverTrigger asChild>
-                                <Button variant="outline" role="combobox" className="w-full justify-between" disabled={isActionDisabled || isLoadingStudents}>
-                                    {isLoadingStudents
-                                        ? 'Loading students...'
-                                        : selectedStudent
+                                <Button variant="outline" role="combobox" className="w-full justify-between" disabled={isActionDisabled}>
+                                    {selectedStudent
                                         ? selectedStudent.name
                                         : "Select a student..."}
                                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -324,7 +297,7 @@ export function SeatBookingDialog({
                                             key={student.id}
                                             value={student.name}
                                             onSelect={() => {
-                                                setSelectedStudent(selectedStudent?.id === student.id ? null : student);
+                                                setSelectedStudent(student);
                                                 setIsComboboxOpen(false);
                                             }}
                                         >
