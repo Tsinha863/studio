@@ -191,6 +191,7 @@ export function SeatingPlan({ libraryId, roomId }: SeatingPlanProps) {
           onOpenChange={setIsBookingDialogOpen}
           seat={selectedSeat}
           students={students as StudentWithId[]}
+          isLoadingStudents={isLoadingStudents}
           bookingsForSeat={bookingsBySeatId.get(selectedSeat.id) ?? []}
           libraryId={libraryId}
           selectedDate={selectedDate}

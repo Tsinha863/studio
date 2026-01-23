@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Check, ChevronsUpDown, Trash2 } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 import { format, setHours, setMinutes } from 'date-fns';
 import {
   collection,
@@ -13,7 +13,6 @@ import { FirebaseError } from 'firebase/app';
 
 import { useFirebase, errorEmitter } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
-import { cn } from '@/lib/utils';
 import {
   Dialog,
   DialogContent,
@@ -24,15 +23,6 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@/components/ui/command';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   Select,
   SelectContent,
@@ -47,6 +37,7 @@ import type { Seat, Student, SeatBooking } from '@/lib/types';
 import { Spinner } from '@/components/spinner';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { createSeatBooking, type BookingDuration } from '@/lib/booking-engine';
+import StudentSelect from '@/components/admin/seating/StudentSelect';
 
 
 type SeatWithId = Seat & { id: string };
@@ -58,6 +49,7 @@ interface SeatBookingDialogProps {
   onOpenChange: (open: boolean) => void;
   seat: SeatWithId;
   students: StudentWithId[];
+  isLoadingStudents: boolean;
   bookingsForSeat: SeatBookingWithId[];
   libraryId: string;
   selectedDate: Date;
@@ -87,12 +79,12 @@ export function SeatBookingDialog({
   selectedDate,
   onSuccess,
   students,
+  isLoadingStudents,
 }: SeatBookingDialogProps) {
   const { firestore, user } = useFirebase();
   const { toast } = useToast();
   
   const [selectedStudent, setSelectedStudent] = React.useState<{ id: string; name: string } | null>(null);
-  const [isComboboxOpen, setIsComboboxOpen] = React.useState(false);
   
   const [startTime, setStartTime] = React.useState('09:00');
   const [duration, setDuration] = React.useState('4h');
@@ -277,39 +269,12 @@ export function SeatBookingDialog({
                  <div className="space-y-4">
                     <div className="space-y-2">
                         <Label>Student</Label>
-                        <Popover open={isComboboxOpen} onOpenChange={setIsComboboxOpen}>
-                            <PopoverTrigger asChild>
-                                <Button variant="outline" role="combobox" className="w-full justify-between" disabled={isActionDisabled}>
-                                    {selectedStudent
-                                        ? selectedStudent.name
-                                        : "Select a student..."}
-                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                                <Command>
-                                <CommandInput placeholder="Search student..." />
-                                <CommandList>
-                                    <CommandEmpty>No available students found.</CommandEmpty>
-                                    <CommandGroup>
-                                    {students.map((student) => (
-                                        <CommandItem
-                                            key={student.id}
-                                            value={student.name}
-                                            onSelect={() => {
-                                                setSelectedStudent(student);
-                                                setIsComboboxOpen(false);
-                                            }}
-                                        >
-                                            <Check className={cn("mr-2 h-4 w-4", selectedStudent?.id === student.id ? "opacity-100" : "opacity-0")} />
-                                            {student.name}
-                                        </CommandItem>
-                                    ))}
-                                    </CommandGroup>
-                                </CommandList>
-                                </Command>
-                            </PopoverContent>
-                        </Popover>
+                        <StudentSelect
+                            students={students}
+                            loading={isLoadingStudents}
+                            value={selectedStudent?.id || null}
+                            onChange={setSelectedStudent}
+                        />
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
