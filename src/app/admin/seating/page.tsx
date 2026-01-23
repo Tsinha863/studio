@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import {
   collection,
   query,
+  orderBy,
 } from 'firebase/firestore';
 
 import { useCollection, useFirebase } from '@/firebase';
@@ -32,7 +33,10 @@ export default function SeatingPage() {
 
   const roomsQuery = React.useMemo(() => {
     if (!firestore || !user) return null;
-    return query(collection(firestore, `libraries/${LIBRARY_ID}/rooms`));
+    return query(
+      collection(firestore, `libraries/${LIBRARY_ID}/rooms`),
+      orderBy('createdAt', 'desc')
+    );
   }, [firestore, user]);
   const { data: rooms, isLoading: isLoadingRooms } = useCollection<Room>(roomsQuery);
 

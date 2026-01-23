@@ -1,18 +1,22 @@
 'use client';
 
 import * as React from 'react';
-import { Trash2 } from 'lucide-react';
+import { Check, ChevronsUpDown, Trash2 } from 'lucide-react';
 import { format, setHours, setMinutes } from 'date-fns';
 import {
   collection,
   writeBatch,
   serverTimestamp,
   doc,
+  query,
+  where,
+  getDocs,
 } from 'firebase/firestore';
 import { FirebaseError } from 'firebase/app';
 
 import { useFirebase, errorEmitter } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 import {
   Dialog,
   DialogContent,
@@ -24,6 +28,15 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -33,14 +46,14 @@ import {
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
-import type { Seat, SeatBooking } from '@/lib/types';
+import type { Seat, Student, SeatBooking } from '@/lib/types';
 import { Spinner } from '@/components/spinner';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { createSeatBooking, type BookingDuration } from '@/lib/booking-engine';
-import StudentSelect from './StudentSelect';
 
 
 type SeatWithId = Seat & { id: string };
+type StudentWithId = Student & { id: string };
 type SeatBookingWithId = SeatBooking & { id: string };
 
 interface SeatBookingDialogProps {
@@ -63,6 +76,7 @@ const durationOptions = [
     { label: '3 Months', value: '3m' },
     { label: '6 Months', value: '6m' },
     { label: '1 Year', value: '1y' },
+    { label: 'Custom Months', value: 'custom' },
 ];
 
 
@@ -78,12 +92,38 @@ export function SeatBookingDialog({
   const { firestore, user } = useFirebase();
   const { toast } = useToast();
   
+  const [students, setStudents] = React.useState<{id: string, name: string}[]>([]);
+  const [isLoadingStudents, setIsLoadingStudents] = React.useState(false);
   const [selectedStudent, setSelectedStudent] = React.useState<{ id: string; name: string } | null>(null);
+  const [isComboboxOpen, setIsComboboxOpen] = React.useState(false);
+  
   const [startTime, setStartTime] = React.useState('09:00');
   const [duration, setDuration] = React.useState('4h');
+  const [customMonths, setCustomMonths] = React.useState<number | string>(1);
   
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isCancelling, setIsCancelling] = React.useState<string | false>(false);
+
+  React.useEffect(() => {
+    if (!firestore || !libraryId || !isOpen) return;
+
+    const fetchStudents = async () => {
+      setIsLoadingStudents(true);
+      try {
+        const studentsRef = collection(firestore, `libraries/${libraryId}/students`);
+        const q = query(studentsRef, where('status', '==', 'active'));
+        const querySnapshot = await getDocs(q);
+        const studentList = querySnapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name as string }));
+        setStudents(studentList);
+      } catch (e) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not load students.' });
+      } finally {
+        setIsLoadingStudents(false);
+      }
+    };
+
+    fetchStudents();
+  }, [firestore, libraryId, isOpen, toast]);
 
 
   const handleBooking = async () => {
@@ -99,6 +139,14 @@ export function SeatBookingDialog({
         bookingDuration = { type: 'daily' };
     } else if (duration.endsWith('h')) {
         bookingDuration = { type: 'hourly', hours: parseInt(duration.replace('h', ''), 10) as 4 | 6 | 12 | 24 };
+    } else if (duration === 'custom') {
+        const months = Number(customMonths);
+        if (isNaN(months) || months < 1) {
+            toast({ variant: 'destructive', title: 'Invalid Custom Duration', description: 'Please enter a valid number of months.' });
+            setIsSubmitting(false);
+            return;
+        }
+        bookingDuration = { type: 'monthly', months };
     } else if (duration.endsWith('m')) {
         bookingDuration = { type: 'monthly', months: parseInt(duration.replace('m', ''), 10) };
     } else if (duration.endsWith('y')) {
@@ -110,7 +158,7 @@ export function SeatBookingDialog({
     }
 
     let startDateTime: Date;
-    const isLongBooking = duration.endsWith('m') || duration.endsWith('y') || duration === 'fullday';
+    const isLongBooking = duration.endsWith('m') || duration.endsWith('y') || duration === 'fullday' || duration === 'custom';
     
     if (isLongBooking) {
         startDateTime = setMinutes(setHours(selectedDate, 9), 0);
@@ -206,10 +254,11 @@ export function SeatBookingDialog({
         setSelectedStudent(null);
         setStartTime('09:00');
         setDuration('4h');
+        setCustomMonths(1);
     }
   }, [isOpen]);
 
-  const isLongDuration = duration.endsWith('m') || duration.endsWith('y') || duration === 'fullday';
+  const isLongDuration = duration.endsWith('m') || duration.endsWith('y') || duration === 'fullday' || duration === 'custom';
   const isActionDisabled = isSubmitting || !!isCancelling;
 
   return (
@@ -253,11 +302,41 @@ export function SeatBookingDialog({
                  <div className="space-y-4">
                     <div className="space-y-2">
                         <Label>Student</Label>
-                        <StudentSelect
-                            libraryId={libraryId}
-                            value={selectedStudent?.id ?? null}
-                            onChange={setSelectedStudent}
-                        />
+                        <Popover open={isComboboxOpen} onOpenChange={setIsComboboxOpen}>
+                            <PopoverTrigger asChild>
+                                <Button variant="outline" role="combobox" className="w-full justify-between" disabled={isActionDisabled || isLoadingStudents}>
+                                    {isLoadingStudents
+                                        ? 'Loading students...'
+                                        : selectedStudent
+                                        ? selectedStudent.name
+                                        : "Select a student..."}
+                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                                <Command>
+                                <CommandInput placeholder="Search student..." />
+                                <CommandList>
+                                    <CommandEmpty>No available students found.</CommandEmpty>
+                                    <CommandGroup>
+                                    {students.map((student) => (
+                                        <CommandItem
+                                            key={student.id}
+                                            value={student.name}
+                                            onSelect={() => {
+                                                setSelectedStudent(selectedStudent?.id === student.id ? null : student);
+                                                setIsComboboxOpen(false);
+                                            }}
+                                        >
+                                            <Check className={cn("mr-2 h-4 w-4", selectedStudent?.id === student.id ? "opacity-100" : "opacity-0")} />
+                                            {student.name}
+                                        </CommandItem>
+                                    ))}
+                                    </CommandGroup>
+                                </CommandList>
+                                </Command>
+                            </PopoverContent>
+                        </Popover>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
@@ -279,6 +358,12 @@ export function SeatBookingDialog({
                             </Select>
                          </div>
                     </div>
+                     {duration === 'custom' && (
+                        <div className="space-y-2">
+                            <Label htmlFor="customMonths">Number of Months</Label>
+                            <Input id="customMonths" type="number" value={customMonths} onChange={(e) => setCustomMonths(e.target.value)} min="1" disabled={isActionDisabled} />
+                        </div>
+                    )}
                  </div>
             </div>
         </div>
