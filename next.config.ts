@@ -30,6 +30,25 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  async redirects() {
+    return [
+      {
+        source: '/admin',
+        destination: '/admin/dashboard',
+        permanent: true,
+      },
+      {
+        source: '/admin/dashbord',
+        destination: '/admin/dashboard',
+        permanent: true,
+      },
+      {
+        source: '/admin/payments',
+        destination: '/admin/billing',
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;
