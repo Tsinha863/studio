@@ -23,11 +23,15 @@ service cloud.firestore {
 
     // --- TOP-LEVEL COLLECTIONS ---
 
-    // User-to-Library mapping: users can read their own mapping to find their library.
-    // Creation/update should only happen via secure backend logic (e.g., signup transaction).
+    // User-to-Library mapping: 
+    // - Users can read their own mapping to find their library.
+    // - A user can create their own mapping document once. This is crucial for both new signups
+    //   and for migrating legacy users who don't have a mapping yet.
+    // - Updates and deletes are forbidden to prevent users from changing their library affiliation.
     match /users/{userId} {
       allow get: if isOwner(userId);
-      allow list, write: if false;
+      allow create: if isOwner(userId);
+      allow list, update, delete: if false;
     }
 
     // --- LIBRARY-SCOPED COLLECTIONS ---
@@ -39,11 +43,12 @@ service cloud.firestore {
       allow create, delete: if false;
     }
 
-    // Users: Can read/write their own user object. Admins can list all users in their library.
+    // Users: Can read/write their own user object. Admins can manage all users in their library.
     match /libraries/{libraryId}/users/{userId} {
       allow get: if isOwner(userId) || isAdmin(libraryId);
       allow list: if isAdmin(libraryId);
-      allow write: if isOwner(userId);
+      allow create: if isOwner(userId) || isAdmin(libraryId);
+      allow write: if isOwner(userId) || isAdmin(libraryId);
     }
 
     // Students: Admins manage fully. Students can read their own profile.
@@ -120,7 +125,7 @@ service cloud.firestore {
       allow update, delete: if false;
     }
     
-    // Invites: Admins can read and write. This is a placeholder; a full student join flow would require more granular rules or a Cloud Function.
+    // Invites: Admins can read and write.
     match /libraries/{libraryId}/invites/{inviteId} {
         allow read, write: if isAdmin(libraryId);
     }
