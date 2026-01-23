@@ -51,7 +51,7 @@ interface SeatBookingDialogProps {
   students: StudentWithId[];
   isLoadingStudents: boolean;
   bookingsForSeat: SeatBookingWithId[];
-  libraryId: string;
+  libraryId: string | null;
   selectedDate: Date;
   onSuccess: () => void;
 }
@@ -94,8 +94,8 @@ export function SeatBookingDialog({
   const [isCancelling, setIsCancelling] = React.useState<string | false>(false);
 
   const handleBooking = async () => {
-    if (!firestore || !user || !selectedStudent) {
-      toast({ variant: 'destructive', title: 'Error', description: 'Please select a student.' });
+    if (!firestore || !user || !selectedStudent || !libraryId) {
+      toast({ variant: 'destructive', title: 'Error', description: 'Please select a student and ensure library context is available.' });
       return;
     }
 
@@ -168,7 +168,7 @@ export function SeatBookingDialog({
   };
 
   const handleCancelBooking = async (booking: SeatBookingWithId) => {
-    if (!firestore || !user) {
+    if (!firestore || !user || !libraryId) {
       toast({ variant: 'destructive', title: 'Error', description: 'You must be logged in to perform this action.' });
       return;
     }

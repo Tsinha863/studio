@@ -35,7 +35,6 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Spinner } from '@/components/spinner';
 import { Skeleton } from '@/components/ui/skeleton';
-import { LIBRARY_ID } from '@/lib/config';
 import { FirestorePermissionError } from '@/firebase/errors';
 
 const DataTable = dynamic(() => import('@/components/ui/data-table').then(mod => mod.DataTable), { 
@@ -51,7 +50,7 @@ type RejectionDialogState = {
 
 export default function PrintRequestsPage() {
   const { toast } = useToast();
-  const { firestore, user } = useFirebase();
+  const { firestore, user, libraryId } = useFirebase();
   const [rejectionDialog, setRejectionDialog] = React.useState<RejectionDialogState>({ isOpen: false });
   const [rejectionReason, setRejectionReason] = React.useState('');
   const [isSubmitting, setIsSubmitting] = React.useState(false);
@@ -60,20 +59,20 @@ export default function PrintRequestsPage() {
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
 
   const requestsQuery = React.useMemo(() => {
-    if (!firestore || !user) return null;
+    if (!firestore || !libraryId) return null;
     return query(
-      collection(firestore, `libraries/${LIBRARY_ID}/printRequests`),
+      collection(firestore, `libraries/${libraryId}/printRequests`),
       orderBy('createdAt', 'desc')
     );
-  }, [firestore, user]);
+  }, [firestore, libraryId]);
   const { data: requests, isLoading, error } = useCollection<PrintRequest>(requestsQuery);
 
   const handleStatusUpdate = React.useCallback(async (requestId: string, newStatus: 'Approved' | 'Rejected', reason?: string) => {
-    if (!user || !firestore) return;
+    if (!user || !firestore || !libraryId) return;
     
     setIsSubmitting(true);
     
-    const requestRef = doc(firestore, `libraries/${LIBRARY_ID}/printRequests`, requestId);
+    const requestRef = doc(firestore, `libraries/${libraryId}/printRequests`, requestId);
     const batch = writeBatch(firestore);
     const actor = { id: user.uid, name: user.displayName || 'Admin' };
     
@@ -87,9 +86,9 @@ export default function PrintRequestsPage() {
 
     batch.update(requestRef, updateData);
 
-    const logRef = doc(collection(firestore, `libraries/${LIBRARY_ID}/activityLogs`));
+    const logRef = doc(collection(firestore, `libraries/${libraryId}/activityLogs`));
     batch.set(logRef, {
-        libraryId: LIBRARY_ID,
+        libraryId: libraryId,
         user: actor,
         activityType: newStatus === 'Approved' ? 'print_request_approved' : 'print_request_rejected',
         details: { requestId, reason: reason || null },
@@ -116,7 +115,7 @@ export default function PrintRequestsPage() {
             setRejectionReason('');
         }
     }
-  }, [user, firestore, toast]);
+  }, [user, firestore, toast, libraryId]);
 
   const approveRequest = React.useCallback((requestId: string) => {
     handleStatusUpdate(requestId, 'Approved');

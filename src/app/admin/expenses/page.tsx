@@ -49,7 +49,6 @@ import type { Expense } from '@/lib/types';
 import { columns as expenseColumns } from '@/components/admin/expenses/columns';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/spinner';
-import { LIBRARY_ID } from '@/lib/config';
 import { FirestorePermissionError } from '@/firebase/errors';
 
 const DataTable = dynamic(() => import('@/components/ui/data-table').then(mod => mod.DataTable), { 
@@ -77,7 +76,7 @@ type AlertState = {
 
 export default function ExpensesPage() {
   const { toast } = useToast();
-  const { firestore, user } = useFirebase();
+  const { firestore, user, libraryId } = useFirebase();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   const [modalState, setModalState] = React.useState<ModalState>({ isOpen: false });
@@ -87,12 +86,12 @@ export default function ExpensesPage() {
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
 
   const expensesQuery = React.useMemo(() => {
-    if (!firestore || !user) return null;
+    if (!firestore || !libraryId) return null;
     return query(
-      collection(firestore, `libraries/${LIBRARY_ID}/expenses`),
+      collection(firestore, `libraries/${libraryId}/expenses`),
       orderBy('expenseDate', 'desc')
     );
-  }, [firestore, user]);
+  }, [firestore, libraryId]);
   const { data: expenses, isLoading, error } = useCollection<Expense>(expensesQuery);
   
   const openModal = React.useCallback((expense?: ExpenseWithId) => setModalState({ isOpen: true, expense }), []);
@@ -125,19 +124,19 @@ export default function ExpensesPage() {
     setAlertState({ isOpen: false, expenseId: undefined });
 
   const handleDeleteExpense = async () => {
-    if (!alertState.expenseId || !user || !firestore) return;
+    if (!alertState.expenseId || !user || !firestore || !libraryId) return;
     
     setIsSubmitting(true);
 
     const batch = writeBatch(firestore);
     const actor = { id: user.uid, name: user.displayName || 'Admin' };
-    const expenseRef = doc(firestore, `libraries/${LIBRARY_ID}/expenses/${alertState.expenseId}`);
+    const expenseRef = doc(firestore, `libraries/${libraryId}/expenses/${alertState.expenseId}`);
     
     batch.delete(expenseRef);
 
-    const logRef = doc(collection(firestore, `libraries/${LIBRARY_ID}/activityLogs`));
+    const logRef = doc(collection(firestore, `libraries/${libraryId}/activityLogs`));
     batch.set(logRef, {
-      libraryId: LIBRARY_ID,
+      libraryId: libraryId,
       user: actor,
       activityType: 'expense_deleted',
       details: { expenseId: alertState.expenseId },
@@ -216,7 +215,7 @@ export default function ExpensesPage() {
           </DialogHeader>
           <ExpenseForm
             expense={modalState.expense}
-            libraryId={LIBRARY_ID}
+            libraryId={libraryId}
             onSuccess={() => {
               closeModal();
               toast({

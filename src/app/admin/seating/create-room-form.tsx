@@ -19,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Seat } from '@/lib/types';
 
 interface CreateRoomFormProps {
-  libraryId: string;
+  libraryId: string | null;
   onSuccess: () => void;
 }
 
@@ -36,7 +36,7 @@ export function CreateRoomForm({ libraryId, onSuccess }: CreateRoomFormProps) {
   const [errors, setErrors] = React.useState<Partial<Record<keyof RoomFormValues, string>>>({});
 
   const handleSubmit = async () => {
-    if (!user || !firestore) {
+    if (!user || !firestore || !libraryId) {
       toast({
         variant: 'destructive',
         title: 'Authentication Error',

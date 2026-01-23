@@ -31,7 +31,7 @@ type StudentWithId = Student & { id: string };
 
 interface StudentFormProps {
   student?: StudentWithId;
-  libraryId: string;
+  libraryId: string | null;
   onSuccess: () => void;
   onCancel: () => void;
 }
@@ -62,7 +62,7 @@ export function StudentForm({ student, libraryId, onSuccess, onCancel }: Student
   }, [student]);
 
   const handleSubmit = () => {
-    if (!firestore || !user) {
+    if (!firestore || !user || !libraryId) {
       toast({
         variant: 'destructive',
         title: 'Authentication Error',

@@ -5,13 +5,14 @@ import Image from 'next/image';
 import { useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { ArrowLeft } from 'lucide-react';
 import {
   createUserWithEmailAndPassword,
   updateProfile,
 } from 'firebase/auth';
 import { FirebaseError } from 'firebase/app';
-import { writeBatch, doc, serverTimestamp } from 'firebase/firestore';
+import { writeBatch, doc, serverTimestamp, collection } from 'firebase/firestore';
 
 import { signupSchema, type SignupFormValues } from '@/lib/schemas';
 import { Button } from '@/components/ui/button';
@@ -38,7 +39,6 @@ import { useFirebase } from '@/firebase';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Logo } from '@/components/logo';
 import { Spinner } from '@/components/spinner';
-import { LIBRARY_ID } from '@/lib/config';
 
 function SignupForm() {
   const router = useRouter();
@@ -46,37 +46,31 @@ function SignupForm() {
   const { auth, firestore } = useFirebase();
 
   const form = useForm<SignupFormValues>({
-    resolver: (values, context, options) => {
-      // Basic zodResolver logic
-      const result = signupSchema.safeParse(values);
-      if (!result.success) {
-        return {
-          values: {},
-          errors: result.error.formErrors.fieldErrors,
-        };
-      }
-      return { values: result.data, errors: {} };
-    },
+    resolver: zodResolver(signupSchema),
     defaultValues: {
       name: '',
       email: '',
       password: '',
       confirmPassword: '',
       role: 'student',
+      libraryName: '',
+      libraryAddress: '',
     },
   });
 
   const {
     formState: { isSubmitting },
+    watch,
   } = form;
+
+  const role = watch('role');
 
   const onSubmit = async (data: SignupFormValues) => {
     if (!auth || !firestore) {
       toast({
         variant: 'destructive',
         title: 'Error',
-        description:
-          'Firebase service is not available. Please try again later.',
+        description: 'Firebase service is not available. Please try again later.',
       });
       return;
     }
@@ -93,45 +87,76 @@ function SignupForm() {
       // 2. Update the auth profile's display name for consistency.
       await updateProfile(user, { displayName: data.name });
 
-      // 3. Atomically create the user's profile documents in Firestore.
+      // 3. Atomically create all necessary Firestore documents.
       const batch = writeBatch(firestore);
 
-      // Create User profile document (for role management)
-      const userDocRef = doc(
-        firestore,
-        `libraries/${LIBRARY_ID}/users`,
-        user.uid
-      );
-      batch.set(userDocRef, {
-        id: user.uid,
-        name: data.name,
-        email: data.email,
-        role: data.role,
-        libraryId: LIBRARY_ID,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+      if (data.role === 'libraryOwner') {
+        // Create a new library for the admin
+        const newLibraryRef = doc(collection(firestore, 'libraries'));
+        const newLibraryId = newLibraryRef.id;
 
-      // If the user is a student, create the student-specific profile
-      if (data.role === 'student') {
-        const studentRef = doc(
-          firestore,
-          `libraries/${LIBRARY_ID}/students`,
-          user.uid
-        );
-        batch.set(studentRef, {
-          libraryId: LIBRARY_ID,
-          userId: user.uid,
-          name: data.name,
-          email: data.email,
-          status: 'active',
-          fibonacciStreak: 0,
-          paymentDue: 0,
-          notes: [],
-          tags: [],
-          lastInteractionAt: serverTimestamp(),
+        // a. Library Document
+        batch.set(newLibraryRef, {
+          id: newLibraryId,
+          name: data.libraryName,
+          address: data.libraryAddress,
+          ownerId: user.uid,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
+        });
+
+        // b. User-to-Library Mapping (for quick login resolution)
+        const userMappingRef = doc(firestore, 'users', user.uid);
+        batch.set(userMappingRef, { libraryId: newLibraryId });
+
+        // c. Admin User Profile (inside the new library)
+        const userProfileRef = doc(firestore, `libraries/${newLibraryId}/users`, user.uid);
+        batch.set(userProfileRef, {
+            id: user.uid,
+            name: data.name,
+            email: data.email,
+            role: 'libraryOwner',
+            libraryId: newLibraryId,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        });
+
+      } else {
+        // For students, this demo assigns them to a default library.
+        // A real app would have an invite system or a way to select a library.
+        const defaultLibraryId = 'library1';
+
+        // a. User-to-Library Mapping
+        const userMappingRef = doc(firestore, 'users', user.uid);
+        batch.set(userMappingRef, { libraryId: defaultLibraryId });
+        
+        // b. Student User Profile
+        const userProfileRef = doc(firestore, `libraries/${defaultLibraryId}/users`, user.uid);
+        batch.set(userProfileRef, {
+            id: user.uid,
+            name: data.name,
+            email: data.email,
+            role: 'student',
+            libraryId: defaultLibraryId,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        });
+
+        // c. Student-specific data record
+        const studentRef = doc(firestore, `libraries/${defaultLibraryId}/students`, user.uid);
+        batch.set(studentRef, {
+            id: user.uid,
+            libraryId: defaultLibraryId,
+            userId: user.uid,
+            name: data.name,
+            email: data.email,
+            status: 'active',
+            fibonacciStreak: 0,
+            lastInteractionAt: serverTimestamp(),
+            notes: [],
+            tags: [],
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
         });
       }
 
@@ -140,6 +165,7 @@ function SignupForm() {
 
       // 4. Redirect to loading page, which will resolve role and redirect to dashboard.
       router.push('/loading');
+
     } catch (error) {
       let title = 'Sign-up failed';
       let description = 'An unexpected error occurred. Please try again.';
@@ -188,10 +214,85 @@ function SignupForm() {
           <CardContent className="grid gap-4">
             <FormField
               control={form.control}
+              name="role"
+              render={({ field }) => (
+                <FormItem className="space-y-3">
+                  <FormLabel>I am a...</FormLabel>
+                  <FormControl>
+                    <RadioGroup
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                      className="flex flex-col space-y-1"
+                      disabled={isSubmitting}
+                    >
+                      <FormItem className="flex items-center space-x-3 space-y-0">
+                        <FormControl>
+                          <RadioGroupItem value="student" />
+                        </FormControl>
+                        <FormLabel className="font-normal">
+                          Student
+                        </FormLabel>
+                      </FormItem>
+                      <FormItem className="flex items-center space-x-3 space-y-0">
+                        <FormControl>
+                          <RadioGroupItem value="libraryOwner" />
+                        </FormControl>
+                        <FormLabel className="font-normal">
+                          Library Owner (Admin)
+                        </FormLabel>
+                      </FormItem>
+                    </RadioGroup>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {role === 'libraryOwner' && (
+              <>
+                <FormField
+                  control={form.control}
+                  name="libraryName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Library Name</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="e.g., Central City Library"
+                          {...field}
+                          disabled={isSubmitting}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="libraryAddress"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Library Address</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="e.g., 123 Main St, Central City"
+                          {...field}
+                          disabled={isSubmitting}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </>
+            )}
+
+            <FormField
+              control={form.control}
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Name</FormLabel>
+                  <FormLabel>Full Name</FormLabel>
                   <FormControl>
                     <Input
                       placeholder="John Doe"
@@ -251,41 +352,6 @@ function SignupForm() {
                       {...field}
                       disabled={isSubmitting}
                     />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="role"
-              render={({ field }) => (
-                <FormItem className="space-y-3">
-                  <FormLabel>I am a...</FormLabel>
-                  <FormControl>
-                    <RadioGroup
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                      className="flex flex-col space-y-1"
-                      disabled={isSubmitting}
-                    >
-                      <FormItem className="flex items-center space-x-3 space-y-0">
-                        <FormControl>
-                          <RadioGroupItem value="student" />
-                        </FormControl>
-                        <FormLabel className="font-normal">
-                          Student
-                        </FormLabel>
-                      </FormItem>
-                      <FormItem className="flex items-center space-x-3 space-y-0">
-                        <FormControl>
-                          <RadioGroupItem value="libraryOwner" />
-                        </FormControl>
-                        <FormLabel className="font-normal">
-                          Library Owner (Admin)
-                        </FormLabel>
-                      </FormItem>
-                    </RadioGroup>
                   </FormControl>
                   <FormMessage />
                 </FormItem>

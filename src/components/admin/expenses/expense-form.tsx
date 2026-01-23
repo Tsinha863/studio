@@ -36,7 +36,7 @@ type ExpenseWithId = Expense & { id: string };
 
 interface ExpenseFormProps {
   expense?: ExpenseWithId;
-  libraryId: string;
+  libraryId: string | null;
   onSuccess: () => void;
   onCancel: () => void;
 }
@@ -69,7 +69,7 @@ export function ExpenseForm({ expense, libraryId, onSuccess, onCancel }: Expense
   }, [expense]);
 
   const handleSubmit = () => {
-    if (!firestore || !user) {
+    if (!firestore || !user || !libraryId) {
       toast({
         variant: 'destructive',
         title: 'Authentication Error',

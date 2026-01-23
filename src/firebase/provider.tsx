@@ -7,7 +7,6 @@ import { Auth, User, onAuthStateChanged, signOut } from 'firebase/auth';
 import { FirebaseStorage } from 'firebase/storage';
 import { FirebaseErrorListener } from '@/components/FirebaseErrorListener';
 import type { User as UserProfileType } from '@/lib/types';
-import { LIBRARY_ID } from '@/lib/config';
 
 const VALID_ROLES = ["libraryOwner", "student"] as const;
 type UserRole = (typeof VALID_ROLES)[number];
@@ -19,11 +18,12 @@ export interface FirebaseContextState {
   auth: Auth | null;
   storage: FirebaseStorage | null;
   
-  // Consolidated auth and profile state
+  // Multi-tenant and profile state
   user: User | null;
   userProfile: UserProfileType | null;
+  libraryId: string | null;
   role: UserRole | null;
-  isLoading: boolean; // True until both auth and profile/role are resolved
+  isLoading: boolean; // True until auth and profile/role/libraryId are resolved
   error: Error | null;
 }
 
@@ -39,9 +39,8 @@ interface FirebaseProviderProps {
 }
 
 /**
- * Provides Firebase services and a consolidated authentication/profile state to the entire app.
- * It listens for auth changes and fetches the user's profile and role in one go,
- * eliminating component-level waterfalls.
+ * Provides Firebase services and a consolidated, multi-tenant-aware authentication/profile state.
+ * It listens for auth changes, resolves the user's library, and then fetches their profile and role.
  */
 export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
   children,
@@ -57,6 +56,7 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
     storage,
     user: null,
     userProfile: null,
+    libraryId: null,
     role: null,
     isLoading: true, // Start in a loading state
     error: null,
@@ -66,38 +66,60 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         try {
-          const userDocRef = doc(firestore, `libraries/${LIBRARY_ID}/users`, firebaseUser.uid);
-          const docSnap = await getDoc(userDocRef);
-          
-          if (!docSnap.exists()) {
-            // This is a critical error state. A user record exists in Auth, but not in Firestore.
-            // This indicates a violation of the application's core invariant.
-            // The safest action is to sign the user out to prevent an inconsistent state.
+          // 1. Resolve libraryId from the top-level users collection
+          const userMappingRef = doc(firestore, 'users', firebaseUser.uid);
+          const userMappingSnap = await getDoc(userMappingRef);
+
+          if (!userMappingSnap.exists()) {
+            // This can happen if signup fails after auth creation but before firestore writes.
+            // Safest action is to sign out.
             await signOut(auth);
-            throw new Error(`User profile not found for uid: ${firebaseUser.uid}. The user has been signed out.`);
+            throw new Error(`User mapping not found for uid: ${firebaseUser.uid}. The user has been signed out.`);
+          }
+          const libraryId = userMappingSnap.data()?.libraryId;
+          if (!libraryId) {
+             await signOut(auth);
+             throw new Error(`Library ID not found in user mapping for uid: ${firebaseUser.uid}.`);
+          }
+
+          // 2. Now that we have the libraryId, get the user's full profile
+          const userProfileRef = doc(firestore, `libraries/${libraryId}/users`, firebaseUser.uid);
+          const userProfileSnap = await getDoc(userProfileRef);
+          
+          if (!userProfileSnap.exists()) {
+            await signOut(auth);
+            throw new Error(`User profile not found in library ${libraryId} for uid: ${firebaseUser.uid}.`);
           }
           
-          const profile = docSnap.data() as UserProfileType;
+          const profile = userProfileSnap.data() as UserProfileType;
+          const role = profile.role as UserRole;
 
-          if (!profile.role || !VALID_ROLES.includes(profile.role as UserRole)) {
+          if (!VALID_ROLES.includes(role)) {
                throw new Error(`User ${firebaseUser.uid} has an invalid or missing role.`);
           }
 
-          // Profile and role resolved successfully. Update state and set loading to false.
-          setAuthState(prev => ({ ...prev, user: firebaseUser, userProfile: profile, role: profile.role as UserRole, isLoading: false, error: null }));
+          // 3. Profile, role, and libraryId resolved successfully. Update state.
+          setAuthState(prev => ({ 
+            ...prev, 
+            user: firebaseUser, 
+            userProfile: profile, 
+            libraryId,
+            role, 
+            isLoading: false, 
+            error: null 
+          }));
 
         } catch (e) {
           // Any failure in this process is a critical error.
-          // Set the error state and stop loading.
-          setAuthState(prev => ({ ...prev, user: firebaseUser, userProfile: null, role: null, isLoading: false, error: e instanceof Error ? e : new Error('Failed to resolve user profile') }));
+          setAuthState(prev => ({ ...prev, user: firebaseUser, userProfile: null, libraryId: null, role: null, isLoading: false, error: e instanceof Error ? e : new Error('Failed to resolve user profile') }));
         }
       } else {
-        // No user is signed in. Clear all user-related state and set loading to false.
-        setAuthState(prev => ({ ...prev, user: null, userProfile: null, role: null, isLoading: false, error: null }));
+        // No user is signed in. Clear all user-related state.
+        setAuthState(prev => ({ ...prev, user: null, userProfile: null, libraryId: null, role: null, isLoading: false, error: null }));
       }
     }, (error) => {
       // An error occurred in the auth listener itself.
-      setAuthState(prev => ({ ...prev, user: null, userProfile: null, role: null, isLoading: false, error }));
+      setAuthState(prev => ({ ...prev, user: null, userProfile: null, libraryId: null, role: null, isLoading: false, error }));
     });
 
     return () => unsubscribe();

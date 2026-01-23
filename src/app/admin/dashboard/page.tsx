@@ -33,7 +33,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/spinner';
 import { useToast } from '@/hooks/use-toast';
-import { LIBRARY_ID } from '@/lib/config';
 
 const IncomeExpenseChart = dynamic(() => import('@/components/admin/dashboard/income-expense-chart').then(mod => mod.IncomeExpenseChart), { 
     ssr: false,
@@ -54,36 +53,36 @@ const ExpenseBreakdownChart = dynamic(() => import('@/components/admin/dashboard
 
 
 export default function DashboardPage() {
-  const { firestore, user } = useFirebase();
+  const { firestore, libraryId } = useFirebase();
   const { toast } = useToast();
   const reportRef = React.useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = React.useState(false);
 
   // --- Data Fetching ---
   const allStudentsQuery = React.useMemo(() => {
-    if (!firestore || !user) return null;
-    return query(collection(firestore, `libraries/${LIBRARY_ID}/students`));
-  }, [firestore, user]);
+    if (!firestore || !libraryId) return null;
+    return query(collection(firestore, `libraries/${libraryId}/students`));
+  }, [firestore, libraryId]);
   const { data: allStudents, isLoading: isLoadingAllStudents } = useCollection<Student>(allStudentsQuery);
 
   const recentStudentsQuery = React.useMemo(() => {
-    if (!firestore || !user) return null;
+    if (!firestore || !libraryId) return null;
     return query(
-      collection(firestore, `libraries/${LIBRARY_ID}/students`),
+      collection(firestore, `libraries/${libraryId}/students`),
       orderBy('createdAt', 'desc'),
       limit(5)
     );
-  }, [firestore, user]);
+  }, [firestore, libraryId]);
   const { data: recentStudents, isLoading: isLoadingRecentStudents } = useCollection<Student>(recentStudentsQuery);
 
   const activityLogsQuery = React.useMemo(() => {
-    if (!firestore || !user) return null;
+    if (!firestore || !libraryId) return null;
     return query(
-      collection(firestore, `libraries/${LIBRARY_ID}/activityLogs`),
+      collection(firestore, `libraries/${libraryId}/activityLogs`),
       orderBy('timestamp', 'desc'),
       limit(5)
     );
-  }, [firestore, user]);
+  }, [firestore, libraryId]);
   const { data: activityLogs, isLoading: isLoadingActivityLogs } = useCollection<ActivityLog>(activityLogsQuery);
   
   const sixMonthsAgoTimestamp = React.useMemo(() => {
@@ -93,21 +92,21 @@ export default function DashboardPage() {
   }, []);
 
   const paymentsQuery = React.useMemo(() => {
-    if (!firestore || !user) return null;
+    if (!firestore || !libraryId) return null;
     return query(
-        collection(firestore, `libraries/${LIBRARY_ID}/payments`),
+        collection(firestore, `libraries/${libraryId}/payments`),
         where('paymentDate', '>=', sixMonthsAgoTimestamp)
     );
-  }, [firestore, user, sixMonthsAgoTimestamp]);
+  }, [firestore, libraryId, sixMonthsAgoTimestamp]);
   const { data: payments, isLoading: isLoadingPayments } = useCollection<Payment>(paymentsQuery);
 
   const expensesQuery = React.useMemo(() => {
-      if (!firestore || !user) return null;
+      if (!firestore || !libraryId) return null;
       return query(
-          collection(firestore, `libraries/${LIBRARY_ID}/expenses`),
+          collection(firestore, `libraries/${libraryId}/expenses`),
           where('expenseDate', '>=', sixMonthsAgoTimestamp)
       );
-  }, [firestore, user, sixMonthsAgoTimestamp]);
+  }, [firestore, libraryId, sixMonthsAgoTimestamp]);
   const { data: expenses, isLoading: isLoadingExpenses } = useCollection<Expense>(expensesQuery);
 
   const isKpiLoading = isLoadingPayments || isLoadingExpenses || isLoadingAllStudents;

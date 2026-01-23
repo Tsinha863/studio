@@ -20,7 +20,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CreateRoomForm } from './create-room-form';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
-import { LIBRARY_ID } from '@/lib/config';
 
 const SeatingPlan = dynamic(() => import('@/components/admin/seating/seating-plan').then(mod => mod.SeatingPlan), { 
   ssr: false,
@@ -28,16 +27,16 @@ const SeatingPlan = dynamic(() => import('@/components/admin/seating/seating-pla
 });
 
 export default function SeatingPage() {
-  const { firestore, user } = useFirebase();
+  const { firestore, user, libraryId } = useFirebase();
   const { toast } = useToast();
 
   const roomsQuery = React.useMemo(() => {
-    if (!firestore || !user) return null;
+    if (!firestore || !libraryId) return null;
     return query(
-      collection(firestore, `libraries/${LIBRARY_ID}/rooms`),
+      collection(firestore, `libraries/${libraryId}/rooms`),
       orderBy('createdAt', 'desc')
     );
-  }, [firestore, user]);
+  }, [firestore, libraryId]);
   const { data: rooms, isLoading: isLoadingRooms } = useCollection<Room>(roomsQuery);
 
   const onRoomCreated = () => {
@@ -63,7 +62,7 @@ export default function SeatingPage() {
         </CardHeader>
         <CardContent>
           <CreateRoomForm
-            libraryId={LIBRARY_ID}
+            libraryId={libraryId}
             onSuccess={onRoomCreated}
           />
         </CardContent>
@@ -86,7 +85,7 @@ export default function SeatingPage() {
             </TabsList>
             {rooms.map(room => (
               <TabsContent key={room.id} value={room.id} className="mt-6">
-                <SeatingPlan libraryId={LIBRARY_ID} roomId={room.id} />
+                <SeatingPlan libraryId={libraryId} roomId={room.id} />
               </TabsContent>
             ))}
           </Tabs>

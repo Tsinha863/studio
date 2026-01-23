@@ -41,7 +41,6 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/spinner';
-import { LIBRARY_ID } from '@/lib/config';
 import { FirestorePermissionError } from '@/firebase/errors';
 
 const DataTable = dynamic(() => import('@/components/ui/data-table').then(mod => mod.DataTable), { 
@@ -56,7 +55,7 @@ type AlertState = {
 
 export default function SuggestionsPage() {
   const { toast } = useToast();
-  const { firestore, user } = useFirebase();
+  const { firestore, user, libraryId } = useFirebase();
   const [alertState, setAlertState] = React.useState<AlertState>({ isOpen: false });
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
@@ -64,12 +63,12 @@ export default function SuggestionsPage() {
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
 
   const suggestionsQuery = React.useMemo(() => {
-    if (!firestore || !user) return null;
+    if (!firestore || !libraryId) return null;
     return query(
-      collection(firestore, `libraries/${LIBRARY_ID}/suggestions`),
+      collection(firestore, `libraries/${libraryId}/suggestions`),
       orderBy('createdAt', 'desc')
     );
-  }, [firestore, user]);
+  }, [firestore, libraryId]);
   const { data: suggestions, isLoading: isLoadingSuggestions, error } = useCollection<Suggestion>(suggestionsQuery);
   
   const suggestionsWithDetails = React.useMemo(() => {
@@ -80,9 +79,9 @@ export default function SuggestionsPage() {
   }, [suggestions]);
 
   const handleStatusChange = React.useCallback(async (suggestionId: string, status: Suggestion['status']) => {
-    if (!user || !firestore) return;
+    if (!user || !firestore || !libraryId) return;
 
-    const suggestionRef = doc(firestore, `libraries/${LIBRARY_ID}/suggestions/${suggestionId}`);
+    const suggestionRef = doc(firestore, `libraries/${libraryId}/suggestions/${suggestionId}`);
     const payload = {
       status,
       updatedAt: serverTimestamp(),
@@ -102,7 +101,7 @@ export default function SuggestionsPage() {
       });
       errorEmitter.emit('permission-error', permissionError);
     }
-  }, [user, firestore, toast]);
+  }, [user, firestore, toast, libraryId]);
 
   const openDeleteAlert = React.useCallback((suggestionId: string) =>
     setAlertState({ isOpen: true, suggestionId }), []);
@@ -110,19 +109,19 @@ export default function SuggestionsPage() {
   const closeDeleteAlert = () => setAlertState({ isOpen: false, suggestionId: undefined });
 
   const handleDelete = async () => {
-    if (!alertState.suggestionId || !user || !firestore) return;
+    if (!alertState.suggestionId || !user || !firestore || !libraryId) return;
     
     setIsSubmitting(true);
 
-    const suggestionRef = doc(firestore, `libraries/${LIBRARY_ID}/suggestions/${alertState.suggestionId}`);
+    const suggestionRef = doc(firestore, `libraries/${libraryId}/suggestions/${alertState.suggestionId}`);
     const batch = writeBatch(firestore);
     const actor = { id: user.uid, name: user.displayName || 'Admin' };
     
     batch.delete(suggestionRef);
 
-    const logRef = doc(collection(firestore, `libraries/${LIBRARY_ID}/activityLogs`));
+    const logRef = doc(collection(firestore, `libraries/${libraryId}/activityLogs`));
     batch.set(logRef, {
-      libraryId: LIBRARY_ID,
+      libraryId: libraryId,
       user: actor,
       activityType: 'suggestion_deleted',
       details: { suggestionId: alertState.suggestionId },

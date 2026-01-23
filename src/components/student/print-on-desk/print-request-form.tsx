@@ -32,7 +32,7 @@ type StudentWithId = Student & { id: string };
 
 interface PrintRequestFormProps {
   student: StudentWithId | null;
-  libraryId: string;
+  libraryId: string | null;
   isLoading: boolean;
 }
 
@@ -50,7 +50,7 @@ export function PrintRequestForm({ student, libraryId, isLoading }: PrintRequest
   });
 
   const onSubmit = async (data: PrintRequestFormValues) => {
-    if (!firestore || !storage || !user || !student) {
+    if (!firestore || !storage || !user || !student || !libraryId) {
       toast({
         variant: 'destructive',
         title: 'Error',

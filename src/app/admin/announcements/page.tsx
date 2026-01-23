@@ -49,7 +49,6 @@ import type { Announcement } from '@/lib/types';
 import { columns as announcementColumns } from '@/components/admin/announcements/columns';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/spinner';
-import { LIBRARY_ID } from '@/lib/config';
 import { FirestorePermissionError } from '@/firebase/errors';
 
 const DataTable = dynamic(() => import('@/components/ui/data-table').then(mod => mod.DataTable), { 
@@ -76,7 +75,7 @@ type AlertState = {
 
 export default function AnnouncementsPage() {
   const { toast } = useToast();
-  const { firestore, user } = useFirebase();
+  const { firestore, user, libraryId } = useFirebase();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   const [modalState, setModalState] = React.useState<ModalState>({ isOpen: false });
@@ -86,12 +85,12 @@ export default function AnnouncementsPage() {
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
 
   const announcementsQuery = React.useMemo(() => {
-    if (!firestore || !user) return null;
+    if (!firestore || !libraryId) return null;
     return query(
-      collection(firestore, `libraries/${LIBRARY_ID}/announcements`),
+      collection(firestore, `libraries/${libraryId}/announcements`),
       orderBy('createdAt', 'desc')
     );
-  }, [firestore, user]);
+  }, [firestore, libraryId]);
   const { data: announcements, isLoading, error } = useCollection<Announcement>(announcementsQuery);
 
   const openDeleteAlert = React.useCallback((announcement: AnnouncementWithId) =>
@@ -124,19 +123,19 @@ export default function AnnouncementsPage() {
     setAlertState({ isOpen: false, announcementId: undefined });
 
   const handleDelete = async () => {
-    if (!alertState.announcementId || !user || !firestore) return;
+    if (!alertState.announcementId || !user || !firestore || !libraryId) return;
     
     setIsSubmitting(true);
     
     const batch = writeBatch(firestore);
     const actor = { id: user.uid, name: user.displayName || 'Admin' };
-    const announcementRef = doc(firestore, `libraries/${LIBRARY_ID}/announcements/${alertState.announcementId}`);
+    const announcementRef = doc(firestore, `libraries/${libraryId}/announcements/${alertState.announcementId}`);
     
     batch.delete(announcementRef);
 
-    const logRef = doc(collection(firestore, `libraries/${LIBRARY_ID}/activityLogs`));
+    const logRef = doc(collection(firestore, `libraries/${libraryId}/activityLogs`));
     batch.set(logRef, {
-      libraryId: LIBRARY_ID,
+      libraryId: libraryId,
       user: actor,
       activityType: 'announcement_deleted',
       details: { announcementId: alertState.announcementId },
@@ -210,7 +209,7 @@ export default function AnnouncementsPage() {
             </DialogDescription>
           </DialogHeader>
           <AnnouncementForm
-            libraryId={LIBRARY_ID}
+            libraryId={libraryId}
             onSuccess={() => {
               closeModal();
               toast({

@@ -17,14 +17,23 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid == userId;
     }
 
-    // --- COLLECTIONS ---
+    // --- TOP-LEVEL COLLECTIONS ---
 
-    // Libraries: Not directly writable by clients.
+    // User-to-Library mapping: users can read their own mapping to find their library.
+    // Creation/update should only happen via secure backend logic (e.g., signup transaction).
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list, write: if false;
+    }
+
+    // --- LIBRARY-SCOPED COLLECTIONS ---
+
+    // Libraries: Not directly writable by clients. Created via signup logic.
     match /libraries/{libraryId} {
       allow read, write: if false;
     }
 
-    // Users: Can read/write their own user object. No one can list.
+    // Users: Can read/write their own user object. Admins can list all users in their library.
     match /libraries/{libraryId}/users/{userId} {
       allow get: if isOwner(userId) || isAdmin(libraryId);
       allow list: if isAdmin(libraryId);

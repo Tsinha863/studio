@@ -17,7 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 
 interface SeatingPlanProps {
-  libraryId: string;
+  libraryId: string | null;
   roomId: string;
 }
 
@@ -35,8 +35,7 @@ const tierStyles = {
 };
 
 export function SeatingPlan({ libraryId, roomId }: SeatingPlanProps) {
-  const { firestore, user } = useFirebase();
-  const { toast } = useToast();
+  const { firestore } = useFirebase();
   
   const [selectedDate, setSelectedDate] = React.useState<Date>(new Date());
   const [selectedSeat, setSelectedSeat] = React.useState<SeatWithId | null>(null);
@@ -44,19 +43,19 @@ export function SeatingPlan({ libraryId, roomId }: SeatingPlanProps) {
 
   // --- Data Fetching ---
   const seatsQuery = React.useMemo(() => {
-    if (!firestore || !user || !roomId) return null;
+    if (!firestore || !libraryId || !roomId) return null;
     return query(collection(firestore, `libraries/${libraryId}/rooms/${roomId}/seats`));
-  }, [firestore, user, libraryId, roomId]);
+  }, [firestore, libraryId, roomId]);
   const { data: seats, isLoading: isLoadingSeats } = useCollection<Seat>(seatsQuery);
 
   const studentsQuery = React.useMemo(() => {
-    if (!firestore || !user) return null;
+    if (!firestore || !libraryId) return null;
     return query(collection(firestore, `libraries/${libraryId}/students`), where('status', '==', 'active'));
-  }, [firestore, user, libraryId]);
+  }, [firestore, libraryId]);
   const { data: students, isLoading: isLoadingStudents } = useCollection<Student>(studentsQuery);
 
   const bookingsQuery = React.useMemo(() => {
-    if (!firestore || !user || !roomId) return null;
+    if (!firestore || !libraryId || !roomId) return null;
     const startOfDay = new Date(selectedDate);
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date(selectedDate);
@@ -69,7 +68,7 @@ export function SeatingPlan({ libraryId, roomId }: SeatingPlanProps) {
       where('startTime', '<=', Timestamp.fromDate(endOfDay)),
       where('endTime', '>=', Timestamp.fromDate(startOfDay))
     );
-  }, [firestore, user, libraryId, roomId, selectedDate]);
+  }, [firestore, libraryId, roomId, selectedDate]);
   const { data: bookings } = useCollection<SeatBooking>(bookingsQuery);
 
   // --- Memoized Data ---

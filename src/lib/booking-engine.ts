@@ -11,7 +11,7 @@ import {
   serverTimestamp,
   type Firestore,
 } from "firebase/firestore";
-import { SeatBooking, Bill, Payment } from "./types";
+import { SeatBooking, Bill } from "./types";
 
 /* ─────────────────────────────────────────────
    TYPES
@@ -61,26 +61,37 @@ export async function createSeatBooking(db: Firestore, input: CreateBookingInput
   const billsRef = collection(db, "libraries", libraryId, "bills");
 
   await runTransaction(db, async (tx) => {
-    // 1. CHECK FOR CONFLICTS
-    const seatConflictQuery = query(bookingsRef, where("seatId", "==", seatId), where("status", "==", "active"));
-    const seatSnap = await getDocs(seatConflictQuery);
-    seatSnap.forEach((doc) => {
-      const b = doc.data();
-      const existingStart = b.startTime.toMillis();
-      const existingEnd = b.endTime.toMillis();
-      if (start.toMillis() < existingEnd && end.getTime() > existingStart) {
-        throw new Error(`Seat is already booked from ${new Date(existingStart).toLocaleTimeString()} to ${new Date(existingEnd).toLocaleTimeString()}`);
+    // 1. CHECK FOR CONFLICTS (Authoritative check inside the transaction)
+    // Query for any active bookings on the same seat that overlap with the new booking time range.
+    const seatConflictQuery = query(
+      bookingsRef, 
+      where("seatId", "==", seatId), 
+      where("status", "==", "active"),
+      where("endTime", ">", start) // Filter for bookings that end after the new one starts
+    );
+    const seatSnap = await tx.get(seatConflictQuery);
+    for (const doc of seatSnap.docs) {
+      const b = doc.data() as SeatBooking;
+      // Since we already filtered where endTime > start, we only need to check if startTime < end.
+      if (b.startTime.toDate() < end) {
+        throw new Error(`Seat is already booked from ${b.startTime.toDate().toLocaleTimeString()} to ${b.endTime.toDate().toLocaleTimeString()}`);
       }
-    });
+    }
 
-    const studentConflictQuery = query(bookingsRef, where("studentId", "==", studentId), where("status", "==", "active"));
-    const studentSnap = await getDocs(studentConflictQuery);
-    studentSnap.forEach((doc) => {
-      const b = doc.data();
-      if (start.toMillis() < b.endTime.toMillis() && end.getTime() > b.startTime.toMillis()) {
-        throw new Error(`${studentName} already has another booking during this time.`);
-      }
-    });
+    // Also check if the student already has any other active booking in the same time range.
+    const studentConflictQuery = query(
+        bookingsRef, 
+        where("studentId", "==", studentId), 
+        where("status", "==", "active"),
+        where("endTime", ">", start)
+    );
+    const studentSnap = await tx.get(studentConflictQuery);
+    for (const doc of studentSnap.docs) {
+        const b = doc.data() as SeatBooking;
+        if (b.startTime.toDate() < end) {
+            throw new Error(`${studentName} already has another booking during this time.`);
+        }
+    }
 
     // 2. CREATE BOOKING & BILL
     const bookingRef = doc(bookingsRef);
@@ -128,7 +139,7 @@ export async function createSeatBooking(db: Firestore, input: CreateBookingInput
       linkedBillId: billRef.id,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-    } as SeatBooking);
+    });
   });
 }
 

@@ -6,6 +6,7 @@ import {
   setDoc,
   serverTimestamp,
   type Firestore,
+  writeBatch,
 } from 'firebase/firestore';
 
 type UserProfileParams = {
@@ -20,6 +21,7 @@ type UserProfileParams = {
 /**
  * Creates a user profile document in Firestore if one does not already exist.
  * This function is idempotent and safe to call multiple times.
+ * It also creates the top-level user-to-library mapping.
  *
  * @param {UserProfileParams} params - The user profile data.
  */
@@ -35,11 +37,15 @@ export async function ensureUserProfile({
     throw new Error('User ID, Role, and Library ID are required to ensure a user profile.');
   }
 
-  const userRef = doc(firestore, 'libraries', libraryId, 'users', uid);
-  const userSnap = await getDoc(userRef);
+  const userProfileRef = doc(firestore, 'libraries', libraryId, 'users', uid);
+  const userProfileSnap = await getDoc(userProfileRef);
 
-  if (!userSnap.exists()) {
-    await setDoc(userRef, {
+  // Only run writes if the main user profile doesn't exist.
+  if (!userProfileSnap.exists()) {
+    const batch = writeBatch(firestore);
+
+    // Set the main user profile
+    batch.set(userProfileRef, {
       id: uid,
       name,
       email,
@@ -48,6 +54,14 @@ export async function ensureUserProfile({
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
+
+    // Set the top-level user-to-library mapping for easy lookup on login.
+    const userMappingRef = doc(firestore, 'users', uid);
+    batch.set(userMappingRef, {
+        libraryId: libraryId,
+    });
+    
+    await batch.commit();
   }
 }
 
@@ -70,21 +84,22 @@ export async function ensureStudentProfile({ uid, name, email, libraryId, firest
         throw new Error('User ID and Library ID are required to ensure a student profile.');
     }
 
+    // The student document ID can be the same as the user UID for 1:1 mapping
     const studentRef = doc(firestore, `libraries/${libraryId}/students`, uid);
     const studentSnap = await getDoc(studentRef);
 
     if (!studentSnap.exists()) {
         await setDoc(studentRef, {
+            id: uid, // explicitly set the student ID to match the user ID
             libraryId: libraryId,
             userId: uid,
             name: name,
             email: email,
             status: 'active',
             fibonacciStreak: 0,
-            paymentDue: 0,
+            lastInteractionAt: serverTimestamp(),
             notes: [],
             tags: [],
-            lastInteractionAt: serverTimestamp(),
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           });

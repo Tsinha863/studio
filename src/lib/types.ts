@@ -4,6 +4,16 @@ import { Timestamp } from "firebase/firestore";
 import type { BookingDuration as EngineBookingDuration } from './booking-engine';
 
 export type BookingDuration = EngineBookingDuration;
+
+export interface Library {
+    id: string;
+    name: string;
+    address: string;
+    ownerId: string;
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
+}
+
 export interface User {
   id: string;
   libraryId: string;

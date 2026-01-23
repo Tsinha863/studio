@@ -41,7 +41,6 @@ import { DataTablePagination } from '@/components/ui/data-table-pagination';
 import { columns as billColumns } from '@/components/admin/billing/columns';
 import { Spinner } from '@/components/spinner';
 import { Skeleton } from '@/components/ui/skeleton';
-import { LIBRARY_ID } from '@/lib/config';
 
 const BillDialog = dynamic(() => import('@/components/bill-dialog').then(mod => mod.BillDialog), { 
     ssr: false,
@@ -58,7 +57,7 @@ type BillDialogState = {
 
 export default function BillingPage() {
   const { toast } = useToast();
-  const { firestore, user } = useFirebase();
+  const { firestore, user, libraryId } = useFirebase();
   const [isPaying, setIsPaying] = React.useState<string | false>(false);
   const [billDialogState, setBillDialogState] = React.useState<BillDialogState>({ isOpen: false });
 
@@ -67,16 +66,16 @@ export default function BillingPage() {
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
 
   const billsQuery = React.useMemo(() => {
-    if (!firestore || !user) return null;
+    if (!firestore || !libraryId) return null;
     return query(
-      collection(firestore, `libraries/${LIBRARY_ID}/bills`),
+      collection(firestore, `libraries/${libraryId}/bills`),
       orderBy('dueDate', 'desc')
     );
-  }, [firestore, user]);
+  }, [firestore, libraryId]);
   const { data: bills, isLoading: isLoadingBills, error } = useCollection<Bill>(billsQuery);
   
   const handleMarkAsPaid = React.useCallback(async (bill: BillWithId) => {
-    if (!user || !firestore || !bill.studentId) {
+    if (!user || !firestore || !libraryId || !bill.studentId) {
        toast({
         variant: 'destructive',
         title: 'Error',
@@ -86,9 +85,9 @@ export default function BillingPage() {
     };
     setIsPaying(bill.id);
 
-    const billRef = doc(firestore, `libraries/${LIBRARY_ID}/bills/${bill.id}`);
-    const studentRef = doc(firestore, `libraries/${LIBRARY_ID}/students/${bill.studentId!}`);
-    const paymentRef = doc(collection(firestore, `libraries/${LIBRARY_ID}/payments`));
+    const billRef = doc(firestore, `libraries/${libraryId}/bills/${bill.id}`);
+    const studentRef = doc(firestore, `libraries/${libraryId}/students/${bill.studentId!}`);
+    const paymentRef = doc(collection(firestore, `libraries/${libraryId}/payments`));
 
     try {
         const studentDoc = await runTransaction(firestore, async (transaction) => {
@@ -100,7 +99,7 @@ export default function BillingPage() {
             // 1. Create Payment
             transaction.set(paymentRef, {
                 id: paymentRef.id,
-                libraryId: LIBRARY_ID,
+                libraryId: libraryId,
                 studentId: bill.studentId,
                 billId: bill.id,
                 amount: bill.totalAmount,
@@ -131,9 +130,9 @@ export default function BillingPage() {
             });
             
             // 4. Create Activity Log
-            const logRef = doc(collection(firestore, `libraries/${LIBRARY_ID}/activityLogs`));
+            const logRef = doc(collection(firestore, `libraries/${libraryId}/activityLogs`));
             transaction.set(logRef, {
-                libraryId: LIBRARY_ID,
+                libraryId: libraryId,
                 user: { id: user.uid, name: user.displayName || 'Admin' },
                 activityType: 'payment_processed',
                 details: { studentName: bill.studentName, amount: bill.totalAmount, billId: bill.id },
@@ -176,7 +175,7 @@ export default function BillingPage() {
     } finally {
       setIsPaying(false);
     }
-  }, [firestore, user, toast]);
+  }, [firestore, user, toast, libraryId]);
 
   const memoizedColumns = React.useMemo(() => billColumns({ handleMarkAsPaid, isPaying }), [handleMarkAsPaid, isPaying]);
   

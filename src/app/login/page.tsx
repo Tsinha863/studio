@@ -38,7 +38,6 @@ import { useFirebase } from '@/firebase';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Logo } from '@/components/logo';
 import { Spinner } from '@/components/spinner';
-import { LIBRARY_ID } from '@/lib/config';
 import { ensureStudentProfile, ensureUserProfile } from '@/firebase/auth/ensure-user-profile';
 
 const loginSchema = z.object({
@@ -48,7 +47,8 @@ const loginSchema = z.object({
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 
-// Demo credentials
+// Demo credentials for a pre-existing library
+const DEMO_LIBRARY_ID = 'library1';
 const DEMO_ADMIN_EMAIL = 'admin@campushub.com';
 const DEMO_ADMIN_PASSWORD = 'password123';
 const DEMO_STUDENT_EMAIL = 'student@campushub.com';
@@ -141,7 +141,7 @@ function LoginForm() {
           name: name,
           email: user.email,
           role: determinedRole,
-          libraryId: LIBRARY_ID,
+          libraryId: DEMO_LIBRARY_ID,
           firestore,
         });
     
@@ -150,7 +150,7 @@ function LoginForm() {
             uid: user.uid,
             name: name,
             email: user.email,
-            libraryId: LIBRARY_ID,
+            libraryId: DEMO_LIBRARY_ID,
             firestore,
           });
         }

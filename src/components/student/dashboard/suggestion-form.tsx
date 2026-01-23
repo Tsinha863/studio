@@ -33,7 +33,7 @@ type StudentWithId = Student & { id: string };
 
 interface SuggestionFormProps {
   student: StudentWithId | null;
-  libraryId: string;
+  libraryId: string | null;
   isLoading: boolean;
 }
 
@@ -46,7 +46,7 @@ const formSchema = z.object({
 });
 
 export function SuggestionForm({ student, libraryId, isLoading: isLoadingStudent }: SuggestionFormProps) {
-  const { firestore, user, isUserLoading } = useFirebase();
+  const { firestore, user } = useFirebase();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [content, setContent] = React.useState('');
@@ -61,7 +61,7 @@ export function SuggestionForm({ student, libraryId, isLoading: isLoadingStudent
       return;
     }
 
-    if (!firestore || !student || !user) {
+    if (!firestore || !student || !user || !libraryId) {
       toast({
         variant: 'destructive',
         title: 'Error',
@@ -111,7 +111,7 @@ export function SuggestionForm({ student, libraryId, isLoading: isLoadingStudent
       });
   };
 
-  const isFormDisabled = isSubmitting || isLoadingStudent || isUserLoading || !user;
+  const isFormDisabled = isSubmitting || isLoadingStudent || !user;
 
   return (
     <Card>

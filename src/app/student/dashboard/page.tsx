@@ -12,7 +12,6 @@ import { UpcomingBillCard } from '@/components/student/dashboard/upcoming-bill-c
 import { FibonacciStreakCard } from '@/components/student/dashboard/fibonacci-streak-card';
 import { SuggestionForm } from '@/components/student/dashboard/suggestion-form';
 import { Skeleton } from '@/components/ui/skeleton';
-import { LIBRARY_ID } from '@/lib/config';
 
 const BillHistoryTable = dynamic(
   () => import('@/components/student/dashboard/bill-history-table').then(mod => mod.BillHistoryTable),
@@ -23,34 +22,34 @@ const BillHistoryTable = dynamic(
 );
 
 export default function StudentDashboardPage() {
-  const { firestore, user } = useFirebase();
+  const { firestore, user, libraryId } = useFirebase();
   const studentId = user?.uid;
 
   const studentDocRef = React.useMemo(() => {
-    if (!firestore || !studentId) return null;
-    return doc(firestore, `libraries/${LIBRARY_ID}/students`, studentId);
-  }, [firestore, studentId]);
+    if (!firestore || !studentId || !libraryId) return null;
+    return doc(firestore, `libraries/${libraryId}/students`, studentId);
+  }, [firestore, studentId, libraryId]);
   const { data: student, isLoading: isLoadingStudent } = useDoc<Student>(studentDocRef);
 
   const billsQuery = React.useMemo(() => {
-    if (!firestore || !studentId) return null;
+    if (!firestore || !studentId || !libraryId) return null;
     return query(
-      collection(firestore, `libraries/${LIBRARY_ID}/bills`),
+      collection(firestore, `libraries/${libraryId}/bills`),
       where('studentId', '==', studentId),
       orderBy('dueDate', 'desc')
     );
-  }, [firestore, studentId]);
+  }, [firestore, studentId, libraryId]);
   const { data: bills, isLoading: isLoadingBills } = useCollection<Bill>(billsQuery);
 
   const bookingsQuery = React.useMemo(() => {
-    if (!firestore || !studentId) return null;
+    if (!firestore || !studentId || !libraryId) return null;
     return query(
-        collection(firestore, `libraries/${LIBRARY_ID}/seatBookings`),
+        collection(firestore, `libraries/${libraryId}/seatBookings`),
         where('studentId', '==', studentId),
         where('endTime', '>=', Timestamp.now()),
         orderBy('endTime', 'asc')
     );
-  }, [firestore, studentId]);
+  }, [firestore, studentId, libraryId]);
   const { data: bookings, isLoading: isLoadingBookings } = useCollection<SeatBooking>(bookingsQuery);
 
   const upcomingBill = React.useMemo(() => {
@@ -72,7 +71,7 @@ export default function StudentDashboardPage() {
             <BillHistoryTable bills={bills} isLoading={isLoadingBills} />
         </div>
         <div className="lg:col-span-2">
-            <SuggestionForm student={student as (Student & {id: string}) | null} libraryId={LIBRARY_ID} isLoading={isLoadingStudent}/>
+            <SuggestionForm student={student as (Student & {id: string}) | null} libraryId={libraryId} isLoading={isLoadingStudent}/>
         </div>
       </div>
     </div>

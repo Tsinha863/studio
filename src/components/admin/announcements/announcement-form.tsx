@@ -20,7 +20,7 @@ import { Label } from '@/components/ui/label';
 import { FirestorePermissionError } from '@/firebase/errors';
 
 interface AnnouncementFormProps {
-  libraryId: string;
+  libraryId: string | null;
   onSuccess: () => void;
   onCancel: () => void;
 }
@@ -34,7 +34,7 @@ export function AnnouncementForm({ libraryId, onSuccess, onCancel }: Announcemen
   const [errors, setErrors] = React.useState<{ title?: string; content?: string }>({});
 
   const handleSubmit = async () => {
-    if (!firestore || !user) {
+    if (!firestore || !user || !libraryId) {
       toast({
         variant: 'destructive',
         title: 'Authentication Error',

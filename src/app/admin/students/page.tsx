@@ -54,7 +54,6 @@ import type { Student } from '@/lib/types';
 import { columns as studentColumns } from '@/components/admin/students/columns';
 import { Spinner } from '@/components/spinner';
 import { Skeleton } from '@/components/ui/skeleton';
-import { LIBRARY_ID } from '@/lib/config';
 import { FirestorePermissionError } from '@/firebase/errors';
 
 const DataTable = dynamic(() => import('@/components/ui/data-table').then(mod => mod.DataTable), { 
@@ -83,7 +82,7 @@ type AlertState = {
 
 export default function StudentsPage() {
   const { toast } = useToast();
-  const { firestore, user } = useFirebase();
+  const { firestore, user, libraryId } = useFirebase();
 
   const [modalState, setModalState] = React.useState<ModalState>({ isOpen: false });
   const [alertState, setAlertState] = React.useState<AlertState>({ isOpen: false });
@@ -95,16 +94,16 @@ export default function StudentsPage() {
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
 
   const studentsQuery = React.useMemo(() => {
-    if (!firestore || !user) return null;
+    if (!firestore || !libraryId) return null;
     const constraints = [];
     if (!showInactive) {
         constraints.push(where('status', 'in', ['active', 'at-risk']));
     }
     return query(
-      collection(firestore, `libraries/${LIBRARY_ID}/students`),
+      collection(firestore, `libraries/${libraryId}/students`),
       ...constraints
     );
-  }, [firestore, user, showInactive]);
+  }, [firestore, libraryId, showInactive]);
 
   const { data: students, isLoading, error } = useCollection<Student>(studentsQuery);
 
@@ -141,20 +140,20 @@ export default function StudentsPage() {
     setAlertState({ isOpen: false, studentId: undefined, studentName: undefined });
 
   const handleDeleteStudent = async () => {
-    if (!alertState.studentId || !user || !firestore) return;
+    if (!alertState.studentId || !user || !firestore || !libraryId) return;
     
     setIsDeleting(true);
 
     try {
         const bookingsQuery = query(
-            collection(firestore, `libraries/${LIBRARY_ID}/seatBookings`),
+            collection(firestore, `libraries/${libraryId}/seatBookings`),
             where('studentId', '==', alertState.studentId),
             where('endTime', '>=', Timestamp.now())
         );
         const bookingsSnapshot = await getDocs(bookingsQuery);
         
         await runTransaction(firestore, async (transaction) => {
-          const studentRef = doc(firestore, `libraries/${LIBRARY_ID}/students/${alertState.studentId!}`);
+          const studentRef = doc(firestore, `libraries/${libraryId}/students/${alertState.studentId!}`);
           const studentDoc = await transaction.get(studentRef);
 
           if (!studentDoc.exists()) {
@@ -171,9 +170,9 @@ export default function StudentsPage() {
             lastInteractionAt: serverTimestamp(),
           });
 
-          const logRef = doc(collection(firestore, `libraries/${LIBRARY_ID}/activityLogs`));
+          const logRef = doc(collection(firestore, `libraries/${libraryId}/activityLogs`));
           transaction.set(logRef, {
-            libraryId: LIBRARY_ID,
+            libraryId: libraryId,
             user: { id: user.uid, name: user.displayName || 'Admin' },
             activityType: 'student_archived',
             details: { studentId: alertState.studentId, studentName: studentDoc.data().name },
@@ -187,7 +186,7 @@ export default function StudentsPage() {
         });
         closeDeleteAlert();
     } catch(serverError) {
-      const studentRef = doc(firestore, `libraries/${LIBRARY_ID}/students/${alertState.studentId!}`);
+      const studentRef = doc(firestore, `libraries/${libraryId}/students/${alertState.studentId!}`);
       const permissionError = new FirestorePermissionError({
         path: studentRef.path,
         operation: 'update',
@@ -264,7 +263,7 @@ export default function StudentsPage() {
           </DialogHeader>
           <StudentForm
             student={modalState.student}
-            libraryId={LIBRARY_ID}
+            libraryId={libraryId}
             onSuccess={() => {
               closeModal();
               toast({

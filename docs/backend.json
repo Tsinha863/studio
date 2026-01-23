@@ -14,6 +14,14 @@
           "type": "string",
           "description": "Name of the library."
         },
+        "address": {
+            "type": "string",
+            "description": "Physical address of the library."
+        },
+        "ownerId": {
+            "type": "string",
+            "description": "The UID of the user who owns/created the library."
+        },
         "createdAt": {
           "type": "string",
           "description": "Timestamp indicating when the library was created.",
@@ -28,9 +36,23 @@
       "required": [
         "id",
         "name",
+        "address",
+        "ownerId",
         "createdAt",
         "updatedAt"
       ]
+    },
+    "UserToLibraryMapping": {
+        "title": "User To Library Mapping",
+        "type": "object",
+        "description": "Stores the libraryId for a given user UID for quick tenant resolution.",
+        "properties": {
+          "libraryId": {
+            "type": "string",
+            "description": "The ID of the library the user belongs to."
+          }
+        },
+        "required": ["libraryId"]
     },
     "User": {
       "$schema": "http://json-schema.org/draft-07/schema#",
@@ -802,6 +824,22 @@
   },
   "firestore": {
     "structure": [
+      {
+        "path": "users/{userId}",
+        "definition": {
+          "entityName": "UserToLibraryMapping",
+          "schema": {
+            "$ref": "#/backend/entities/UserToLibraryMapping"
+          },
+          "description": "Top-level mapping of a user UID to their libraryId for efficient lookup.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "Unique identifier for the user, matches Auth UID."
+            }
+          ]
+        }
+      },
       {
         "path": "libraries/{libraryId}",
         "definition": {

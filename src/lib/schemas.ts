@@ -70,10 +70,30 @@ export const signupSchema = z
     role: z.enum(['student', 'libraryOwner'], {
       required_error: 'You must select a role.',
     }),
+    libraryName: z.string().optional(),
+    libraryAddress: z.string().optional(),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords don't match",
     path: ['confirmPassword'],
+  })
+  .superRefine((data, ctx) => {
+    if (data.role === 'libraryOwner') {
+      if (!data.libraryName || data.libraryName.length < 3) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Library name must be at least 3 characters.',
+          path: ['libraryName'],
+        });
+      }
+      if (!data.libraryAddress || data.libraryAddress.length < 10) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Library address must be at least 10 characters.',
+          path: ['libraryAddress'],
+        });
+      }
+    }
   });
 
 export type SignupFormValues = z.infer<typeof signupSchema>;
