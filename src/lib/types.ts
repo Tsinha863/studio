@@ -10,6 +10,10 @@ export interface Library {
     name: string;
     address: string;
     ownerId: string;
+    contactEmail?: string;
+    contactPhone?: string;
+    timezone?: string;
+    billingCycle?: 'monthly' | 'yearly';
     createdAt: Timestamp;
     updatedAt: Timestamp;
 }
@@ -174,4 +178,29 @@ export interface PrintRequest {
   rejectionReason?: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
+}
+
+export interface Invite {
+    id: string;
+    libraryId: string;
+    role: 'student';
+    email?: string;
+    inviteCode: string;
+    expiresAt: Timestamp;
+    used: boolean;
+    usedBy?: string;
+    createdBy: string;
+    createdAt: Timestamp;
+}
+
+export interface OwnershipTransfer {
+    id: string;
+    libraryId: string;
+    fromOwnerId: string;
+    toUserId: string;
+    toUserName: string;
+    status: 'pending' | 'accepted' | 'cancelled';
+    createdAt: Timestamp;
+    expiresAt: Timestamp;
+    resolvedAt?: Timestamp;
 }

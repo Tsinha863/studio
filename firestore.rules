@@ -16,6 +16,10 @@ service cloud.firestore {
     function isOwner(userId) {
       return request.auth != null && request.auth.uid == userId;
     }
+    
+    function isLibraryOwner(libraryId) {
+        return isAdmin(libraryId) && get(/databases/$(database)/documents/libraries/$(libraryId)).data.ownerId == request.auth.uid;
+    }
 
     // --- TOP-LEVEL COLLECTIONS ---
 
@@ -28,9 +32,11 @@ service cloud.firestore {
 
     // --- LIBRARY-SCOPED COLLECTIONS ---
 
-    // Libraries: Not directly writable by clients. Created via signup logic.
+    // Libraries: Admins can update settings. Any user in the library can read.
     match /libraries/{libraryId} {
-      allow read, write: if false;
+      allow read: if isLibraryUser(libraryId);
+      allow update: if isAdmin(libraryId);
+      allow create, delete: if false;
     }
 
     // Users: Can read/write their own user object. Admins can list all users in their library.
@@ -113,7 +119,20 @@ service cloud.firestore {
       allow list, create: if isAdmin(libraryId);
       allow update, delete: if false;
     }
+    
+    // Invites: Admins can read and write. This is a placeholder; a full student join flow would require more granular rules or a Cloud Function.
+    match /libraries/{libraryId}/invites/{inviteId} {
+        allow read, write: if isAdmin(libraryId);
+    }
+    
+    // Ownership Transfers: Admins can read. Owner can create/cancel. Recipient can accept.
+    match /libraries/{libraryId}/ownershipTransfers/{transferId} {
+        allow read: if isAdmin(libraryId);
+        // Only the current library owner can initiate a transfer.
+        allow create: if isLibraryOwner(libraryId);
+        // The owner can cancel (update status to 'cancelled'), or the recipient can accept (update status to 'accepted').
+        allow update: if (isLibraryOwner(libraryId) && request.resource.data.status == 'cancelled') || (request.auth.uid == resource.data.toUserId && request.resource.data.status == 'accepted');
+        allow delete: if false; // Transfers are a permanent record.
+    }
   }
 }
-
-    

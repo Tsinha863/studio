@@ -22,6 +22,10 @@
             "type": "string",
             "description": "The UID of the user who owns/created the library."
         },
+        "contactEmail": { "type": "string", "format": "email" },
+        "contactPhone": { "type": "string" },
+        "timezone": { "type": "string" },
+        "billingCycle": { "type": "string", "enum": ["monthly", "yearly"] },
         "createdAt": {
           "type": "string",
           "description": "Timestamp indicating when the library was created.",
@@ -41,6 +45,41 @@
         "createdAt",
         "updatedAt"
       ]
+    },
+    "Invite": {
+      "title": "Invite",
+      "type": "object",
+      "description": "Represents an invite code for students to join a library.",
+      "properties": {
+        "id": { "type": "string" },
+        "libraryId": { "type": "string" },
+        "role": { "type": "string", "enum": ["student"] },
+        "email": { "type": "string", "format": "email", "description": "If set, only this email can use the invite." },
+        "inviteCode": { "type": "string", "description": "Unique, short, human-readable code." },
+        "expiresAt": { "type": "string", "format": "date-time" },
+        "used": { "type": "boolean" },
+        "usedBy": { "type": "string", "description": "UID of the user who used the invite."},
+        "createdBy": { "type": "string", "description": "UID of the admin who created it." },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "libraryId", "role", "inviteCode", "expiresAt", "used", "createdBy", "createdAt"]
+    },
+    "OwnershipTransfer": {
+        "title": "Ownership Transfer",
+        "type": "object",
+        "description": "Represents a request to transfer library ownership.",
+        "properties": {
+            "id": { "type": "string" },
+            "libraryId": { "type": "string" },
+            "fromOwnerId": { "type": "string" },
+            "toUserId": { "type": "string" },
+            "toUserName": { "type": "string" },
+            "status": { "type": "string", "enum": ["pending", "accepted", "cancelled"] },
+            "createdAt": { "type": "string", "format": "date-time" },
+            "expiresAt": { "type": "string", "format": "date-time" },
+            "resolvedAt": { "type": "string", "format": "date-time" }
+        },
+        "required": ["id", "libraryId", "fromOwnerId", "toUserId", "toUserName", "status", "createdAt", "expiresAt"]
     },
     "UserToLibraryMapping": {
         "title": "User To Library Mapping",
@@ -1099,10 +1138,44 @@
             }
           ]
         }
+      },
+      {
+        "path": "libraries/{libraryId}/invites/{inviteId}",
+        "definition": {
+          "entityName": "Invite",
+          "schema": { "$ref": "#/entities/Invite" },
+          "description": "Stores invite codes for students to join a library.",
+           "params": [
+            {
+              "name": "libraryId",
+              "description": "Unique identifier for the library."
+            },
+            {
+              "name": "inviteId",
+              "description": "Unique identifier for the invite."
+            }
+          ]
+        }
+      },
+      {
+        "path": "libraries/{libraryId}/ownershipTransfers/{transferId}",
+        "definition": {
+          "entityName": "OwnershipTransfer",
+          "schema": { "$ref": "#/entities/OwnershipTransfer" },
+          "description": "Tracks library ownership transfer requests.",
+           "params": [
+            {
+              "name": "libraryId",
+              "description": "Unique identifier for the library."
+            },
+            {
+              "name": "transferId",
+              "description": "Unique identifier for the transfer request."
+            }
+          ]
+        }
       }
     ],
     "reasoning": "The Firestore structure is designed for a multi-tenant library system, prioritizing strict library isolation and role-based access control. The core principle is Authorization Independence achieved through the denormalization of the `libraryId` in every document. This eliminates the need for `get()` calls in security rules, simplifying the rules and ensuring atomic operations. The structure uses structural segregation by storing data with different access requirements in separate collections, which also helps with list operation QAPs. Access is modeled based on path-based ownership for user-specific data and a global role-based access control (DBAC) with dedicated collections for admin users. The explicit state modeling utilizes the status filed (e.g., for suggestions)."
   }
 }
-
-    
