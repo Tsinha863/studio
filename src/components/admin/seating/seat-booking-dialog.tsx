@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Check, ChevronsUpDown, Trash2 } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 import { format, setHours, setMinutes } from 'date-fns';
 import {
   collection,
@@ -13,7 +13,6 @@ import { FirebaseError } from 'firebase/app';
 
 import { useFirebase, errorEmitter } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
-import { cn } from '@/lib/utils';
 import {
   Dialog,
   DialogContent,
@@ -24,15 +23,6 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@/components/ui/command';
 import {
   Select,
   SelectContent,
@@ -43,20 +33,20 @@ import {
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
-import type { Seat, Student, SeatBooking } from '@/lib/types';
+import type { Seat, SeatBooking } from '@/lib/types';
 import { Spinner } from '@/components/spinner';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { createSeatBooking, type BookingDuration } from '@/lib/booking-engine';
+import StudentSelect from './StudentSelect';
+
 
 type SeatWithId = Seat & { id: string };
-type StudentWithId = Student & { id: string };
 type SeatBookingWithId = SeatBooking & { id: string };
 
 interface SeatBookingDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   seat: SeatWithId;
-  students: StudentWithId[];
   bookingsForSeat: SeatBookingWithId[];
   libraryId: string;
   selectedDate: Date;
@@ -68,10 +58,12 @@ const durationOptions = [
     { label: '6 Hours', value: '6h' },
     { label: '12 Hours', value: '12h' },
     { label: '24 Hours', value: '24h' },
+    { label: 'Full Day (9am-9pm)', value: 'fullday' },
     { label: '1 Month', value: '1m' },
     { label: '3 Months', value: '3m' },
     { label: '6 Months', value: '6m' },
     { label: '1 Year', value: '1y' },
+    { label: 'Custom Months', value: 'custom' },
 ];
 
 
@@ -79,7 +71,6 @@ export function SeatBookingDialog({
   isOpen,
   onOpenChange,
   seat,
-  students,
   bookingsForSeat,
   libraryId,
   selectedDate,
@@ -88,29 +79,36 @@ export function SeatBookingDialog({
   const { firestore, user } = useFirebase();
   const { toast } = useToast();
   
-  const [selectedStudentId, setSelectedStudentId] = React.useState<string | undefined>();
+  const [selectedStudent, setSelectedStudent] = React.useState<{ id: string; name: string } | null>(null);
+  
   const [startTime, setStartTime] = React.useState('09:00');
   const [duration, setDuration] = React.useState('4h');
+  const [customMonths, setCustomMonths] = React.useState<number | string>(1);
   
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isCancelling, setIsCancelling] = React.useState<string | false>(false);
-  const [isComboboxOpen, setIsComboboxOpen] = React.useState(false);
-
-  const activeStudents = React.useMemo(() => students.filter(s => s.status !== 'inactive'), [students]);
 
   const handleBooking = async () => {
-    if (!firestore || !user || !selectedStudentId) {
+    if (!firestore || !user || !selectedStudent) {
       toast({ variant: 'destructive', title: 'Error', description: 'Please select a student.' });
       return;
     }
-    const studentToAssign = students.find(s => s.id === selectedStudentId);
-    if (!studentToAssign) return;
 
     setIsSubmitting(true);
     
     let bookingDuration: BookingDuration;
-    if (duration.endsWith('h')) {
+    if (duration === 'fullday') {
+        bookingDuration = { type: 'daily' };
+    } else if (duration.endsWith('h')) {
         bookingDuration = { type: 'hourly', hours: parseInt(duration.replace('h', ''), 10) as 4 | 6 | 12 | 24 };
+    } else if (duration === 'custom') {
+        const months = Number(customMonths);
+        if (isNaN(months) || months < 1) {
+            toast({ variant: 'destructive', title: 'Invalid Custom Duration', description: 'Please enter a valid number of months.' });
+            setIsSubmitting(false);
+            return;
+        }
+        bookingDuration = { type: 'monthly', months };
     } else if (duration.endsWith('m')) {
         bookingDuration = { type: 'monthly', months: parseInt(duration.replace('m', ''), 10) };
     } else if (duration.endsWith('y')) {
@@ -122,7 +120,8 @@ export function SeatBookingDialog({
     }
 
     let startDateTime: Date;
-    const isLongBooking = duration.endsWith('m') || duration.endsWith('y');
+    const isLongBooking = duration.endsWith('m') || duration.endsWith('y') || duration === 'fullday' || duration === 'custom';
+    
     if (isLongBooking) {
         startDateTime = setMinutes(setHours(selectedDate, 9), 0);
     } else {
@@ -135,14 +134,14 @@ export function SeatBookingDialog({
         libraryId,
         roomId: seat.roomId,
         seatId: seat.id,
-        studentId: selectedStudentId,
-        studentName: studentToAssign.name,
+        studentId: selectedStudent.id,
+        studentName: selectedStudent.name,
         startTime: startDateTime,
         duration: bookingDuration,
         seatTier: seat.tier,
       });
       
-      toast({ title: 'Seat Booked!', description: `Seat ${seat.id} booked for ${studentToAssign.name}.` });
+      toast({ title: 'Seat Booked!', description: `Seat ${seat.id} booked for ${selectedStudent.name}.` });
       onSuccess();
     } catch (serverError) {
        if (serverError instanceof FirebaseError && serverError.code === 'permission-denied') {
@@ -214,13 +213,14 @@ export function SeatBookingDialog({
   
   React.useEffect(() => {
     if (!isOpen) {
-        setSelectedStudentId(undefined);
+        setSelectedStudent(null);
         setStartTime('09:00');
         setDuration('4h');
+        setCustomMonths(1);
     }
   }, [isOpen]);
 
-  const isLongDuration = duration.endsWith('m') || duration.endsWith('y');
+  const isLongDuration = duration.endsWith('m') || duration.endsWith('y') || duration === 'fullday' || duration === 'custom';
   const isActionDisabled = isSubmitting || !!isCancelling;
 
   return (
@@ -264,39 +264,11 @@ export function SeatBookingDialog({
                  <div className="space-y-4">
                     <div className="space-y-2">
                         <Label>Student</Label>
-                        <Popover open={isComboboxOpen} onOpenChange={setIsComboboxOpen}>
-                            <PopoverTrigger asChild>
-                                <Button variant="outline" role="combobox" className="w-full justify-between" disabled={isActionDisabled}>
-                                    {selectedStudentId
-                                        ? students.find((student) => student.id === selectedStudentId)?.name
-                                        : "Select a student..."}
-                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                                <Command>
-                                <CommandInput placeholder="Search student..." />
-                                <CommandList>
-                                    <CommandEmpty>No available students found.</CommandEmpty>
-                                    <CommandGroup>
-                                    {activeStudents.map((student) => (
-                                        <CommandItem
-                                            key={student.id}
-                                            value={student.name}
-                                            onSelect={() => {
-                                                setSelectedStudentId(student.id);
-                                                setIsComboboxOpen(false);
-                                            }}
-                                        >
-                                            <Check className={cn("mr-2 h-4 w-4", selectedStudentId === student.id ? "opacity-100" : "opacity-0")} />
-                                            {student.name}
-                                        </CommandItem>
-                                    ))}
-                                    </CommandGroup>
-                                </CommandList>
-                                </Command>
-                            </PopoverContent>
-                        </Popover>
+                        <StudentSelect
+                            libraryId={libraryId}
+                            value={selectedStudent?.id || null}
+                            onChange={setSelectedStudent}
+                        />
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
@@ -318,6 +290,12 @@ export function SeatBookingDialog({
                             </Select>
                          </div>
                     </div>
+                     {duration === 'custom' && (
+                        <div className="space-y-2">
+                            <Label htmlFor="customMonths">Number of Months</Label>
+                            <Input id="customMonths" type="number" value={customMonths} onChange={(e) => setCustomMonths(e.target.value)} min="1" disabled={isActionDisabled} />
+                        </div>
+                    )}
                  </div>
             </div>
         </div>
@@ -326,7 +304,7 @@ export function SeatBookingDialog({
           <DialogClose asChild>
             <Button type="button" variant="outline" disabled={isActionDisabled}>Close</Button>
           </DialogClose>
-          <Button type="button" onClick={handleBooking} disabled={isActionDisabled || !selectedStudentId}>
+          <Button type="button" onClick={handleBooking} disabled={isActionDisabled || !selectedStudent}>
             {isSubmitting && <Spinner className="mr-2" />}
             {isSubmitting ? 'Booking...' : 'Create Booking'}
           </Button>

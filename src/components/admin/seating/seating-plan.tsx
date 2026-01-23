@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -50,12 +49,6 @@ export function SeatingPlan({ libraryId, roomId }: SeatingPlanProps) {
   }, [firestore, user, libraryId, roomId]);
   const { data: seats, isLoading: isLoadingSeats } = useCollection<Seat>(seatsQuery);
 
-  const studentsQuery = React.useMemo(() => {
-    if (!firestore || !user) return null;
-    return collection(firestore, `libraries/${libraryId}/students`);
-  }, [firestore, user, libraryId]);
-  const { data: students, isLoading: isLoadingStudents } = useCollection<Student>(studentsQuery);
-
   const bookingsQuery = React.useMemo(() => {
     if (!firestore || !user || !roomId) return null;
     const startOfDay = new Date(selectedDate);
@@ -66,6 +59,7 @@ export function SeatingPlan({ libraryId, roomId }: SeatingPlanProps) {
     return query(
       collection(firestore, `libraries/${libraryId}/seatBookings`),
       where('roomId', '==', roomId),
+      where('status', '==', 'active'),
       where('startTime', '<=', Timestamp.fromDate(endOfDay)),
       where('endTime', '>=', Timestamp.fromDate(startOfDay))
     );
@@ -156,7 +150,7 @@ export function SeatingPlan({ libraryId, roomId }: SeatingPlanProps) {
           
           const tooltipContent = seatBookings.length > 0
             ? seatBookings.map(b => (
-                `Booked by ${b.studentName} from ${format(b.startTime.toDate(), 'p')} to ${format(b.endTime.toDate(), 'p')}`
+                `Booked by ${b.studentName} from ${format(b.startTime.toDate(), 'MMM d, p')} to ${format(b.endTime.toDate(), 'MMM d, p')}`
               )).join(' | ')
             : 'Available';
 
@@ -190,7 +184,6 @@ export function SeatingPlan({ libraryId, roomId }: SeatingPlanProps) {
           isOpen={isBookingDialogOpen}
           onOpenChange={setIsBookingDialogOpen}
           seat={selectedSeat}
-          students={students as StudentWithId[] || []}
           bookingsForSeat={bookingsBySeatId.get(selectedSeat.id) ?? []}
           libraryId={libraryId}
           selectedDate={selectedDate}
