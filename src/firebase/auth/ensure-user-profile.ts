@@ -3,7 +3,6 @@
 import {
   doc,
   getDoc,
-  setDoc,
   serverTimestamp,
   type Firestore,
   writeBatch,
@@ -89,7 +88,8 @@ export async function ensureStudentProfile({ uid, name, email, libraryId, firest
     const studentSnap = await getDoc(studentRef);
 
     if (!studentSnap.exists()) {
-        await setDoc(studentRef, {
+        const batch = writeBatch(firestore);
+        batch.set(studentRef, {
             id: uid, // explicitly set the student ID to match the user ID
             libraryId: libraryId,
             userId: uid,
@@ -102,6 +102,9 @@ export async function ensureStudentProfile({ uid, name, email, libraryId, firest
             tags: [],
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
-          });
+        });
+        await batch.commit();
     }
 }
+
+    

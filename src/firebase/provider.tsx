@@ -178,3 +178,5 @@ export const useUser = () => {
     const { user, userProfile, role, isLoading, error } = useFirebase();
     return { user, userProfile, role, isLoading, error };
 }
+
+    
