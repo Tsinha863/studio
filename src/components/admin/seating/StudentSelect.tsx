@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { collection, getDocs, query, where } from "firebase/firestore";
-import { firestore as db } from "@/firebase";
+import { useFirebase } from "@/firebase";
 import { cn } from "@/lib/utils";
 
 type Student = {
@@ -21,12 +21,13 @@ export default function StudentSelect({
   value,
   onChange,
 }: Props) {
+  const { firestore } = useFirebase();
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     // 🔒 HARD GUARD — prevents unknown-collection
-    if (!libraryId) {
+    if (!libraryId || !firestore) {
       setStudents([]);
       setLoading(false);
       return;
@@ -39,7 +40,7 @@ export default function StudentSelect({
         setLoading(true);
 
         const q = query(
-          collection(db, "libraries", libraryId, "students"),
+          collection(firestore, "libraries", libraryId, "students"),
           where("status", "==", "active") // optional but recommended
         );
 
@@ -66,7 +67,7 @@ export default function StudentSelect({
     return () => {
       cancelled = true;
     };
-  }, [libraryId]);
+  }, [libraryId, firestore]);
 
   /* ───────────────────────────── */
 
