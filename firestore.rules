@@ -52,7 +52,7 @@ service cloud.firestore {
       allow write: if isAdmin(libraryId);
     }
 
-    // Payments: Admins can create. Students can read their own.
+    // Payments: Admins can create. Students can read their own. Payments are immutable.
     match /libraries/{libraryId}/payments/{paymentId} {
       allow get: if isLibraryUser(libraryId) && (isAdmin(libraryId) || resource.data.studentId == request.auth.uid);
       allow list: if isAdmin(libraryId);

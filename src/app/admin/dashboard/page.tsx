@@ -125,7 +125,7 @@ export default function DashboardPage() {
         if (paymentDate) {
             const month = paymentDate.toLocaleString('default', { month: 'short' });
             const monthData = months.find(m => m.month === month);
-            if (monthData && p.status === 'paid') {
+            if (monthData) {
                 monthData.income += p.amount;
             }
         }
@@ -143,7 +143,7 @@ export default function DashboardPage() {
     return months;
   }, [payments, expenses]);
 
-  const totalRevenue = React.useMemo(() => payments.filter(p => p.status === 'paid').reduce((acc, p) => acc + p.amount, 0), [payments]);
+  const totalRevenue = React.useMemo(() => payments.reduce((acc, p) => acc + p.amount, 0), [payments]);
   const totalExpenses = React.useMemo(() => expenses.reduce((acc, e) => acc + e.amount, 0), [expenses]);
   const activeStudentCount = React.useMemo(() => allStudents.filter(s => s.status === 'active').length, [allStudents]);
   
