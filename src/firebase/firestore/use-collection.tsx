@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Query,
   onSnapshot,
@@ -27,16 +27,14 @@ export interface UseCollectionResult<T> {
 
 /**
  * React hook to subscribe to a Firestore collection or query in real-time.
- * It encapsulates memoization to prevent infinite loops from unstable query objects.
+ * It requires a memoized query object to prevent infinite re-renders.
  * 
  * @template T Optional type for document data. Defaults to any.
- * @param {() => CollectionReference | Query | null | undefined} queryFactory - A function that returns the Firestore query/reference.
- * @param {React.DependencyList} deps - Dependencies for the query factory, similar to `useMemo`.
+ * @param {CollectionReference | Query | null | undefined} query - The memoized Firestore query, created with React.useMemo.
  * @returns {UseCollectionResult<T>} Object with data, isLoading, error.
  */
 export function useCollection<T = any>(
-    queryFactory: () => CollectionReference<DocumentData> | Query<DocumentData> | null | undefined,
-    deps: React.DependencyList = []
+    query: CollectionReference<DocumentData> | Query<DocumentData> | null | undefined,
 ): UseCollectionResult<T> {
   type ResultItemType = WithId<T>;
   type StateDataType = ResultItemType[] | null;
@@ -45,10 +43,10 @@ export function useCollection<T = any>(
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<FirestoreError | null>(null);
 
-  const memoizedQuery = useMemo(queryFactory, deps);
-
   useEffect(() => {
-    if (!memoizedQuery) {
+    // This is the critical guard. If the query is not ready (e.g., waiting for a user ID),
+    // we reset the state and do nothing. This prevents invalid queries from executing.
+    if (!query) {
       setData(null);
       setIsLoading(false); 
       setError(null);
@@ -57,15 +55,15 @@ export function useCollection<T = any>(
 
     setIsLoading(true);
     setError(null);
-    setData(null); // Clear previous data
+    setData(null); // Clear previous data on new query
 
     const unsubscribe = onSnapshot(
-      memoizedQuery,
+      query,
       (snapshot: QuerySnapshot<DocumentData>) => {
-        const results: ResultItemType[] = [];
-        for (const doc of snapshot.docs) {
-          results.push({ ...(doc.data() as T), id: doc.id });
-        }
+        const results: ResultItemType[] = snapshot.docs.map(doc => ({
+          ...(doc.data() as T),
+          id: doc.id,
+        }));
         setData(results);
         setError(null);
         setIsLoading(false);
@@ -75,14 +73,11 @@ export function useCollection<T = any>(
         setData(null);
         setIsLoading(false);
         
-        if (serverError.code === 'permission-denied' && memoizedQuery) {
-          // Safely try to get the path for the error context.
-          // This works for CollectionReferences but not for complex Queries,
-          // which is a limitation of the Firebase JS SDK. For queries, we report a placeholder.
-          let path = 'unknown-collection (from a query)';
-          if ('path' in memoizedQuery && typeof (memoizedQuery as any).path === 'string') {
-            path = (memoizedQuery as any).path;
-          }
+        if (serverError.code === 'permission-denied') {
+          // This works for CollectionReferences. For complex Queries, the SDK does not expose the path.
+          const path = 'path' in query && typeof (query as any).path === 'string'
+            ? (query as any).path
+            : 'unknown-collection (from a query)';
           
           try {
             const permissionError = new FirestorePermissionError({
@@ -98,10 +93,9 @@ export function useCollection<T = any>(
       }
     );
 
+    // Unsubscribe from the listener when the component unmounts or the query changes.
     return () => unsubscribe();
-  }, [memoizedQuery]);
+  }, [query]); // The effect re-runs only when the memoized query object changes.
   
   return { data, isLoading, error };
 }
-
-    

@@ -86,13 +86,14 @@ export default function ExpensesPage() {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
 
-  const { data: expenses, isLoading, error } = useCollection<Expense>(() => {
+  const expensesQuery = React.useMemo(() => {
     if (!firestore || !user) return null;
     return query(
       collection(firestore, `libraries/${LIBRARY_ID}/expenses`),
       orderBy('expenseDate', 'desc')
     );
   }, [firestore, user]);
+  const { data: expenses, isLoading, error } = useCollection<Expense>(expensesQuery);
   
   const openModal = React.useCallback((expense?: ExpenseWithId) => setModalState({ isOpen: true, expense }), []);
   
@@ -124,14 +125,7 @@ export default function ExpensesPage() {
     setAlertState({ isOpen: false, expenseId: undefined });
 
   const handleDeleteExpense = async () => {
-    if (!alertState.expenseId || !user || !firestore) {
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'User not authenticated or expense not found.',
-      });
-      return;
-    }
+    if (!alertState.expenseId || !user || !firestore) return;
     
     setIsSubmitting(true);
 
@@ -165,11 +159,6 @@ export default function ExpensesPage() {
           });
           errorEmitter.emit('permission-error', permissionError);
         }
-        toast({
-          variant: 'destructive',
-          title: 'Deletion Failed',
-          description: serverError instanceof Error ? serverError.message : 'Could not delete the expense.',
-        });
     } finally {
         setIsSubmitting(false);
     }

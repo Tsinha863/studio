@@ -45,13 +45,11 @@ function UserMenu() {
   const { firestore, user } = useFirebase();
   const userAvatar = PlaceHolderImages.find((p) => p.id === 'user-avatar');
   
-  // The student profile contains more detailed info (like name) than the user profile.
-  // We fetch it here for the UI. The AuthGuard and redirects have already used the
-  // core `role` from the user profile for security.
-  const { data: student, isLoading: isLoadingStudent } = useDoc<Student>(() => {
+  const studentDocRef = React.useMemo(() => {
     if (!firestore || !user?.uid) return null;
     return doc(firestore, `libraries/${LIBRARY_ID}/students`, user.uid);
   }, [firestore, user]);
+  const { data: student, isLoading: isLoadingStudent } = useDoc<Student>(studentDocRef);
 
   return (
     <DropdownMenu>

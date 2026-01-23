@@ -12,18 +12,15 @@ import { LIBRARY_ID } from '@/lib/config';
 
 export default function PrintOnDeskPage() {
   const { firestore, user } = useFirebase();
-
-  // The AuthGuard ensures user is available. The user's UID is the student's document ID.
   const studentId = user?.uid;
 
-  // 1. Get current student's data
-  const { data: student, isLoading: isLoadingStudent } = useDoc<Student>(() => {
+  const studentDocRef = React.useMemo(() => {
     if (!firestore || !studentId) return null;
     return doc(firestore, `libraries/${LIBRARY_ID}/students`, studentId);
   }, [firestore, studentId]);
+  const { data: student, isLoading: isLoadingStudent } = useDoc<Student>(studentDocRef);
 
-  // 2. Get student's print requests
-  const { data: printRequests, isLoading: isLoadingPrintRequests } = useCollection<PrintRequest>(() => {
+  const printRequestsQuery = React.useMemo(() => {
     if (!firestore || !studentId) return null;
     return query(
       collection(firestore, `libraries/${LIBRARY_ID}/printRequests`),
@@ -31,6 +28,7 @@ export default function PrintOnDeskPage() {
       orderBy('createdAt', 'desc')
     );
   }, [firestore, studentId]);
+  const { data: printRequests, isLoading: isLoadingPrintRequests } = useCollection<PrintRequest>(printRequestsQuery);
 
   return (
     <div className="flex flex-col gap-6">

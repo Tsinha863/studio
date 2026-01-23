@@ -44,17 +44,19 @@ export function SeatingPlan({ libraryId, roomId }: SeatingPlanProps) {
   const [isBookingDialogOpen, setIsBookingDialogOpen] = React.useState(false);
 
   // --- Data Fetching ---
-  const { data: seats, isLoading: isLoadingSeats } = useCollection<Seat>(() => {
+  const seatsQuery = React.useMemo(() => {
     if (!firestore || !user || !roomId) return null;
     return query(collection(firestore, `libraries/${libraryId}/rooms/${roomId}/seats`));
   }, [firestore, user, libraryId, roomId]);
+  const { data: seats, isLoading: isLoadingSeats } = useCollection<Seat>(seatsQuery);
 
-  const { data: students, isLoading: isLoadingStudents } = useCollection<Student>(() => {
+  const studentsQuery = React.useMemo(() => {
     if (!firestore || !user) return null;
     return collection(firestore, `libraries/${libraryId}/students`);
   }, [firestore, user, libraryId]);
+  const { data: students, isLoading: isLoadingStudents } = useCollection<Student>(studentsQuery);
 
-  const { data: bookings } = useCollection<SeatBooking>(() => {
+  const bookingsQuery = React.useMemo(() => {
     if (!firestore || !user || !roomId) return null;
     const startOfDay = new Date(selectedDate);
     startOfDay.setHours(0, 0, 0, 0);
@@ -68,6 +70,7 @@ export function SeatingPlan({ libraryId, roomId }: SeatingPlanProps) {
       where('endTime', '>=', Timestamp.fromDate(startOfDay))
     );
   }, [firestore, user, libraryId, roomId, selectedDate]);
+  const { data: bookings } = useCollection<SeatBooking>(bookingsQuery);
 
   // --- Memoized Data ---
   const bookingsBySeatId = React.useMemo(() => {

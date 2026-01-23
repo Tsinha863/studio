@@ -25,20 +25,15 @@ const PaymentHistoryTable = dynamic(
 
 export default function StudentDashboardPage() {
   const { firestore, user } = useFirebase();
-
-  // The AuthGuard ensures user is available. The user's UID is the student's document ID.
   const studentId = user?.uid;
 
-  // --- Data Fetching ---
-  
-  // 1. Get current student's data by their ID (UID)
-  const { data: student, isLoading: isLoadingStudent } = useDoc<Student>(() => {
+  const studentDocRef = React.useMemo(() => {
     if (!firestore || !studentId) return null;
     return doc(firestore, `libraries/${LIBRARY_ID}/students`, studentId);
   }, [firestore, studentId]);
+  const { data: student, isLoading: isLoadingStudent } = useDoc<Student>(studentDocRef);
 
-  // 2. Get student's payments
-  const { data: payments, isLoading: isLoadingPayments } = useCollection<Payment>(() => {
+  const paymentsQuery = React.useMemo(() => {
     if (!firestore || !studentId) return null;
     return query(
       collection(firestore, `libraries/${LIBRARY_ID}/payments`),
@@ -46,9 +41,9 @@ export default function StudentDashboardPage() {
       orderBy('dueDate', 'desc')
     );
   }, [firestore, studentId]);
+  const { data: payments, isLoading: isLoadingPayments } = useCollection<Payment>(paymentsQuery);
 
-  // 3. Get student's upcoming seat bookings
-  const { data: bookings, isLoading: isLoadingBookings } = useCollection<SeatBooking>(() => {
+  const bookingsQuery = React.useMemo(() => {
     if (!firestore || !studentId) return null;
     return query(
         collection(firestore, `libraries/${LIBRARY_ID}/seatBookings`),
@@ -57,6 +52,7 @@ export default function StudentDashboardPage() {
         orderBy('endTime', 'asc')
     );
   }, [firestore, studentId]);
+  const { data: bookings, isLoading: isLoadingBookings } = useCollection<SeatBooking>(bookingsQuery);
 
   const upcomingPayment = React.useMemo(() => {
     return payments?.find(p => p.status === 'pending' || p.status === 'overdue');

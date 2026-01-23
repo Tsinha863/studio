@@ -1,6 +1,6 @@
 'use client';
     
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import {
   DocumentReference,
   onSnapshot,
@@ -27,16 +27,14 @@ export interface UseDocResult<T> {
 
 /**
  * React hook to subscribe to a single Firestore document in real-time.
- * It encapsulates memoization to prevent infinite loops from unstable query objects.
+ * It requires a memoized document reference to prevent infinite re-renders.
  *
  * @template T Optional type for document data. Defaults to any.
- * @param {() => DocumentReference | null | undefined} docRefFactory - A function that returns the Firestore DocumentReference.
- * @param {React.DependencyList} deps - Dependencies for the factory function, similar to `useMemo`.
+ * @param {DocumentReference | null | undefined} docRef - The memoized Firestore DocumentReference, created with React.useMemo.
  * @returns {UseDocResult<T>} Object with data, isLoading, error.
  */
 export function useDoc<T = any>(
-  docRefFactory: () => DocumentReference<DocumentData> | null | undefined,
-  deps: React.DependencyList = []
+  docRef: DocumentReference<DocumentData> | null | undefined,
 ): UseDocResult<T> {
   type StateDataType = WithId<T> | null;
 
@@ -44,10 +42,9 @@ export function useDoc<T = any>(
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<FirestoreError | null>(null);
 
-  const memoizedDocRef = useMemo(docRefFactory, deps);
-
   useEffect(() => {
-    if (!memoizedDocRef) {
+    // Critical guard: do nothing if the document reference isn't ready.
+    if (!docRef) {
       setData(null);
       setIsLoading(false);
       setError(null);
@@ -56,14 +53,15 @@ export function useDoc<T = any>(
 
     setIsLoading(true);
     setError(null);
-    setData(null);
+    setData(null); // Clear previous data
 
     const unsubscribe = onSnapshot(
-      memoizedDocRef,
+      docRef,
       (snapshot: DocumentSnapshot<DocumentData>) => {
         if (snapshot.exists()) {
           setData({ ...(snapshot.data() as T), id: snapshot.id });
         } else {
+          // Document does not exist.
           setData(null);
         }
         setError(null);
@@ -75,17 +73,21 @@ export function useDoc<T = any>(
         setIsLoading(false);
         
         if (serverError.code === 'permission-denied') {
-            const permissionError = new FirestorePermissionError({
-              path: memoizedDocRef.path,
-              operation: 'get',
-            });
-            errorEmitter.emit('permission-error', permissionError);
+            try {
+                const permissionError = new FirestorePermissionError({
+                  path: docRef.path,
+                  operation: 'get',
+                });
+                errorEmitter.emit('permission-error', permissionError);
+            } catch (e) {
+                // Prevent crash if error constructor fails.
+            }
         }
       }
     );
 
     return () => unsubscribe();
-  }, [memoizedDocRef]);
+  }, [docRef]); // Effect depends directly on the memoized docRef.
 
   return { data, isLoading, error };
 }

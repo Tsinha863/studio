@@ -114,8 +114,8 @@ export default function StudentsPage() {
     setAlertState({ isOpen: true, studentId: student.id, studentName: student.name }), []);
 
   const memoizedColumns = React.useMemo(
-    () => studentColumns({ openModal, openDeleteAlert, toast }), 
-    [openModal, openDeleteAlert, toast]
+    () => studentColumns({ openModal, openDeleteAlert }), 
+    [openModal, openDeleteAlert]
   );
 
   const table = useReactTable({
@@ -141,58 +141,42 @@ export default function StudentsPage() {
     setAlertState({ isOpen: false, studentId: undefined, studentName: undefined });
 
   const handleDeleteStudent = async () => {
-    if (!alertState.studentId || !user || !firestore) {
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'User not authenticated or student not found.',
-      });
-      return;
-    }
+    if (!alertState.studentId || !user || !firestore) return;
     
     setIsDeleting(true);
 
     try {
-        // Step 1: Query for the student's future bookings outside the transaction.
-        // It's not permitted to run queries inside a client-side Firestore transaction.
         const bookingsQuery = query(
             collection(firestore, `libraries/${LIBRARY_ID}/seatBookings`),
             where('studentId', '==', alertState.studentId),
             where('endTime', '>=', Timestamp.now())
         );
         const bookingsSnapshot = await getDocs(bookingsQuery);
-        const bookingRefsToDelete = bookingsSnapshot.docs.map(d => d.ref);
-
-        // Step 2: Run the atomic write operations in a transaction.
+        
         await runTransaction(firestore, async (transaction) => {
           const studentRef = doc(firestore, `libraries/${LIBRARY_ID}/students/${alertState.studentId!}`);
           const studentDoc = await transaction.get(studentRef);
 
           if (!studentDoc.exists()) {
-            throw new Error("Student not found. The operation cannot be completed.");
+            throw new Error("Student not found.");
           }
           
-          const studentData = studentDoc.data() as Student;
-
-          // Delete all the future seat bookings found in Step 1.
-          bookingRefsToDelete.forEach(bookingRef => {
-              transaction.delete(bookingRef);
+          bookingsSnapshot.docs.forEach(bookingDoc => {
+              transaction.delete(bookingDoc.ref);
           });
 
-          // Update the student's status to inactive.
           transaction.update(studentRef, {
             status: 'inactive',
             updatedAt: serverTimestamp(),
             lastInteractionAt: serverTimestamp(),
           });
 
-          // Create an activity log entry for this action.
           const logRef = doc(collection(firestore, `libraries/${LIBRARY_ID}/activityLogs`));
           transaction.set(logRef, {
             libraryId: LIBRARY_ID,
             user: { id: user.uid, name: user.displayName || 'Admin' },
             activityType: 'student_archived',
-            details: { studentId: alertState.studentId, studentName: studentData.name },
+            details: { studentId: alertState.studentId, studentName: studentDoc.data().name },
             timestamp: serverTimestamp(),
           });
         });
@@ -211,11 +195,6 @@ export default function StudentsPage() {
           });
           errorEmitter.emit('permission-error', permissionError);
         }
-        toast({
-            variant: 'destructive',
-            title: 'Error',
-            description: serverError instanceof Error ? serverError.message : 'Could not update the student status.',
-        });
     } finally {
         setIsDeleting(false);
     }

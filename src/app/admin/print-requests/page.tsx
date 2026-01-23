@@ -59,19 +59,17 @@ export default function PrintRequestsPage() {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
 
-  const { data: requests, isLoading, error } = useCollection<PrintRequest>(() => {
+  const requestsQuery = React.useMemo(() => {
     if (!firestore || !user) return null;
     return query(
       collection(firestore, `libraries/${LIBRARY_ID}/printRequests`),
       orderBy('createdAt', 'desc')
     );
   }, [firestore, user]);
+  const { data: requests, isLoading, error } = useCollection<PrintRequest>(requestsQuery);
 
   const handleStatusUpdate = React.useCallback(async (requestId: string, newStatus: 'Approved' | 'Rejected', reason?: string) => {
-    if (!user || !firestore) {
-      toast({ variant: 'destructive', title: 'Error', description: 'You must be logged in.' });
-      return;
-    }
+    if (!user || !firestore) return;
     
     setIsSubmitting(true);
     
@@ -113,11 +111,6 @@ export default function PrintRequestsPage() {
           });
           errorEmitter.emit('permission-error', permissionError);
         }
-        toast({
-          variant: 'destructive',
-          title: 'Update Failed',
-          description: serverError instanceof Error ? serverError.message : 'Could not update the request.',
-        });
     } finally {
         setIsSubmitting(false);
         if (newStatus === 'Rejected') {

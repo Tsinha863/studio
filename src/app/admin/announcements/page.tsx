@@ -85,13 +85,14 @@ export default function AnnouncementsPage() {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
 
-  const { data: announcements, isLoading, error } = useCollection<Announcement>(() => {
+  const announcementsQuery = React.useMemo(() => {
     if (!firestore || !user) return null;
     return query(
       collection(firestore, `libraries/${LIBRARY_ID}/announcements`),
       orderBy('createdAt', 'desc')
     );
   }, [firestore, user]);
+  const { data: announcements, isLoading, error } = useCollection<Announcement>(announcementsQuery);
 
   const openDeleteAlert = React.useCallback((announcement: AnnouncementWithId) =>
     setAlertState({ isOpen: true, announcementId: announcement.id }), []);
@@ -123,14 +124,7 @@ export default function AnnouncementsPage() {
     setAlertState({ isOpen: false, announcementId: undefined });
 
   const handleDelete = async () => {
-    if (!alertState.announcementId || !user || !firestore) {
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'User not authenticated or announcement not found.',
-      });
-      return;
-    }
+    if (!alertState.announcementId || !user || !firestore) return;
     
     setIsSubmitting(true);
     
@@ -164,11 +158,6 @@ export default function AnnouncementsPage() {
           });
           errorEmitter.emit('permission-error', permissionError);
         }
-        toast({
-          variant: 'destructive',
-          title: 'Deletion Failed',
-          description: serverError instanceof Error ? serverError.message : 'Could not delete the announcement.',
-        });
     } finally {
         setIsSubmitting(false);
     }

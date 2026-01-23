@@ -30,12 +30,11 @@ export default function SeatingPage() {
   const { firestore, user } = useFirebase();
   const { toast } = useToast();
 
-  const { data: rooms, isLoading: isLoadingRooms } = useCollection<Room>(() => {
+  const roomsQuery = React.useMemo(() => {
     if (!firestore || !user) return null;
-    return query(
-      collection(firestore, `libraries/${LIBRARY_ID}/rooms`)
-    );
+    return query(collection(firestore, `libraries/${LIBRARY_ID}/rooms`));
   }, [firestore, user]);
+  const { data: rooms, isLoading: isLoadingRooms } = useCollection<Room>(roomsQuery);
 
   const onRoomCreated = () => {
     toast({ title: 'Room Created', description: 'The new room has been added.' });

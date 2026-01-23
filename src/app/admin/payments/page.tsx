@@ -81,13 +81,14 @@ export default function PaymentsPage() {
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
 
-  const { data: payments, isLoading: isLoadingPayments, error } = useCollection<Payment>(() => {
+  const paymentsQuery = React.useMemo(() => {
     if (!firestore || !user) return null;
     return query(
       collection(firestore, `libraries/${LIBRARY_ID}/payments`),
       orderBy('dueDate', 'desc')
     );
   }, [firestore, user]);
+  const { data: payments, isLoading: isLoadingPayments, error } = useCollection<Payment>(paymentsQuery);
   
   const handleMarkAsPaid = React.useCallback((payment: PaymentWithId) => {
     if (!user || !firestore || !payment.studentId) {
@@ -184,11 +185,6 @@ export default function PaymentsPage() {
         });
         errorEmitter.emit('permission-error', permissionError);
       }
-      toast({
-        variant: 'destructive',
-        title: 'Transaction Error',
-        description: serverError instanceof Error ? serverError.message : 'Could not process payment.',
-      });
     }).finally(() => {
       setIsPaying(false);
     });
@@ -311,11 +307,6 @@ export default function PaymentsPage() {
         });
         errorEmitter.emit('permission-error', permissionError);
       }
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: serverError instanceof Error ? serverError.message : "Could not create payments.",
-      });
     } finally {
       setIsCreating(false);
     }

@@ -63,16 +63,15 @@ export default function SuggestionsPage() {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
 
-  // --- Data Fetching ---
-  const { data: suggestions, isLoading: isLoadingSuggestions, error } = useCollection<Suggestion>(() => {
+  const suggestionsQuery = React.useMemo(() => {
     if (!firestore || !user) return null;
     return query(
       collection(firestore, `libraries/${LIBRARY_ID}/suggestions`),
       orderBy('createdAt', 'desc')
     );
   }, [firestore, user]);
+  const { data: suggestions, isLoading: isLoadingSuggestions, error } = useCollection<Suggestion>(suggestionsQuery);
   
-  // --- Data Processing ---
   const suggestionsWithDetails = React.useMemo(() => {
     if (!suggestions) return [];
     return suggestions.map((s) => ({
@@ -81,12 +80,8 @@ export default function SuggestionsPage() {
     }));
   }, [suggestions]);
 
-  // --- Handlers ---
   const handleStatusChange = React.useCallback(async (suggestionId: string, status: Suggestion['status']) => {
-    if (!user || !firestore) {
-      toast({ variant: 'destructive', title: 'Error', description: 'You must be logged in to perform this action.'});
-      return;
-    }
+    if (!user || !firestore) return;
 
     const suggestionRef = doc(firestore, `libraries/${LIBRARY_ID}/suggestions/${suggestionId}`);
     const payload = {
@@ -109,11 +104,6 @@ export default function SuggestionsPage() {
           });
           errorEmitter.emit('permission-error', permissionError);
         }
-        toast({
-          variant: 'destructive',
-          title: 'Update Failed',
-          description: serverError instanceof Error ? serverError.message : "The status could not be updated.",
-        });
     }
   }, [user, firestore, toast]);
 
@@ -123,10 +113,7 @@ export default function SuggestionsPage() {
   const closeDeleteAlert = () => setAlertState({ isOpen: false, suggestionId: undefined });
 
   const handleDelete = async () => {
-    if (!alertState.suggestionId || !user || !firestore) {
-      toast({ variant: 'destructive', title: 'Error', description: 'User not authenticated or suggestion not found.'});
-      return;
-    }
+    if (!alertState.suggestionId || !user || !firestore) return;
     
     setIsSubmitting(true);
 
@@ -160,11 +147,6 @@ export default function SuggestionsPage() {
           });
           errorEmitter.emit('permission-error', permissionError);
         }
-        toast({
-          variant: 'destructive',
-          title: 'Deletion Failed',
-          description: serverError instanceof Error ? serverError.message : "Could not delete the suggestion.",
-        });
     } finally {
         setIsSubmitting(false);
     }
