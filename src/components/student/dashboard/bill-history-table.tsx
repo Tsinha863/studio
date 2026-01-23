@@ -22,22 +22,23 @@ import {
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
-import { columns as paymentHistoryColumns } from './payment-history-columns';
+import { columns as billHistoryColumns } from './bill-history-columns';
+import type { Bill } from '@/lib/types';
 
-interface DataTableProps<TData, TValue> {
-  payments: TData[];
+interface DataTableProps<TData extends Bill, TValue> {
+  bills: TData[];
   isLoading?: boolean;
 }
 
-export function PaymentHistoryTable<TData, TValue>({
-  payments,
+export function BillHistoryTable<TData extends Bill, TValue>({
+  bills,
   isLoading,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([]);
 
   const table = useReactTable({
-    data: payments,
-    columns: paymentHistoryColumns as ColumnDef<TData, TValue>[],
+    data: bills,
+    columns: billHistoryColumns as ColumnDef<TData, TValue>[],
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     onSortingChange: setSorting,
@@ -50,8 +51,8 @@ export function PaymentHistoryTable<TData, TValue>({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Payment History</CardTitle>
-        <CardDescription>A record of all your past payments.</CardDescription>
+        <CardTitle>Billing History</CardTitle>
+        <CardDescription>A record of all your past bills.</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="rounded-md border">
@@ -78,7 +79,7 @@ export function PaymentHistoryTable<TData, TValue>({
               {isLoading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <TableRow key={i}>
-                    {paymentHistoryColumns.map((col, j) => (
+                    {billHistoryColumns.map((col, j) => (
                       <TableCell key={j}>
                         <Skeleton className="h-6 w-full" />
                       </TableCell>
@@ -104,10 +105,10 @@ export function PaymentHistoryTable<TData, TValue>({
               ) : (
                 <TableRow>
                   <TableCell
-                    colSpan={paymentHistoryColumns.length}
+                    colSpan={billHistoryColumns.length}
                     className="h-24 text-center"
                   >
-                    No payment history found.
+                    No billing history found.
                   </TableCell>
                 </TableRow>
               )}

@@ -15,13 +15,13 @@ export interface User {
 }
 
 export interface Student {
+  id: string;
   libraryId: string;
   userId?: string; // Optional link to a User account
   name: string;
   email: string;
   status: 'active' | 'at-risk' | 'inactive';
   fibonacciStreak: number;
-  paymentDue: number;
   lastInteractionAt: Timestamp;
   notes: Array<{ text: string; createdAt: Timestamp; authorId: string; authorName: string; }>;
   tags: string[];
@@ -29,16 +29,38 @@ export interface Student {
   updatedAt: Timestamp;
 }
 
-export interface Payment {
+export interface Bill {
+  id: string;
   libraryId: string;
-  studentId: string; // The custom student ID
+  studentId: string;
   studentName: string;
   bookingId?: string;
-  amount: number;
-  paymentDate: Timestamp | null; // Null if not paid
+  paymentId?: string;
+  lineItems: Array<{
+    description: string;
+    quantity: number;
+    unitPrice: number;
+    total: number;
+  }>;
+  subtotal: number;
+  taxes: number;
+  totalAmount: number;
+  status: 'Due' | 'Paid' | 'Overdue' | 'Cancelled';
+  issuedAt: Timestamp;
   dueDate: Timestamp;
-  status: 'paid' | 'pending' | 'overdue' | 'cancelled';
-  method: 'Online' | 'Cash';
+  paidAt?: Timestamp;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export interface Payment {
+  id: string;
+  libraryId: string;
+  studentId: string;
+  billId: string;
+  amount: number;
+  paymentDate: Timestamp;
+  method: 'Admin' | 'Cash' | 'Online';
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -46,6 +68,7 @@ export interface Payment {
 export type ExpenseCategory = 'rent' | 'utilities' | 'supplies' | 'salaries' | 'other';
 
 export interface Expense {
+  id: string;
   libraryId: string;
   description: string;
   amount: number;
@@ -69,6 +92,7 @@ export interface Room {
  * The document ID itself is the canonical, human-readable seat number (e.g., '1', '25').
  */
 export interface Seat {
+  id: string;
   libraryId: string;
   roomId: string;
   tier: 'basic' | 'standard' | 'premium';
@@ -88,7 +112,7 @@ export interface SeatBooking {
   duration: BookingDuration;
   seatTier: 'basic' | 'standard' | 'premium';
   status: 'active' | 'completed' | 'cancelled';
-  linkedPaymentId: string | null;
+  linkedBillId: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }

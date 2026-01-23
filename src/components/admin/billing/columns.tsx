@@ -8,16 +8,16 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { DataTableColumnHeader } from '@/components/admin/students/data-table-header';
 import { Spinner } from '@/components/spinner';
-import type { Payment } from '@/lib/types';
+import type { Bill } from '@/lib/types';
 
-type PaymentWithId = Payment & { id: string };
+type BillWithId = Bill & { id: string };
 
 type ColumnsConfig = {
-  handleMarkAsPaid: (payment: PaymentWithId) => void;
+  handleMarkAsPaid: (bill: BillWithId) => void;
   isPaying: string | false;
 };
 
-export const columns = ({ handleMarkAsPaid, isPaying }: ColumnsConfig): ColumnDef<PaymentWithId>[] => [
+export const columns = ({ handleMarkAsPaid, isPaying }: ColumnsConfig): ColumnDef<BillWithId>[] => [
   {
     accessorKey: 'studentName',
     header: ({ column }) => (
@@ -25,12 +25,12 @@ export const columns = ({ handleMarkAsPaid, isPaying }: ColumnsConfig): ColumnDe
     ),
   },
   {
-    accessorKey: 'amount',
+    accessorKey: 'totalAmount',
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Amount" />
     ),
     cell: ({ row }) => {
-      const amount = parseFloat(row.getValue('amount'));
+      const amount = parseFloat(row.getValue('totalAmount'));
       const formatted = new Intl.NumberFormat('en-IN', {
         style: 'currency',
         currency: 'INR',
@@ -58,23 +58,13 @@ export const columns = ({ handleMarkAsPaid, isPaying }: ColumnsConfig): ColumnDe
     },
   },
     {
-    accessorKey: 'paymentDate',
+    accessorKey: 'paidAt',
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Payment Date" />
+      <DataTableColumnHeader column={column} title="Paid On" />
     ),
     cell: ({ row }) => {
-      const date = row.original.paymentDate?.toDate();
+      const date = row.original.paidAt?.toDate();
       return date ? <span>{format(date, 'MMM d, yyyy')}</span> : <span className="text-muted-foreground">N/A</span>;
-    },
-    filterFn: (row, id, value) => {
-      const val = row.getValue(id) as Timestamp | null;
-      if (!value) return true;
-      if (!val) return false;
-      const rowDate = val.toDate();
-      const filterDate = value as Date;
-      return rowDate.getFullYear() === filterDate.getFullYear() &&
-             rowDate.getMonth() === filterDate.getMonth() &&
-             rowDate.getDate() === filterDate.getDate();
     },
   },
   {
@@ -85,9 +75,9 @@ export const columns = ({ handleMarkAsPaid, isPaying }: ColumnsConfig): ColumnDe
     cell: ({ row }) => {
       const status = row.original.status;
       const variant =
-        status === 'paid'
+        status === 'Paid'
           ? 'success'
-          : status === 'pending'
+          : status === 'Due'
           ? 'secondary'
           : 'destructive';
       return <Badge variant={variant} className="capitalize">{status}</Badge>;
@@ -99,19 +89,19 @@ export const columns = ({ handleMarkAsPaid, isPaying }: ColumnsConfig): ColumnDe
   {
     id: 'actions',
     cell: ({ row }) => {
-      const payment = row.original;
-      const isCurrentPaymentProcessing = isPaying === payment.id;
+      const bill = row.original;
+      const isCurrentBillProcessing = isPaying === bill.id;
 
       return (
         <Button
           type="button"
           variant="outline"
           size="sm"
-          onClick={() => handleMarkAsPaid(payment)}
-          disabled={payment.status === 'paid' || !!isPaying}
+          onClick={() => handleMarkAsPaid(bill)}
+          disabled={bill.status === 'Paid' || !!isPaying}
         >
-          {isCurrentPaymentProcessing && <Spinner className="mr-2 h-4 w-4" />}
-          {payment.status === 'paid' ? 'Paid' : 'Mark as Paid'}
+          {isCurrentBillProcessing && <Spinner className="mr-2 h-4 w-4" />}
+          {bill.status === 'Paid' ? 'Paid' : 'Mark as Paid'}
         </Button>
       );
     },

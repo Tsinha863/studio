@@ -15,6 +15,7 @@ import {
   Megaphone,
   Lightbulb,
   Printer,
+  Receipt,
 } from 'lucide-react';
 import {
   SidebarProvider,
@@ -124,10 +125,10 @@ function MainSidebar() {
                         </SidebarMenuButton>
                     </SidebarMenuItem>
                     <SidebarMenuItem>
-                        <SidebarMenuButton asChild tooltip="Payments" isActive={pathname === '/admin/payments'}>
-                            <Link href="/admin/payments">
-                                <CreditCard />
-                                <span>Payments</span>
+                        <SidebarMenuButton asChild tooltip="Billing" isActive={pathname.startsWith('/admin/billing')}>
+                            <Link href="/admin/billing">
+                                <Receipt />
+                                <span>Billing</span>
                             </Link>
                         </SidebarMenuButton>
                     </SidebarMenuItem>

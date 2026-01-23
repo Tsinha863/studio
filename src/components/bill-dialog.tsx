@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -19,33 +18,33 @@ import { ScrollArea } from './ui/scroll-area';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from './ui/dropdown-menu';
 import { Spinner } from './spinner';
 import { useToast } from '@/hooks/use-toast';
+import type { Bill } from '@/lib/types';
 
-interface ReceiptDialogProps {
+interface BillDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  receiptText?: string;
-  studentName?: string;
+  billText?: string;
+  bill?: Bill;
 }
 
-export function ReceiptDialog({
+export function BillDialog({
   isOpen,
   onClose,
-  receiptText,
-  studentName,
-}: ReceiptDialogProps) {
-  const receiptRef = React.useRef<HTMLPreElement>(null);
+  billText,
+  bill,
+}: BillDialogProps) {
+  const billRef = React.useRef<HTMLPreElement>(null);
   const [isExporting, setIsExporting] = React.useState(false);
   const { toast } = useToast();
 
   const handlePrint = () => {
     const printWindow = window.open('', '_blank');
     if (printWindow) {
-      printWindow.document.write('<html><head><title>Payment Receipt</title>');
+      printWindow.document.write('<html><head><title>Payment Bill</title>');
       printWindow.document.write('<style>body { font-family: monospace; white-space: pre-wrap; margin: 20px; }</style>');
       printWindow.document.write('</head><body>');
-      // Using innerHTML to preserve formatting from the <pre> tag
-      const receiptContent = receiptRef.current?.innerHTML || '';
-      printWindow.document.write(receiptContent);
+      const billContent = billRef.current?.innerHTML || '';
+      printWindow.document.write(billContent);
       printWindow.document.write('</body></html>');
       printWindow.document.close();
       printWindow.print();
@@ -53,29 +52,27 @@ export function ReceiptDialog({
   };
 
   const handleExport = async (format: 'pdf' | 'png') => {
-    if (!receiptRef.current) return;
+    if (!billRef.current) return;
     setIsExporting(true);
 
     try {
-        const canvas = await html2canvas(receiptRef.current, {
-            backgroundColor: '#ffffff', // Ensure a solid background
-            scale: 2, // Improve resolution
+        const canvas = await html2canvas(billRef.current, {
+            backgroundColor: '#ffffff',
+            scale: 2,
         });
         const imgData = canvas.toDataURL('image/png');
 
-        // Sanitize the filename to prevent any potential path traversal issues or DoS vectors.
-        const safeStudentName = (studentName || 'student')
-            .replace(/[^a-zA-Z0-9\s-]/g, '') // Allow only safe characters
+        const safeStudentName = (bill?.studentName || 'student')
+            .replace(/[^a-zA-Z0-9\s-]/g, '')
             .trim()
-            .replace(/\s+/g, '_') // Replace spaces with underscores
-            .slice(0, 50); // Truncate to prevent excessively long filenames.
-        const fileName = `receipt-${safeStudentName}-${Date.now()}`;
+            .replace(/\s+/g, '_')
+            .slice(0, 50);
+        const fileName = `bill-${safeStudentName}-${Date.now()}`;
 
         if (format === 'pdf') {
             const pdf = new jsPDF({
                 orientation: 'portrait',
                 unit: 'px',
-                // Set format to the size of the captured canvas
                 format: [canvas.width, canvas.height]
             });
             pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
@@ -98,15 +95,14 @@ export function ReceiptDialog({
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Payment Receipt</DialogTitle>
+          <DialogTitle>Payment Bill</DialogTitle>
           <DialogDescription>
-            A simulated receipt for {studentName}'s recent payment.
+            A bill for {bill?.studentName}'s recent payment.
           </DialogDescription>
         </DialogHeader>
         <ScrollArea className="h-72 w-full rounded-md border">
-            {/* The ref is attached here to the element we want to capture */}
-            <pre ref={receiptRef} className="text-sm whitespace-pre-wrap font-code bg-white p-4 text-black">
-                {receiptText}
+            <pre ref={billRef} className="text-sm whitespace-pre-wrap font-code bg-white p-4 text-black">
+                {billText}
             </pre>
         </ScrollArea>
         <DialogFooter className='sm:justify-between flex-wrap gap-2'>

@@ -4,10 +4,10 @@ import { ColumnDef } from '@tanstack/react-table';
 import { format } from 'date-fns';
 
 import { Badge } from '@/components/ui/badge';
-import type { Payment } from '@/lib/types';
+import type { Bill } from '@/lib/types';
 import { DataTableColumnHeader } from '@/components/admin/students/data-table-header';
 
-export const columns: ColumnDef<Payment>[] = [
+export const columns: ColumnDef<Bill>[] = [
   {
     accessorKey: 'dueDate',
     header: ({ column }) => (
@@ -19,22 +19,22 @@ export const columns: ColumnDef<Payment>[] = [
     },
   },
   {
-    accessorKey: 'paymentDate',
+    accessorKey: 'paidAt',
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Paid On" />
     ),
     cell: ({ row }) => {
-      const date = row.original.paymentDate?.toDate();
+      const date = row.original.paidAt?.toDate();
       return date ? <span>{format(date, 'MMM d, yyyy')}</span> : <span className="text-muted-foreground">N/A</span>;
     },
   },
   {
-    accessorKey: 'amount',
+    accessorKey: 'totalAmount',
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Amount" />
     ),
     cell: ({ row }) => {
-      const amount = parseFloat(row.getValue('amount'));
+      const amount = parseFloat(row.getValue('totalAmount'));
       const formatted = new Intl.NumberFormat('en-IN', {
         style: 'currency',
         currency: 'INR',
@@ -50,9 +50,9 @@ export const columns: ColumnDef<Payment>[] = [
     cell: ({ row }) => {
       const status = row.original.status;
       const variant =
-        status === 'paid'
+        status === 'Paid'
           ? 'success'
-          : status === 'pending'
+          : status === 'Due'
           ? 'secondary'
           : 'destructive';
       return <Badge variant={variant} className="capitalize">{status}</Badge>;

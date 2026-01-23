@@ -26,26 +26,38 @@ service cloud.firestore {
 
     // Users: Can read/write their own user object. No one can list.
     match /libraries/{libraryId}/users/{userId} {
-      allow read, write: if isOwner(userId);
-      allow list: if false;
+      allow get: if isOwner(userId) || isAdmin(libraryId);
+      allow list: if isAdmin(libraryId);
+      allow write: if isOwner(userId);
     }
 
     // Students: Admins manage fully. Students can read their own profile.
     match /libraries/{libraryId}/students/{studentId} {
-      allow read: if isLibraryUser(libraryId);
+      allow get: if isLibraryUser(libraryId) && (isAdmin(libraryId) || isOwner(studentId));
+      allow list: if isAdmin(libraryId);
       allow write: if isAdmin(libraryId);
     }
     
     // Seat Bookings: Library users can read. Admins can write.
     match /libraries/{libraryId}/seatBookings/{bookingId} {
-        allow read: if isLibraryUser(libraryId);
+        allow get: if isLibraryUser(libraryId) && (isAdmin(libraryId) || resource.data.studentId == request.auth.uid);
+        allow list: if isAdmin(libraryId);
         allow write: if isAdmin(libraryId);
     }
-
-    // Payments: Admins manage. Library users can read.
-    match /libraries/{libraryId}/payments/{paymentId} {
-      allow read: if isLibraryUser(libraryId);
+    
+    // Bills: Admins manage. Students can read their own.
+    match /libraries/{libraryId}/bills/{billId} {
+      allow get: if isLibraryUser(libraryId) && (isAdmin(libraryId) || resource.data.studentId == request.auth.uid);
+      allow list: if isAdmin(libraryId);
       allow write: if isAdmin(libraryId);
+    }
+
+    // Payments: Admins can create. Students can read their own.
+    match /libraries/{libraryId}/payments/{paymentId} {
+      allow get: if isLibraryUser(libraryId) && (isAdmin(libraryId) || resource.data.studentId == request.auth.uid);
+      allow list: if isAdmin(libraryId);
+      allow create: if isAdmin(libraryId);
+      allow update, delete: if false; // Payments are immutable
     }
 
     // Expenses: Only Admins can C/R/U/D.
@@ -72,14 +84,16 @@ service cloud.firestore {
 
     // Suggestions: Students create their own. Admins can manage all.
     match /libraries/{libraryId}/suggestions/{suggestionId} {
-      allow read: if isLibraryUser(libraryId);
+      allow get: if isLibraryUser(libraryId) && (isAdmin(libraryId) || resource.data.studentId == request.auth.uid);
+      allow list: if isAdmin(libraryId);
       allow create: if isOwner(request.resource.data.studentId);
       allow update, delete: if isAdmin(libraryId);
     }
 
     // Print Requests: Students create their own. Admins can manage all.
     match /libraries/{libraryId}/printRequests/{printRequestId} {
-      allow read: if isLibraryUser(libraryId);
+      allow get: if isLibraryUser(libraryId) && (isAdmin(libraryId) || resource.data.studentId == request.auth.uid);
+      allow list: if isAdmin(libraryId);
       allow create: if isOwner(request.resource.data.studentId);
       allow update, delete: if isAdmin(libraryId);
     }

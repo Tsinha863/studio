@@ -120,10 +120,6 @@
             "inactive"
           ]
         },
-        "paymentDue": {
-          "type": "number",
-          "description": "Amount the student still needs to pay."
-        },
         "fibonacciStreak": {
           "type": "number",
           "description": "Consecutive on-time payment streak."
@@ -189,11 +185,98 @@
         "updatedAt"
       ]
     },
+    "Bill": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Bill",
+      "type": "object",
+      "description": "Represents a bill for a student, generated for a booking or other services.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Bill entity."
+        },
+        "libraryId": {
+          "type": "string",
+          "description": "Reference to Library."
+        },
+        "studentId": {
+          "type": "string",
+          "description": "Reference to Student."
+        },
+        "studentName": {
+          "type": "string",
+          "description": "Denormalized student name."
+        },
+        "bookingId": {
+          "type": "string",
+          "description": "Optional reference to a SeatBooking."
+        },
+        "paymentId": {
+          "type": "string",
+          "description": "Reference to the associated Payment, set once paid."
+        },
+        "lineItems": {
+          "type": "array",
+          "description": "Itemized list of charges on the bill.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "description": { "type": "string" },
+              "quantity": { "type": "number" },
+              "unitPrice": { "type": "number" },
+              "total": { "type": "number" }
+            },
+            "required": ["description", "quantity", "unitPrice", "total"]
+          }
+        },
+        "subtotal": {
+          "type": "number",
+          "description": "The total amount before taxes."
+        },
+        "taxes": {
+          "type": "number",
+          "description": "Optional taxes applied to the bill."
+        },
+        "totalAmount": {
+          "type": "number",
+          "description": "The final amount to be paid."
+        },
+        "status": {
+          "type": "string",
+          "description": "The payment status of the bill.",
+          "enum": ["Due", "Paid", "Overdue", "Cancelled"]
+        },
+        "issuedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when the bill was issued."
+        },
+         "dueDate": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when the bill is due."
+        },
+        "paidAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when the bill was paid."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "libraryId", "studentId", "studentName", "lineItems", "subtotal", "totalAmount", "status", "issuedAt", "dueDate", "createdAt", "updatedAt"]
+    },
     "Payment": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Payment",
       "type": "object",
-      "description": "Represents a payment made by a student.",
+      "description": "Represents a payment transaction made by a student against a bill.",
       "properties": {
         "id": {
           "type": "string",
@@ -201,19 +284,15 @@
         },
         "libraryId": {
           "type": "string",
-          "description": "Reference to Library. (Relationship: Library 1:N Payment). Identifies the library to which the payment belongs."
+          "description": "Reference to Library."
         },
         "studentId": {
           "type": "string",
-          "description": "Reference to Student. (Relationship: Student 1:N Payment). Identifies the student who made the payment."
+          "description": "Reference to Student."
         },
-        "studentName": {
+        "billId": {
           "type": "string",
-          "description": "Denormalized name of the student for easier display."
-        },
-        "bookingId": {
-          "type": "string",
-          "description": "Optional reference to a seat booking document."
+          "description": "Reference to the Bill this payment settles."
         },
         "amount": {
           "type": "number",
@@ -224,24 +303,9 @@
           "description": "Date the payment was made.",
           "format": "date-time"
         },
-        "dueDate": {
-          "type": "string",
-          "description": "Date the payment is due.",
-          "format": "date-time"
-        },
-        "status": {
-          "type": "string",
-          "description": "Status of the payment.",
-          "enum": [
-            "paid",
-            "pending",
-            "overdue",
-            "cancelled"
-          ]
-        },
         "method": {
           "type": "string",
-          "description": "Method of payment (e.g., 'credit card', 'cash')."
+          "description": "Method of payment (e.g., 'Credit Card', 'Cash', 'Admin')."
         },
         "createdAt": {
           "type": "string",
@@ -258,10 +322,10 @@
         "id",
         "libraryId",
         "studentId",
-        "studentName",
+        "billId",
         "amount",
-        "dueDate",
-        "status",
+        "paymentDate",
+        "method",
         "createdAt",
         "updatedAt"
       ]
@@ -467,9 +531,9 @@
             "cancelled"
           ]
         },
-        "linkedPaymentId": {
+        "linkedBillId": {
           "type": "string",
-          "description": "Optional reference to a payment document."
+          "description": "Reference to the Bill generated for this booking."
         },
         "createdAt": {
           "type": "string",
@@ -494,6 +558,7 @@
         "duration",
         "seatTier",
         "status",
+        "linkedBillId",
         "createdAt",
         "updatedAt"
       ]
@@ -794,13 +859,33 @@
         }
       },
       {
+        "path": "libraries/{libraryId}/bills/{billId}",
+        "definition": {
+          "entityName": "Bill",
+          "schema": {
+            "$ref": "#/backend/entities/Bill"
+          },
+          "description": "Stores bills for students. This is the source of truth for amounts due.",
+          "params": [
+            {
+              "name": "libraryId",
+              "description": "Unique identifier for the library."
+            },
+            {
+              "name": "billId",
+              "description": "Unique identifier for the bill."
+            }
+          ]
+        }
+      },
+      {
         "path": "libraries/{libraryId}/payments/{paymentId}",
         "definition": {
           "entityName": "Payment",
           "schema": {
             "$ref": "#/backend/entities/Payment"
           },
-          "description": "Stores payment information. Includes the 'libraryId' for authorization independence.",
+          "description": "Stores payment transaction records. Includes the 'libraryId' for authorization independence.",
           "params": [
             {
               "name": "libraryId",
