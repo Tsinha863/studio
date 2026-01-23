@@ -14,7 +14,6 @@ import {
 } from 'firebase/auth';
 import { FirebaseError } from 'firebase/app';
 import { ArrowLeft } from 'lucide-react';
-import { writeBatch, doc, serverTimestamp } from 'firebase/firestore';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -40,6 +39,7 @@ import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Logo } from '@/components/logo';
 import { Spinner } from '@/components/spinner';
 import { LIBRARY_ID } from '@/lib/config';
+import { ensureStudentProfile, ensureUserProfile } from '@/firebase/auth/ensure-user-profile';
 
 const loginSchema = z.object({
   email: z.string().email({ message: 'Please enter a valid email address.' }),
@@ -94,74 +94,71 @@ function LoginForm() {
     try {
       // 1. Attempt to sign in.
       await signInWithEmailAndPassword(auth, email, password);
-      // The FirebaseProvider will handle profile healing if needed.
-      router.push('/loading');
     } catch (error) {
-      // 2. If user does not exist, create them. The provider will handle the profile.
+      // 2. If user does not exist, create them.
       if (
         error instanceof FirebaseError &&
         (error.code === 'auth/user-not-found' ||
           error.code === 'auth/invalid-credential')
       ) {
         try {
-          const userCredential = await createUserWithEmailAndPassword(
-            auth,
-            email,
-            password
-          );
-          const { user } = userCredential;
-
-          const determinedRole = email === DEMO_ADMIN_EMAIL ? 'libraryOwner' : 'student';
-          const name = determinedRole === 'libraryOwner' ? 'Admin' : 'Student';
-
-          const batch = writeBatch(firestore);
-
-          // Create User profile
-          const userDocRef = doc(firestore, `libraries/${LIBRARY_ID}/users`, user.uid);
-          batch.set(userDocRef, {
-            id: user.uid,
-            name: name,
-            email: user.email,
-            role: determinedRole,
-            libraryId: LIBRARY_ID,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          });
-
-          // Create Student profile if role is student
-          if (determinedRole === 'student') {
-            const studentRef = doc(
-              firestore,
-              `libraries/${LIBRARY_ID}/students`,
-              user.uid
-            );
-            batch.set(studentRef, {
-              libraryId: LIBRARY_ID,
-              userId: user.uid,
-              name: name,
-              email: user.email,
-              status: 'active',
-              fibonacciStreak: 0,
-              paymentDue: 0,
-              notes: [],
-              tags: [],
-              lastInteractionAt: serverTimestamp(),
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp(),
-            });
-          }
-          await batch.commit();
-          await updateProfile(user, { displayName: name });
-          router.push('/loading');
+          await createUserWithEmailAndPassword(auth, email, password);
         } catch (creationError) {
-          handleAuthError(creationError, 'Could not set up demo account.');
+          handleAuthError(
+            creationError,
+            'Could not set up demo account.'
+          );
+          setIsDemoLoading(null);
+          return;
         }
       } else {
         // Handle other sign-in errors
         handleAuthError(error);
+        setIsDemoLoading(null);
+        return;
       }
-    } finally {
+    }
+
+    // 3. At this point, a user is guaranteed to be authenticated.
+    // Now, idempotently ensure their profile exists in Firestore.
+    const user = auth.currentUser;
+    if (!user) {
+      handleAuthError(new Error('Authentication failed unexpectedly.'));
       setIsDemoLoading(null);
+      return;
+    }
+    
+    const determinedRole = role === 'admin' ? 'libraryOwner' : 'student';
+    const name = role === 'admin' ? 'Admin' : 'Student';
+    
+    try {
+        if (!user.displayName) {
+          await updateProfile(user, { displayName: name });
+        }
+    
+        await ensureUserProfile({
+          uid: user.uid,
+          name: name,
+          email: user.email,
+          role: determinedRole,
+          libraryId: LIBRARY_ID,
+          firestore,
+        });
+    
+        if (determinedRole === 'student') {
+          await ensureStudentProfile({
+            uid: user.uid,
+            name: name,
+            email: user.email,
+            libraryId: LIBRARY_ID,
+            firestore,
+          });
+        }
+    
+        router.push('/loading');
+    } catch(profileError) {
+        handleAuthError(profileError, "Failed to create user profile.");
+        setIsDemoLoading(null);
     }
   };
 

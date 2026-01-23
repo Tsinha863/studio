@@ -6,7 +6,7 @@ import { collection, query, where, Timestamp } from 'firebase/firestore';
 import { User as UserIcon, Calendar as CalendarIcon } from 'lucide-react';
 import { format } from 'date-fns';
 
-import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
+import { useCollection, useFirebase } from '@/firebase';
 import type { Seat, Student, SeatBooking } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -44,19 +44,19 @@ export function SeatingPlan({ libraryId, roomId }: SeatingPlanProps) {
   const [isBookingDialogOpen, setIsBookingDialogOpen] = React.useState(false);
 
   // --- Data Fetching ---
-  const seatsQuery = useMemoFirebase(() => {
+  const seatsQuery = React.useMemo(() => {
     if (!firestore || !user || !roomId) return null;
     return query(collection(firestore, `libraries/${libraryId}/rooms/${roomId}/seats`));
   }, [firestore, user, libraryId, roomId]);
   const { data: seats, isLoading: isLoadingSeats } = useCollection<Seat>(seatsQuery);
 
-  const studentsQuery = useMemoFirebase(() => {
+  const studentsQuery = React.useMemo(() => {
     if (!firestore || !user) return null;
     return collection(firestore, `libraries/${libraryId}/students`);
   }, [firestore, user, libraryId]);
   const { data: students, isLoading: isLoadingStudents } = useCollection<Student>(studentsQuery);
 
-  const bookingsQuery = useMemoFirebase(() => {
+  const bookingsQuery = React.useMemo(() => {
     if (!firestore || !user || !roomId) return null;
     const startOfDay = new Date(selectedDate);
     startOfDay.setHours(0, 0, 0, 0);
