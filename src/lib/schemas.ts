@@ -67,35 +67,12 @@ export const signupSchema = z
       .string()
       .min(8, { message: 'Password must be at least 8 characters long.' }),
     confirmPassword: z.string(),
-    role: z.enum(['student', 'libraryOwner'], {
-      required_error: 'You must select a role.',
-    }),
-    libraryName: z.string().optional(),
-    libraryAddress: z.string().optional(),
+    libraryName: z.string().min(3, 'Library name must be at least 3 characters.'),
+    libraryAddress: z.string().min(10, 'Library address must be at least 10 characters.'),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords don't match",
     path: ['confirmPassword'],
-  })
-  .superRefine((data, ctx) => {
-    if (data.role === 'libraryOwner') {
-      if (!data.libraryName || data.libraryName.length < 3) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'Library name must be at least 3 characters.',
-          path: ['libraryName'],
-        });
-      }
-      if (!data.libraryAddress || data.libraryAddress.length < 10) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'Library address must be at least 10 characters.',
-          path: ['libraryAddress'],
-        });
-      }
-    }
   });
 
 export type SignupFormValues = z.infer<typeof signupSchema>;
-
-    
