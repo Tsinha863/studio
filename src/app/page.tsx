@@ -45,8 +45,8 @@ export default function WelcomePage() {
                 </Link>
             </Button>
             <Button asChild>
-              <Link href="/signup">
-                Sign Up Free <ArrowRight className="ml-2 h-4 w-4" />
+              <Link href="/join">
+                Sign Up <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
             </Button>
           </nav>
@@ -137,7 +137,7 @@ export default function WelcomePage() {
             </p>
             <div className="mt-8">
               <Button size="lg" asChild>
-                <Link href="/login">
+                <Link href="/join">
                   Get Started for Free
                 </Link>
               </Button>

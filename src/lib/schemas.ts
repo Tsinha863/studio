@@ -76,3 +76,28 @@ export const signupSchema = z
   });
 
 export type SignupFormValues = z.infer<typeof signupSchema>;
+
+export const studentSignupSchema = z
+  .object({
+    name: z
+      .string()
+      .min(2, { message: 'Name must be at least 2 characters long.' }),
+    email: z.string().email({ message: 'Please enter a valid email address.' }),
+    password: z
+      .string()
+      .min(8, { message: 'Password must be at least 8 characters long.' }),
+    confirmPassword: z.string(),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords don't match",
+    path: ['confirmPassword'],
+  });
+
+export type StudentSignupFormValues = z.infer<typeof studentSignupSchema>;
+
+
+export const inviteCodeSchema = z.object({
+    inviteCode: z.string().min(6, 'Invite code must be at least 6 characters.'),
+});
+
+export type InviteCodeFormValues = z.infer<typeof inviteCodeSchema>;

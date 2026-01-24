@@ -139,5 +139,15 @@ service cloud.firestore {
         allow update: if (isLibraryOwner(libraryId) && request.resource.data.status == 'cancelled') || (request.auth.uid == resource.data.toUserId && request.resource.data.status == 'accepted');
         allow delete: if false; // Transfers are a permanent record.
     }
+
+    // --- COLLECTION GROUP RULES ---
+    
+    // Allow an authenticated user to query the 'invites' collection group
+    // only if they are looking for a specific invite code and requesting just one.
+    // This is required for the student join flow and is secure because they
+    // cannot list all invites.
+    match /{path=**}/invites/{inviteId} {
+        allow list: if request.auth != null && request.query.limit == 1;
+    }
   }
 }

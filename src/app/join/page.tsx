@@ -12,9 +12,8 @@ import {
   updateProfile,
 } from 'firebase/auth';
 import { FirebaseError } from 'firebase/app';
-import { writeBatch, doc, serverTimestamp, collection } from 'firebase/firestore';
 
-import { signupSchema, type SignupFormValues } from '@/lib/schemas';
+import { studentSignupSchema, type StudentSignupFormValues } from '@/lib/schemas';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -39,20 +38,18 @@ import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Logo } from '@/components/logo';
 import { Spinner } from '@/components/spinner';
 
-function SignupForm() {
+function StudentSignupForm() {
   const router = useRouter();
   const { toast } = useToast();
-  const { auth, firestore } = useFirebase();
+  const { auth } = useFirebase();
 
-  const form = useForm<SignupFormValues>({
-    resolver: zodResolver(signupSchema),
+  const form = useForm<StudentSignupFormValues>({
+    resolver: zodResolver(studentSignupSchema),
     defaultValues: {
       name: '',
       email: '',
       password: '',
       confirmPassword: '',
-      libraryName: '',
-      libraryAddress: '',
     },
   });
 
@@ -60,66 +57,27 @@ function SignupForm() {
     formState: { isSubmitting },
   } = form;
 
-  const onSubmit = async (data: SignupFormValues) => {
-    if (!auth || !firestore) {
+  const onSubmit = async (data: StudentSignupFormValues) => {
+    if (!auth) {
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: 'Firebase service is not available. Please try again later.',
+        description: 'Firebase service is not available.',
       });
       return;
     }
 
     try {
-      // 1. Create user in Firebase Auth.
       const userCredential = await createUserWithEmailAndPassword(
         auth,
         data.email,
         data.password
       );
-      const { user } = userCredential;
+      await updateProfile(userCredential.user, { displayName: data.name });
 
-      // 2. Update the auth profile's display name for consistency.
-      await updateProfile(user, { displayName: data.name });
-
-      // 3. Atomically create all necessary Firestore documents for the new Library Owner.
-      const batch = writeBatch(firestore);
-
-      // Create a new library for the admin
-      const newLibraryRef = doc(collection(firestore, 'libraries'));
-      const newLibraryId = newLibraryRef.id;
-
-      // a. Library Document
-      batch.set(newLibraryRef, {
-        id: newLibraryId,
-        name: data.libraryName,
-        address: data.libraryAddress,
-        ownerId: user.uid,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-
-      // b. User-to-Library Mapping (for quick login resolution)
-      const userMappingRef = doc(firestore, 'users', user.uid);
-      batch.set(userMappingRef, { libraryId: newLibraryId });
-
-      // c. Admin User Profile (inside the new library)
-      const userProfileRef = doc(firestore, `libraries/${newLibraryId}/users`, user.uid);
-      batch.set(userProfileRef, {
-          id: user.uid,
-          name: data.name,
-          email: data.email,
-          role: 'libraryOwner',
-          libraryId: newLibraryId,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-      });
-
-      // Commit the atomic write.
-      await batch.commit();
-
-      // 4. Redirect to loading page, which will resolve role and redirect to dashboard.
-      router.push('/loading');
+      // After successful auth account creation, redirect to the next step
+      // where they will enter their invite code to join a library.
+      router.push('/join/library');
 
     } catch (error) {
       let title = 'Sign-up failed';
@@ -130,7 +88,7 @@ function SignupForm() {
           case 'auth/email-already-in-use':
             title = 'Email in Use';
             description =
-              'This email address is already associated with an account.';
+              'This email address is already associated with an account. Please log in instead.';
             break;
           case 'auth/weak-password':
             title = 'Weak Password';
@@ -160,57 +118,22 @@ function SignupForm() {
               <Logo />
             </Link>
             <CardTitle className="font-headline text-2xl">
-              Create a New Library
+              Student Account Creation
             </CardTitle>
             <CardDescription>
-              Enter your details below to create your library and admin account.
+              Create your account, then join your library with an invite code.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
             <FormField
               control={form.control}
-              name="libraryName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Library Name</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="e.g., Central City Library"
-                      {...field}
-                      disabled={isSubmitting}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="libraryAddress"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Library Address</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="e.g., 123 Main St, Central City"
-                      {...field}
-                      disabled={isSubmitting}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Your Full Name</FormLabel>
+                  <FormLabel>Full Name</FormLabel>
                   <FormControl>
                     <Input
-                      placeholder="John Doe"
+                      placeholder="Jane Doe"
                       {...field}
                       disabled={isSubmitting}
                     />
@@ -224,7 +147,7 @@ function SignupForm() {
               name="email"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Your Email (for login)</FormLabel>
+                  <FormLabel>Email</FormLabel>
                   <FormControl>
                     <Input
                       placeholder="name@example.com"
@@ -254,7 +177,7 @@ function SignupForm() {
                 </FormItem>
               )}
             />
-            <FormField
+             <FormField
               control={form.control}
               name="confirmPassword"
               render={({ field }) => (
@@ -279,9 +202,15 @@ function SignupForm() {
               {isSubmitting ? 'Creating Account...' : 'Create Account'}
             </Button>
             <div className="text-center text-sm text-muted-foreground">
-              Are you a student?{' '}
-              <Link href="/join" className="text-primary hover:underline">
-                Join with an invite code.
+              Already have an account?{' '}
+              <Link href="/login" className="text-primary hover:underline">
+                Sign In
+              </Link>
+            </div>
+             <div className="text-center text-sm text-muted-foreground">
+              Are you an Admin?{' '}
+              <Link href="/signup" className="text-primary hover:underline">
+                Create a library.
               </Link>
             </div>
           </CardFooter>
@@ -291,7 +220,7 @@ function SignupForm() {
   );
 }
 
-export default function SignupPage() {
+export default function JoinPage() {
   const heroImage = PlaceHolderImages.find((p) => p.id === 'login-hero');
 
   return (
@@ -303,7 +232,7 @@ export default function SignupPage() {
             Back to Welcome
           </Button>
         </Link>
-        <SignupForm />
+        <StudentSignupForm />
       </div>
       <div className="relative hidden w-1/2 flex-col justify-between bg-primary p-12 text-primary-foreground lg:flex">
         {heroImage && (
