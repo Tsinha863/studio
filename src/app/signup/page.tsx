@@ -276,12 +276,12 @@ function SignupForm() {
           <CardFooter className="flex flex-col gap-4">
             <Button type="submit" className="w-full" disabled={isSubmitting}>
               {isSubmitting ? <Spinner className="mr-2" /> : null}
-              {isSubmitting ? 'Creating Account...' : 'Create Account'}
+              {isSubmitting ? 'Creating Library...' : 'Create Library & Account'}
             </Button>
             <div className="text-center text-sm text-muted-foreground">
               Are you a student?{' '}
               <Link href="/join" className="text-primary hover:underline">
-                Join with an invite code.
+                Join with an invite code
               </Link>
             </div>
           </CardFooter>

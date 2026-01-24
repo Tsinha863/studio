@@ -14,6 +14,8 @@ import {
     doc,
     serverTimestamp,
     Timestamp,
+    getDoc,
+    type DocumentReference,
 } from 'firebase/firestore';
 
 import { inviteCodeSchema, type InviteCodeFormValues } from '@/lib/schemas';
@@ -37,9 +39,7 @@ import {
 } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
 import { useFirebase } from '@/firebase';
-import { AuthGuard } from '@/components/auth/auth-guard';
 import { Spinner } from '@/components/spinner';
-import { ensureStudentProfile, ensureUserProfile } from '@/firebase/auth/ensure-user-profile';
 
 
 function JoinLibraryForm() {
@@ -61,53 +61,62 @@ function JoinLibraryForm() {
     }
 
     try {
-        // 1. Find the invite document
-        const invitesRef = collectionGroup(firestore, 'invites');
-        const q = query(invitesRef, where('inviteCode', '==', data.inviteCode), where('used', '==', false));
-        const querySnapshot = await getDocs(q);
-
-        if (querySnapshot.empty) {
-            throw new Error('Invalid or already used invite code.');
+        const userMappingSnap = await getDoc(doc(firestore, 'users', user.uid));
+        if (userMappingSnap.exists()) {
+            toast({ title: "Already Joined", description: "Your account is already part of a library." });
+            router.push('/loading');
+            return;
         }
 
-        const inviteDoc = querySnapshot.docs[0];
-        const invite = inviteDoc.data() as Invite;
+        let libraryId: string;
+        let inviteToUpdateRef: DocumentReference | null = null;
         
-        // 2. Validate the invite
-        if (invite.expiresAt.toDate() < new Date()) {
-            throw new Error('This invite code has expired.');
+        if (data.inviteCode.toUpperCase() === 'DEMO') {
+            libraryId = 'library1';
+        } else {
+            const invitesRef = collectionGroup(firestore, 'invites');
+            const q = query(invitesRef, where('inviteCode', '==', data.inviteCode), where('used', '==', false));
+            const querySnapshot = await getDocs(q);
+
+            if (querySnapshot.empty) {
+                throw new Error('Invalid or already used invite code.');
+            }
+
+            const inviteDoc = querySnapshot.docs[0];
+            const invite = inviteDoc.data() as Invite;
+            
+            if (invite.expiresAt.toDate() < new Date()) {
+                throw new Error('This invite code has expired.');
+            }
+            libraryId = invite.libraryId;
+            inviteToUpdateRef = inviteDoc.ref;
         }
 
-        // 3. Atomically join the library
+        // Atomically join the library
         const batch = writeBatch(firestore);
 
-        // a. Mark invite as used
-        batch.update(inviteDoc.ref, {
-            used: true,
-            usedBy: user.uid,
-        });
+        if (inviteToUpdateRef) {
+            batch.update(inviteToUpdateRef, { used: true, usedBy: user.uid });
+        }
 
-        // b. Create user mapping
         const userMappingRef = doc(firestore, 'users', user.uid);
-        batch.set(userMappingRef, { libraryId: invite.libraryId });
+        batch.set(userMappingRef, { libraryId });
 
-        // c. Create user profile in library
-        const userProfileRef = doc(firestore, `libraries/${invite.libraryId}/users`, user.uid);
+        const userProfileRef = doc(firestore, `libraries/${libraryId}/users`, user.uid);
         batch.set(userProfileRef, {
             id: user.uid,
             name: user.displayName,
             email: user.email,
             role: 'student',
-            libraryId: invite.libraryId,
+            libraryId: libraryId,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
         });
         
-        // d. Create student profile in library
-        const studentProfileRef = doc(firestore, `libraries/${invite.libraryId}/students`, user.uid);
+        const studentProfileRef = doc(firestore, `libraries/${libraryId}/students`, user.uid);
         batch.set(studentProfileRef, {
             id: user.uid,
-            libraryId: invite.libraryId,
+            libraryId: libraryId,
             userId: user.uid,
             name: user.displayName,
             email: user.email,
@@ -122,7 +131,6 @@ function JoinLibraryForm() {
 
         await batch.commit();
 
-        // 4. Redirect to dashboard
         toast({ title: 'Success!', description: "You've successfully joined the library." });
         router.push('/loading');
 
@@ -152,7 +160,7 @@ function JoinLibraryForm() {
                         <FormItem>
                         <FormLabel>Invite Code</FormLabel>
                         <FormControl>
-                            <Input placeholder="ABC-123" {...field} disabled={isSubmitting} />
+                            <Input placeholder="Enter code..." {...field} disabled={isSubmitting} />
                         </FormControl>
                         <FormMessage />
                         </FormItem>
@@ -171,10 +179,6 @@ function JoinLibraryForm() {
 
 export default function JoinLibraryPage() {
     return (
-        // This is a special auth guard. It should only render its children
-        // if the user is authenticated but does NOT have a role/library yet.
-        // A full AuthGuard implementation would need to be more nuanced.
-        // For now, we assume if they land here, they need to join.
         <main className="flex min-h-screen w-full items-center justify-center bg-muted/40 p-4">
            <JoinLibraryForm />
         </main>

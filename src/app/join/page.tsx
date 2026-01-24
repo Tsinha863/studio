@@ -123,6 +123,9 @@ function StudentSignupForm() {
             <CardDescription>
               Create your account, then join your library with an invite code.
             </CardDescription>
+            <CardDescription className="!mt-2 rounded-md border-l-4 border-accent p-2 text-left text-sm text-foreground">
+              After signing up, use the invite code <strong className="font-mono">DEMO</strong> to join the demonstration library and explore the dashboard.
+            </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
             <FormField
@@ -210,7 +213,7 @@ function StudentSignupForm() {
              <div className="text-center text-sm text-muted-foreground">
               Are you an Admin?{' '}
               <Link href="/signup" className="text-primary hover:underline">
-                Create a library.
+                Create a library
               </Link>
             </div>
           </CardFooter>
