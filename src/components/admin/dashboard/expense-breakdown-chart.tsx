@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Pie, PieChart } from 'recharts';
+import { Pie, PieChart, Cell } from 'recharts';
 
 import {
   ChartConfig,
@@ -59,8 +59,8 @@ export function ExpenseBreakdownChart({ data }: ExpenseBreakdownChartProps) {
           innerRadius={60}
           strokeWidth={5}
         >
-          {chartData.map((entry) => (
-            <PieChart.defaultProps.children.type key={entry.category} fill={entry.fill} />
+          {chartData.map((entry, index) => (
+            <Cell key={`cell-${index}`} fill={entry.fill} />
           ))}
         </Pie>
         <ChartLegend
