@@ -4,9 +4,29 @@ import { FirebaseClientProvider } from '@/firebase';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'CampusHub',
-  description: 'Student Management System',
+  title: {
+    template: '%s | CampusHub',
+    default: 'CampusHub | Student Management System',
+  },
+  description: 'CampusHub brings everything—students, seating, and payments—into one simple, powerful platform for modern library and student facility management.',
+  applicationName: 'CampusHub',
+  keywords: ['student management', 'library software', 'campus management', 'seat booking', 'billing system', 'co-working space software'],
+  authors: [{ name: 'Firebase Studio', url: 'https://firebase.google.com/studio' }],
+  openGraph: {
+    title: 'CampusHub | Your Campus, Organized',
+    description: 'The all-in-one solution for modern student management.',
+    type: 'website',
+    images: [
+      {
+        url: 'https://images.unsplash.com/photo-1521737604893-d14cc237f11d?w=1200&h=630&fit=crop',
+        width: 1200,
+        height: 630,
+        alt: 'A team collaborating in a modern workspace, representing CampusHub\'s features.',
+      },
+    ],
+  },
 };
+
 
 export default function RootLayout({
   children,
