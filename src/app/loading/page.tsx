@@ -14,30 +14,30 @@ function AuthRedirector() {
     const { user, role, isLoading, error } = useFirebase();
 
     React.useEffect(() => {
-        // Wait until loading is fully resolved.
+        // Wait until the Firebase provider has finished its initial loading.
         if (isLoading) {
             return;
         }
 
-        // If there is an auth error or no user, always redirect to login.
+        // If the provider determined there's an error or no user is authenticated,
+        // it's a definitive failure state. Redirect to login.
         if (error || !user) {
             router.replace('/login');
             return;
         }
-        
-        // If the user is authenticated but the role could not be determined,
-        // it's a critical error. The provider will have logged this.
-        // The safest recovery is to send them back to the login page.
-        if (!role) {
-            router.replace('/login');
-            return;
-        }
 
-        // If role is resolved, redirect to the correct dashboard.
+        // If loading is complete and we have a user, redirect based on their role.
+        // The provider is responsible for finding the role. If it couldn't, it would have
+        // set the 'error' state, which is handled above.
         if (role === 'libraryOwner') {
             router.replace('/admin/dashboard');
         } else if (role === 'student') {
             router.replace('/student/dashboard');
+        } else {
+            // This is a fallback for an unexpected state where loading is done,
+            // a user exists, but no role was resolved. This indicates a problem
+            // in the data structure, and the safest action is to sign out.
+            router.replace('/login');
         }
         
     }, [user, isLoading, role, error, router]);

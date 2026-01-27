@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -11,6 +12,7 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   updateProfile,
+  type User,
 } from 'firebase/auth';
 import { FirebaseError } from 'firebase/app';
 import { ArrowLeft } from 'lucide-react';
@@ -70,98 +72,6 @@ function LoginForm() {
   const { isSubmitting } = form.formState;
   const isAnyLoading = isSubmitting || !!isDemoLoading;
 
-  // Handler for the manual email/password form
-  const onFormSubmit = async (data: LoginFormValues) => {
-    if (!auth) return;
-
-    try {
-      await signInWithEmailAndPassword(auth, data.email, data.password);
-      router.push('/loading');
-    } catch (error) {
-      handleAuthError(error);
-    }
-  };
-
-  // Handler for both demo login buttons
-  const handleDemoLogin = async (role: 'admin' | 'student') => {
-    if (!auth || !firestore) return;
-    setIsDemoLoading(role);
-
-    const email = role === 'admin' ? DEMO_ADMIN_EMAIL : DEMO_STUDENT_EMAIL;
-    const password =
-      role === 'admin' ? DEMO_ADMIN_PASSWORD : DEMO_STUDENT_PASSWORD;
-
-    try {
-      // 1. Attempt to sign in.
-      await signInWithEmailAndPassword(auth, email, password);
-    } catch (error) {
-      // 2. If user does not exist, create them.
-      if (
-        error instanceof FirebaseError &&
-        (error.code === 'auth/user-not-found' ||
-          error.code === 'auth/invalid-credential')
-      ) {
-        try {
-          await createUserWithEmailAndPassword(auth, email, password);
-        } catch (creationError) {
-          handleAuthError(
-            creationError,
-            'Could not set up demo account.'
-          );
-          setIsDemoLoading(null);
-          return;
-        }
-      } else {
-        // Handle other sign-in errors
-        handleAuthError(error);
-        setIsDemoLoading(null);
-        return;
-      }
-    }
-
-    // 3. At this point, a user is guaranteed to be authenticated.
-    // Now, idempotently ensure their profile exists in Firestore.
-    const user = auth.currentUser;
-    if (!user) {
-      handleAuthError(new Error('Authentication failed unexpectedly.'));
-      setIsDemoLoading(null);
-      return;
-    }
-    
-    const determinedRole = role === 'admin' ? 'libraryOwner' : 'student';
-    const name = role === 'admin' ? 'Admin' : 'Student';
-    
-    try {
-        if (!user.displayName) {
-          await updateProfile(user, { displayName: name });
-        }
-    
-        await ensureUserProfile({
-          uid: user.uid,
-          name: name,
-          email: user.email,
-          role: determinedRole,
-          libraryId: DEMO_LIBRARY_ID,
-          firestore,
-        });
-    
-        if (determinedRole === 'student') {
-          await ensureStudentProfile({
-            uid: user.uid,
-            name: name,
-            email: user.email,
-            libraryId: DEMO_LIBRARY_ID,
-            firestore,
-          });
-        }
-    
-        router.push('/loading');
-    } catch(profileError) {
-        handleAuthError(profileError, "Failed to create user profile.");
-        setIsDemoLoading(null);
-    }
-  };
-
   const handleAuthError = (error: unknown, defaultMessage?: string) => {
     let title = 'Login Failed';
     let description =
@@ -192,6 +102,97 @@ function LoginForm() {
       }
     }
     toast({ variant: 'destructive', title, description });
+  };
+  
+  const provisionDemoUser = async (user: User, role: 'admin' | 'student') => {
+      if (!firestore) throw new Error("Firestore is not available.");
+      
+      const name = role === 'admin' ? 'Admin' : 'Student';
+      const determinedRole = role === 'admin' ? 'libraryOwner' : 'student';
+
+      if (!user.displayName) {
+          await updateProfile(user, { displayName: name });
+      }
+
+      await ensureUserProfile({
+          uid: user.uid,
+          name: name,
+          email: user.email,
+          role: determinedRole,
+          libraryId: DEMO_LIBRARY_ID,
+          firestore,
+      });
+
+      if (determinedRole === 'student') {
+          await ensureStudentProfile({
+              uid: user.uid,
+              name: name,
+              email: user.email,
+              libraryId: DEMO_LIBRARY_ID,
+              firestore,
+          });
+      }
+  };
+
+
+  // Handler for the manual email/password form
+  const onFormSubmit = async (data: LoginFormValues) => {
+    if (!auth) return;
+
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, data.email, data.password);
+      const user = userCredential.user;
+
+      // After successful login, check if it's a demo user. If so, ensure their
+      // profile exists before redirecting. This makes this form work for demo users.
+      if (user.email === DEMO_ADMIN_EMAIL) {
+          await provisionDemoUser(user, 'admin');
+      } else if (user.email === DEMO_STUDENT_EMAIL) {
+          await provisionDemoUser(user, 'student');
+      }
+      
+      router.push('/loading');
+    } catch (error) {
+      handleAuthError(error);
+    }
+  };
+
+  // Handler for both demo login buttons
+  const handleDemoLogin = async (role: 'admin' | 'student') => {
+    if (!auth || !firestore) return;
+    setIsDemoLoading(role);
+
+    const email = role === 'admin' ? DEMO_ADMIN_EMAIL : DEMO_STUDENT_EMAIL;
+    const password =
+      role === 'admin' ? DEMO_ADMIN_PASSWORD : DEMO_STUDENT_PASSWORD;
+
+    try {
+        let user: User;
+        try {
+            // 1. Attempt to sign in.
+            const userCredential = await signInWithEmailAndPassword(auth, email, password);
+            user = userCredential.user;
+        } catch (error) {
+            // 2. If user does not exist, create them.
+            if (error instanceof FirebaseError && (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential')) {
+                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                user = userCredential.user;
+            } else {
+                throw error; // Rethrow other sign-in errors
+            }
+        }
+        
+        // 3. Ensure the corresponding Firestore documents exist.
+        await provisionDemoUser(user, role);
+    
+        // 4. Redirect to the loading page to resolve role and final destination.
+        router.push('/loading');
+
+    } catch(profileError) {
+        handleAuthError(profileError, "Failed to create user profile.");
+    } finally {
+        setIsDemoLoading(null);
+    }
   };
 
   return (
