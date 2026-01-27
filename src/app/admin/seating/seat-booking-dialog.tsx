@@ -195,7 +195,7 @@ export function SeatBookingDialog({
 
     try {
       await batch.commit();
-      toast({ title: 'Booking Cancelled', description: 'The seat booking and associated payment have been cancelled.' });
+      toast({ title: 'Booking Cancelled', description: 'The seat booking and associated bill have been cancelled.' });
       onSuccess();
     } catch(serverError) {
       if (serverError instanceof FirebaseError && serverError.code === 'permission-denied') {

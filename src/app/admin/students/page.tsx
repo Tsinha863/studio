@@ -50,7 +50,7 @@ import { Label } from '@/components/ui/label';
 import { DataTablePagination } from '@/components/ui/data-table-pagination';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirebase, errorEmitter } from '@/firebase';
-import type { Student } from '@/lib/types';
+import type { Student, SeatBooking } from '@/lib/types';
 import { columns as studentColumns } from '@/components/admin/students/columns';
 import { Spinner } from '@/components/spinner';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -161,7 +161,16 @@ export default function StudentsPage() {
           }
           
           bookingsSnapshot.docs.forEach(bookingDoc => {
-              transaction.delete(bookingDoc.ref);
+              const bookingData = bookingDoc.data() as SeatBooking;
+              
+              // Cancel associated bill
+              if (bookingData.linkedBillId) {
+                  const billRef = doc(firestore, `libraries/${libraryId}/bills`, bookingData.linkedBillId);
+                  transaction.update(billRef, { status: 'Cancelled', updatedAt: serverTimestamp() });
+              }
+              
+              // Soft-delete booking
+              transaction.update(bookingDoc.ref, { status: 'cancelled', updatedAt: serverTimestamp() });
           });
 
           transaction.update(studentRef, {
