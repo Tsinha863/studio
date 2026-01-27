@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { SeatBooking } from '@/lib/types';
 import { Armchair } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, isSameDay } from 'date-fns';
 
 interface AssignedSeatCardProps {
   bookings: SeatBooking[];
@@ -31,7 +31,7 @@ export function AssignedSeatCard({ bookings, isLoading }: AssignedSeatCardProps)
                     <li key={`${booking.seatId}-${booking.id}-${index}`}>
                         <div className="text-2xl font-bold">Seat {booking.seatId}</div>
                         <p className="text-xs text-muted-foreground">
-                            {format(booking.startTime.toDate(), 'MMM d, p')} - {format(booking.endTime.toDate(), 'p')}
+                            {format(booking.startTime.toDate(), 'MMM d, p')} - {isSameDay(booking.startTime.toDate(), booking.endTime.toDate()) ? format(booking.endTime.toDate(), 'p') : format(booking.endTime.toDate(), 'MMM d, p')}
                         </p>
                     </li>
                 ))}

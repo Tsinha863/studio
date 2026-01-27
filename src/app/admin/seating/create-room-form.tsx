@@ -7,7 +7,7 @@ import {
   serverTimestamp,
   writeBatch,
 } from 'firebase/firestore';
-import { useFirebase } from '@/firebase';
+import { useFirebase, errorEmitter } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
@@ -17,9 +17,11 @@ import { Label } from '@/components/ui/label';
 import { PlusCircle } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Seat } from '@/lib/types';
+import { FirestorePermissionError } from '@/firebase/errors';
+import { FirebaseError } from 'firebase/app';
 
 interface CreateRoomFormProps {
-  libraryId: string | null;
+  libraryId: string;
   onSuccess: () => void;
 }
 
@@ -36,7 +38,7 @@ export function CreateRoomForm({ libraryId, onSuccess }: CreateRoomFormProps) {
   const [errors, setErrors] = React.useState<Partial<Record<keyof RoomFormValues, string>>>({});
 
   const handleSubmit = async () => {
-    if (!user || !firestore || !libraryId) {
+    if (!user || !firestore) {
       toast({
         variant: 'destructive',
         title: 'Authentication Error',
@@ -59,20 +61,21 @@ export function CreateRoomForm({ libraryId, onSuccess }: CreateRoomFormProps) {
     }
     
     setIsSubmitting(true);
+
+    const batch = writeBatch(firestore);
+    const roomRef = doc(collection(firestore, `libraries/${libraryId}/rooms`));
     
     try {
       const validatedData = validation.data;
-      const batch = writeBatch(firestore);
       const actor = { id: user.uid, name: user.displayName || 'Admin' };
-      const roomRef = doc(collection(firestore, `libraries/${libraryId}/rooms`));
-  
-      batch.set(roomRef, {
+      const roomPayload = {
         name: validatedData.name,
         capacity: validatedData.capacity,
         libraryId,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      });
+      };
+      batch.set(roomRef, roomPayload);
   
       const seatsColRef = collection(firestore, `libraries/${libraryId}/rooms/${roomRef.id}/seats`);
       for (let i = 1; i <= validatedData.capacity; i++) {
@@ -108,11 +111,18 @@ export function CreateRoomForm({ libraryId, onSuccess }: CreateRoomFormProps) {
       setTier('standard');
       setErrors({});
 
-    } catch (error) {
+    } catch (serverError) {
+      if (serverError instanceof FirebaseError && serverError.code === 'permission-denied') {
+        const permissionError = new FirestorePermissionError({
+          path: roomRef.path,
+          operation: 'create',
+        });
+        errorEmitter.emit('permission-error', permissionError);
+      }
       toast({
         variant: 'destructive',
         title: 'Room Creation Failed',
-        description: error instanceof Error ? error.message : "The room could not be created."
+        description: serverError instanceof Error ? serverError.message : "The room could not be created."
       });
     } finally {
       setIsSubmitting(false);

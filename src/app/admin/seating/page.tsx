@@ -27,7 +27,7 @@ const SeatingPlan = dynamic(() => import('@/components/admin/seating/seating-pla
 });
 
 export default function SeatingPage() {
-  const { firestore, user, libraryId } = useFirebase();
+  const { firestore, libraryId } = useFirebase();
   const { toast } = useToast();
 
   const roomsQuery = React.useMemo(() => {
@@ -61,10 +61,12 @@ export default function SeatingPage() {
           <CardTitle>Room Management</CardTitle>
         </CardHeader>
         <CardContent>
-          <CreateRoomForm
-            libraryId={libraryId}
-            onSuccess={onRoomCreated}
-          />
+          {libraryId && (
+            <CreateRoomForm
+              libraryId={libraryId}
+              onSuccess={onRoomCreated}
+            />
+          )}
         </CardContent>
       </Card>
 
@@ -76,7 +78,7 @@ export default function SeatingPage() {
               <Skeleton className="h-10 w-full" />
               <Skeleton className="h-48 w-full" />
             </div>
-        ) : rooms && rooms.length > 0 ? (
+        ) : rooms && rooms.length > 0 && libraryId ? (
           <Tabs defaultValue={rooms[0].id} className="w-full">
             <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4">
               {rooms.map(room => (

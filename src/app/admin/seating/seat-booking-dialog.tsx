@@ -51,7 +51,7 @@ interface SeatBookingDialogProps {
   students: StudentWithId[];
   isLoadingStudents: boolean;
   bookingsForSeat: SeatBookingWithId[];
-  libraryId: string | null;
+  libraryId: string;
   selectedDate: Date;
   onSuccess: () => void;
 }
@@ -94,7 +94,7 @@ export function SeatBookingDialog({
   const [isCancelling, setIsCancelling] = React.useState<string | false>(false);
 
   const handleBooking = async () => {
-    if (!firestore || !user || !selectedStudent || !libraryId) {
+    if (!firestore || !user || !selectedStudent) {
       toast({ variant: 'destructive', title: 'Error', description: 'Please select a student and ensure library context is available.' });
       return;
     }
@@ -168,7 +168,7 @@ export function SeatBookingDialog({
   };
 
   const handleCancelBooking = async (booking: SeatBookingWithId) => {
-    if (!firestore || !user || !libraryId) {
+    if (!firestore || !user) {
       toast({ variant: 'destructive', title: 'Error', description: 'You must be logged in to perform this action.' });
       return;
     }
@@ -179,9 +179,9 @@ export function SeatBookingDialog({
     const bookingRef = doc(firestore, `libraries/${libraryId}/seatBookings`, booking.id);
     batch.update(bookingRef, { status: 'cancelled', updatedAt: serverTimestamp() });
 
-    if (booking.linkedPaymentId) {
-        const paymentRef = doc(firestore, `libraries/${libraryId}/payments`, booking.linkedPaymentId);
-        batch.update(paymentRef, { status: 'cancelled', updatedAt: serverTimestamp() });
+    if (booking.linkedBillId) {
+        const billRef = doc(firestore, `libraries/${libraryId}/bills`, booking.linkedBillId);
+        batch.update(billRef, { status: 'Cancelled', updatedAt: serverTimestamp() });
     }
 
     const logRef = doc(collection(firestore, `libraries/${libraryId}/activityLogs`));
