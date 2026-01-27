@@ -1,8 +1,6 @@
 'use client';
 
 import * as React from 'react';
-import html2canvas from 'html2canvas';
-import { jsPDF } from 'jspdf';
 import { Download, Printer, FileImage, FileText } from 'lucide-react';
 
 import {
@@ -56,6 +54,7 @@ export function BillDialog({
     setIsExporting(true);
 
     try {
+        const html2canvas = (await import('html2canvas')).default;
         const canvas = await html2canvas(billRef.current, {
             backgroundColor: '#ffffff',
             scale: 2,
@@ -70,6 +69,7 @@ export function BillDialog({
         const fileName = `bill-${safeStudentName}-${Date.now()}`;
 
         if (format === 'pdf') {
+            const { jsPDF } = await import('jspdf');
             const pdf = new jsPDF({
                 orientation: 'portrait',
                 unit: 'px',

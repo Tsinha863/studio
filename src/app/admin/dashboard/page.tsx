@@ -1,8 +1,6 @@
 'use client';
 import * as React from 'react';
 import dynamic from 'next/dynamic';
-import html2canvas from 'html2canvas';
-import { jsPDF } from 'jspdf';
 import {
   Activity,
   IndianRupee,
@@ -158,6 +156,9 @@ export default function DashboardPage() {
     setIsExporting(true);
 
     try {
+        const html2canvas = (await import('html2canvas')).default;
+        const { jsPDF } = await import('jspdf');
+
         const canvas = await html2canvas(reportRef.current, {
             scale: 2,
         });
