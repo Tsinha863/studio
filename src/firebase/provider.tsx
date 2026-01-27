@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, ReactNode, useMemo, useState, useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 import { FirebaseApp } from 'firebase/app';
 import { Firestore, doc, getDoc, setDoc } from 'firebase/firestore';
 import { Auth, User, onAuthStateChanged, signOut } from 'firebase/auth';
@@ -62,8 +63,26 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
     error: null,
   });
 
+  const pathname = usePathname();
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      // If a user is authenticated but on a page where they are expected to NOT have a profile yet,
+      // we set the user object but do not proceed with profile/role resolution. This allows
+      // them to complete the signup/join flow without being logged out.
+      if (firebaseUser && (pathname === '/join' || pathname === '/join/library')) {
+        setAuthState(prev => ({ 
+            ...prev, 
+            user: firebaseUser,
+            userProfile: null,
+            libraryId: null,
+            role: null,
+            isLoading: false, 
+            error: null 
+        }));
+        return; // Stop processing for these pages
+      }
+
       if (firebaseUser) {
         try {
           // 1. Resolve libraryId from the top-level users collection
@@ -130,7 +149,7 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
     });
 
     return () => unsubscribe();
-  }, [auth, firestore]);
+  }, [auth, firestore, pathname]);
 
   const contextValue = useMemo(() => authState, [authState]);
 
