@@ -82,7 +82,13 @@ function SignupForm() {
       // 2. Update the auth profile's display name for consistency.
       await updateProfile(user, { displayName: data.name });
 
-      // 3. Atomically create all necessary Firestore documents for the new Library Owner.
+      // 3. Wait for the ID token to ensure the user is fully authenticated
+      await user.getIdToken(true);
+
+      // Small delay to ensure authentication state is propagated
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // 4. Atomically create all necessary Firestore documents for the new Library Owner.
       const batch = writeBatch(firestore);
 
       // Create a new library for the admin
@@ -106,22 +112,29 @@ function SignupForm() {
       // c. Admin User Profile (inside the new library)
       const userProfileRef = doc(firestore, `libraries/${newLibraryId}/users`, user.uid);
       batch.set(userProfileRef, {
-          id: user.uid,
-          name: data.name,
-          email: data.email,
-          role: 'libraryOwner',
-          libraryId: newLibraryId,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
+        id: user.uid,
+        name: data.name,
+        email: data.email,
+        role: 'libraryOwner',
+        libraryId: newLibraryId,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
       });
 
       // Commit the atomic write.
       await batch.commit();
 
-      // 4. Redirect to loading page, which will resolve role and redirect to dashboard.
+      // 5. Show success message
+      toast({
+        title: 'Success!',
+        description: 'Your library has been created successfully.',
+      });
+
+      // 6. Redirect to loading page, which will resolve role and redirect to dashboard.
       router.push('/loading');
 
     } catch (error) {
+      console.error('Signup error:', error);
       let title = 'Sign-up failed';
       let description = 'An unexpected error occurred. Please try again.';
 
@@ -136,6 +149,12 @@ function SignupForm() {
             title = 'Weak Password';
             description =
               'The password is not strong enough. Please choose a stronger password.';
+            break;
+          case 'permission-denied':
+          case 'firestore/permission-denied':
+            title = 'Permission Error';
+            description =
+              'Unable to create library data. Please check your Firestore security rules or contact support.';
             break;
           default:
             description = error.message;

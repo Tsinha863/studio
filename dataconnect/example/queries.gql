@@ -1,0 +1,26 @@
+mutation AddNewBook($title: String!, $author: String!, $genre: String!, $isbn: String!, $publicationYear: Int!, $coverImageUrl: String, $description: String) @auth(level: USER) {
+  book_insert(data: {title: $title, author: $author, genre: $genre, isbn: $isbn, publicationYear: $publicationYear, coverImageUrl: $coverImageUrl, description: $description, userId_expr: "auth.uid"}) {
+    id
+  }
+}
+
+query GetBooksByGenre($genre: String!) @auth(level: PUBLIC, insecureReason: "This operation is safe to expose to the public") {
+  books(where: {genre: {eq: $genre}}) {
+    id
+    title
+    author
+    coverImageUrl
+  }
+}
+
+mutation BorrowBook($bookId: UUID!, $borrowerId: UUID!, $dueDate: Date!, $loanDate: Date!) @auth(level: USER) {
+  loan_insert(data: {bookId: $bookId, borrowerId: $borrowerId, dueDate: $dueDate, loanDate: $loanDate, isReturned: false, createdAt_expr: "request.time"}) {
+    id
+  }
+}
+
+mutation ReturnBook($loanId: UUID!) @auth(level: USER) {
+  loan_update(id: $loanId, data: {isReturned: true, returnDate_expr: "request.time"}) {
+    id
+  }
+}

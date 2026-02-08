@@ -1,0 +1,35 @@
+type User @table {
+  username: String! @unique
+  passwordHash: String!
+  createdAt: Timestamp!
+  email: String
+}
+
+type Book @table {
+  user: User!
+  title: String!
+  author: String!
+  createdAt: Timestamp!
+  isbn: String
+  publicationYear: Int
+  genre: String
+  description: String
+  coverImageUrl: String
+}
+
+type Borrower @table {
+  user: User!
+  name: String!
+  createdAt: Timestamp!
+  contactInfo: String
+}
+
+type Loan @table {
+  book: Book!
+  borrower: Borrower!
+  loanDate: Date!
+  dueDate: Date!
+  isReturned: Boolean!
+  createdAt: Timestamp!
+  returnDate: Date
+}
