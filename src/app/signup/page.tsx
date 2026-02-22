@@ -66,10 +66,7 @@ function SignupForm() {
 
   const {
     formState: { isSubmitting },
-    watch,
   } = form;
-
-  const selectedRole = watch('role');
 
   const onSubmit = async (data: SignupFormValues) => {
     if (!auth || !firestore) {
@@ -79,12 +76,6 @@ function SignupForm() {
         description: 'Firebase service is not available. Please try again later.',
       });
       return;
-    }
-
-    if (data.role === 'libraryStaff') {
-        // Staff should join existing libraries using an invite code.
-        router.push('/join/library');
-        return;
     }
 
     try {
@@ -117,7 +108,7 @@ function SignupForm() {
       const userMappingRef = doc(firestore, 'users', user.uid);
       batch.set(userMappingRef, { 
         libraryId: newLibraryId,
-        role: 'libraryOwner',
+        role: data.role,
         createdAt: serverTimestamp() 
       });
 
@@ -127,7 +118,7 @@ function SignupForm() {
         id: user.uid,
         name: data.name,
         email: data.email,
-        role: 'libraryOwner',
+        role: data.role,
         libraryId: newLibraryId,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -139,7 +130,7 @@ function SignupForm() {
         libraryId: newLibraryId,
         user: { id: user.uid, name: data.name },
         activityType: 'library_created',
-        details: { libraryName: data.libraryName },
+        details: { libraryName: data.libraryName, initialRole: data.role },
         timestamp: serverTimestamp(),
       });
 
@@ -147,14 +138,14 @@ function SignupForm() {
 
       toast({
         title: 'Success!',
-        description: 'Your library has been created successfully.',
+        description: 'Your institutional workspace has been created.',
       });
 
       router.push('/loading');
 
     } catch (error) {
       console.error('Signup error:', error);
-      let title = 'Sign-up failed';
+      let title = 'Registration failed';
       let description = 'An unexpected error occurred. Please try again.';
 
       if (error instanceof FirebaseError) {
@@ -198,7 +189,7 @@ function SignupForm() {
               Institutional Registration
             </CardTitle>
             <CardDescription>
-              Create your library account or join as staff.
+              Create your library workspace.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
@@ -207,7 +198,7 @@ function SignupForm() {
               name="role"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>I am signing up as...</FormLabel>
+                  <FormLabel>Registering as...</FormLabel>
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <FormControl>
                       <SelectTrigger>
@@ -218,13 +209,13 @@ function SignupForm() {
                       <SelectItem value="libraryOwner">
                         <div className="flex items-center">
                             <Building2 className="mr-2 h-4 w-4 text-primary" />
-                            <span>Library Owner / Founder</span>
+                            <span>Founder / Owner</span>
                         </div>
                       </SelectItem>
                       <SelectItem value="libraryStaff">
                         <div className="flex items-center">
                             <ShieldCheck className="mr-2 h-4 w-4 text-accent" />
-                            <span>Library Staff / Manager</span>
+                            <span>Manager / Staff</span>
                         </div>
                       </SelectItem>
                     </SelectContent>
@@ -234,54 +225,40 @@ function SignupForm() {
               )}
             />
 
-            {selectedRole === 'libraryOwner' ? (
-                <>
-                    <FormField
-                    control={form.control}
-                    name="libraryName"
-                    render={({ field }) => (
-                        <FormItem>
-                        <FormLabel>Library Name</FormLabel>
-                        <FormControl>
-                            <Input
-                            placeholder="e.g., Central City Library"
-                            {...field}
-                            disabled={isSubmitting}
-                            />
-                        </FormControl>
-                        <FormMessage />
-                        </FormItem>
-                    )}
+            <FormField
+            control={form.control}
+            name="libraryName"
+            render={({ field }) => (
+                <FormItem>
+                <FormLabel>Library Name</FormLabel>
+                <FormControl>
+                    <Input
+                    placeholder="e.g., Central City Library"
+                    {...field}
+                    disabled={isSubmitting}
                     />
-                    <FormField
-                    control={form.control}
-                    name="libraryAddress"
-                    render={({ field }) => (
-                        <FormItem>
-                        <FormLabel>Library Address</FormLabel>
-                        <FormControl>
-                            <Input
-                            placeholder="e.g., 123 Main St, Central City"
-                            {...field}
-                            disabled={isSubmitting}
-                            />
-                        </FormControl>
-                        <FormMessage />
-                        </FormItem>
-                    )}
-                    />
-                </>
-            ) : (
-                <div className="rounded-md bg-muted p-4 text-sm">
-                    <p className="font-medium text-primary">Staff Onboarding</p>
-                    <p className="mt-1 text-muted-foreground">
-                        Staff members must join an existing library using a secure invite code provided by their Owner.
-                    </p>
-                    <Button variant="link" className="mt-2 h-auto p-0" asChild>
-                        <Link href="/join/library">Enter Staff Invite Code</Link>
-                    </Button>
-                </div>
+                </FormControl>
+                <FormMessage />
+                </FormItem>
             )}
+            />
+            <FormField
+            control={form.control}
+            name="libraryAddress"
+            render={({ field }) => (
+                <FormItem>
+                <FormLabel>Library Address</FormLabel>
+                <FormControl>
+                    <Input
+                    placeholder="e.g., 123 Main St, Central City"
+                    {...field}
+                    disabled={isSubmitting}
+                    />
+                </FormControl>
+                <FormMessage />
+                </FormItem>
+            )}
+            />
 
             <FormField
               control={form.control}
@@ -357,7 +334,7 @@ function SignupForm() {
           <CardFooter className="flex flex-col gap-4">
             <Button type="submit" className="w-full" disabled={isSubmitting}>
               {isSubmitting ? <Spinner className="mr-2 h-4 w-4" /> : null}
-              {selectedRole === 'libraryOwner' ? 'Create Library & Account' : 'Continue to Join Flow'}
+              Create Workspace & Account
             </Button>
             <div className="text-center text-sm text-muted-foreground">
               Already have an account?{' '}
