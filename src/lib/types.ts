@@ -1,9 +1,12 @@
+
 'use client';
 
 import { Timestamp } from "firebase/firestore";
 import type { BookingDuration as EngineBookingDuration } from './booking-engine';
 
 export type BookingDuration = EngineBookingDuration;
+
+export type UserRole = 'admin' | 'libraryOwner' | 'libraryStaff' | 'student';
 
 export interface Library {
     id: string;
@@ -20,8 +23,8 @@ export interface Library {
 
 export interface User {
   id: string;
-  libraryId: string;
-  role: 'libraryOwner' | 'student';
+  libraryId?: string;
+  role: UserRole;
   name: string;
   email: string;
   createdAt: Timestamp;
@@ -31,7 +34,7 @@ export interface User {
 export interface Student {
   id: string;
   libraryId: string;
-  userId?: string; // Optional link to a User account
+  userId?: string;
   name: string;
   email: string;
   status: 'active' | 'at-risk' | 'inactive';
@@ -67,29 +70,29 @@ export interface Bill {
   updatedAt: Timestamp;
 }
 
-export interface Payment {
+export interface ActivityLog {
   id: string;
   libraryId: string;
-  studentId: string;
-  billId: string;
-  amount: number;
-  paymentDate: Timestamp;
-  method: 'Admin' | 'Cash' | 'Online';
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
+  activityType: string;
+  user: {
+    id: string;
+    name: string;
+  };
+  timestamp: Timestamp;
+  details: Record<string, any>;
 }
 
-export type ExpenseCategory = 'rent' | 'utilities' | 'supplies' | 'salaries' | 'other';
-
-export interface Expense {
-  id: string;
-  libraryId: string;
-  description: string;
-  amount: number;
-  category: ExpenseCategory;
-  expenseDate: Timestamp;
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
+export interface Invite {
+    id: string;
+    libraryId: string;
+    role: 'student' | 'libraryStaff';
+    email?: string;
+    inviteCode: string;
+    expiresAt: Timestamp;
+    used: boolean;
+    usedBy?: string;
+    createdBy: string;
+    createdAt: Timestamp;
 }
 
 export interface Room {
@@ -101,10 +104,6 @@ export interface Room {
   updatedAt: Timestamp;
 }
 
-/**
- * Represents a single seat within a room.
- * The document ID itself is the canonical, human-readable seat number (e.g., '1', '25').
- */
 export interface Seat {
   id: string;
   libraryId: string;
@@ -131,15 +130,6 @@ export interface SeatBooking {
   updatedAt: Timestamp;
 }
 
-export interface Announcement {
-  id: string;
-  libraryId: string;
-  title: string;
-  content: string;
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
-}
-
 export interface Suggestion {
   id: string;
   libraryId: string;
@@ -151,20 +141,6 @@ export interface Suggestion {
   updatedAt: Timestamp;
 }
 
-export interface ActivityLog {
-  id: string;
-  libraryId: string;
-  activityType: string;
-  user: {
-    id: string;
-    name: string;
-  };
-  timestamp: Timestamp;
-  details: Record<string, any>;
-}
-
-export type PrintRequestStatus = 'Pending' | 'Approved' | 'Rejected';
-
 export interface PrintRequest {
   id: string;
   libraryId: string;
@@ -174,33 +150,19 @@ export interface PrintRequest {
   fileUrl: string;
   fileName: string;
   notes: string;
-  status: PrintRequestStatus;
+  status: 'Pending' | 'Approved' | 'Rejected';
   rejectionReason?: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
 
-export interface Invite {
-    id: string;
-    libraryId: string;
-    role: 'student';
-    email?: string;
-    inviteCode: string;
-    expiresAt: Timestamp;
-    used: boolean;
-    usedBy?: string;
-    createdBy: string;
-    createdAt: Timestamp;
-}
-
-export interface OwnershipTransfer {
-    id: string;
-    libraryId: string;
-    fromOwnerId: string;
-    toUserId: string;
-    toUserName: string;
-    status: 'pending' | 'accepted' | 'cancelled';
-    createdAt: Timestamp;
-    expiresAt: Timestamp;
-    resolvedAt?: Timestamp;
+export interface Expense {
+  id: string;
+  libraryId: string;
+  description: string;
+  amount: number;
+  category: 'rent' | 'utilities' | 'supplies' | 'salaries' | 'other';
+  expenseDate: Timestamp;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
 }

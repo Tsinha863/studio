@@ -2,399 +2,142 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ==================== HELPER FUNCTIONS ====================
-    
-    // Authentication & Library Access
+    // --- HELPER FUNCTIONS ---
     function isAuthenticated() {
       return request.auth != null;
     }
-    
+
     function isLibraryUser(libraryId) {
       return isAuthenticated() &&
         exists(/databases/$(database)/documents/libraries/$(libraryId)/users/$(request.auth.uid));
     }
 
-    function isAdmin(libraryId) {
-      return isLibraryUser(libraryId) &&
-        get(/databases/$(database)/documents/libraries/$(libraryId)/users/$(request.auth.uid)).data.role in ['libraryOwner', 'staff'];
+    function getUserData(libraryId) {
+      return get(/databases/$(database)/documents/libraries/$(libraryId)/users/$(request.auth.uid)).data;
     }
-    
-    function isLibraryOwner(libraryId) {
-      return isLibraryUser(libraryId) &&
-        get(/databases/$(database)/documents/libraries/$(libraryId)/users/$(request.auth.uid)).data.role == 'libraryOwner';
+
+    function isAdmin(libraryId) {
+      return isLibraryUser(libraryId) && getUserData(libraryId).role == "libraryOwner";
+    }
+
+    function isStaff(libraryId) {
+      return isLibraryUser(libraryId) && (getUserData(libraryId).role == "libraryOwner" || getUserData(libraryId).role == "libraryStaff");
     }
 
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
     
-    // Student Access Checks
-    function isStudentOwner(libraryId, studentId) {
-      return isAuthenticated() && 
-        exists(/databases/$(database)/documents/libraries/$(libraryId)/students/$(studentId)) &&
-        get(/databases/$(database)/documents/libraries/$(libraryId)/students/$(studentId)).data.userId == request.auth.uid;
-    }
-    
-    function getStudentIdForUser(libraryId) {
-      // Helper to get studentId from userId - assumes studentId == userId for simplicity
-      // Adjust based on your data model
-      return request.auth.uid;
-    }
-    
-    // Invite Validation
-    function hasValidInvite(libraryId) {
-      let inviteCode = request.resource.data.get('inviteCode', '');
-      let invitePath = /databases/$(database)/documents/libraries/$(libraryId)/invites/$(inviteCode);
-      
-      return inviteCode != '' &&
-        exists(invitePath) &&
-        get(invitePath).data.used == false &&
-        get(invitePath).data.expiresAt > request.time;
-    }
-    
-    // Data Validation Helpers
-    function isValidEmail(email) {
-      return email.matches('^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$');
-    }
-    
-    function isValidPhone(phone) {
-      return phone.matches('^[0-9]{10,15}$');
-    }
-    
-    function isValidRole(role) {
-      return role in ['libraryOwner', 'staff', 'viewer'];
-    }
-    
-    function isValidStatus(status, allowedStatuses) {
-      return status in allowedStatuses;
-    }
-    
-    // Time-based checks
-    function isNotInPast(timeValue) {
-      return timeValue > request.time;
-    }
-    
-    function isFutureBooking(startTime) {
-      return startTime > request.time;
+    function isLibraryOwner(libraryId) {
+        return isAdmin(libraryId) && get(/databases/$(database)/documents/libraries/$(libraryId)).data.ownerId == request.auth.uid;
     }
 
-    // ==================== TOP-LEVEL COLLECTIONS ====================
+    // --- TOP-LEVEL COLLECTIONS ---
 
-    // User-to-Library mapping
     match /users/{userId} {
       allow get: if isOwner(userId);
-      
-      // Allow creation during signup - simplified validation
-      allow create: if isOwner(userId) && 
-                       !exists(/databases/$(database)/documents/users/$(userId)) &&
-                       request.resource.data.keys().hasAll(['libraryId']) &&
-                       request.resource.data.libraryId is string;
-      
+      // Users can create their initial mapping, but cannot escalate their own role to 'admin'
+      allow create: if isOwner(userId) && (!request.resource.data.keys().contains('role') || request.resource.data.role != 'admin');
       allow list, update, delete: if false;
     }
 
     // ==================== LIBRARY-SCOPED COLLECTIONS ====================
 
-    // Libraries: Allow creation during signup
     match /libraries/{libraryId} {
       allow read: if isLibraryUser(libraryId);
-      
-      allow update: if isAdmin(libraryId) && 
-                       !request.resource.data.diff(resource.data).affectedKeys().hasAny(['id', 'ownerId', 'createdAt']) &&
-                       request.resource.data.keys().hasAll(['name', 'ownerId']);
-      
-      // Allow authenticated users to create a library if they are the owner
-      allow create: if isAuthenticated() &&
-                       request.resource.data.ownerId == request.auth.uid &&
-                       request.resource.data.keys().hasAll(['id', 'name', 'address', 'ownerId']) &&
-                       request.resource.data.id == libraryId;
-      
-      allow delete: if false;
+      allow update: if isAdmin(libraryId);
+      allow create, delete: if false;
     }
 
-    // Users: Allow library owner creation during signup
     match /libraries/{libraryId}/users/{userId} {
-      allow get: if isOwner(userId) || isAdmin(libraryId);
-      allow list: if isAdmin(libraryId);
-      
-      // Allow creation in three scenarios:
-      // 1. Admin adding users
-      // 2. User joining with invite
-      // 3. User creating themselves as library owner during signup
-      allow create: if (isAdmin(libraryId) && 
-                         request.resource.data.keys().hasAll(['role']) &&
-                         isValidRole(request.resource.data.role)) ||
-                       (isOwner(userId) && 
-                         hasValidInvite(libraryId) &&
-                         request.resource.data.role in ['viewer', 'staff'] &&
-                         request.resource.data.keys().hasAll(['role', 'inviteCode'])) ||
-                       // Signup scenario: user creates their own libraryOwner profile
-                       (isOwner(userId) &&
-                         request.resource.data.role == 'libraryOwner' &&
-                         request.resource.data.keys().hasAll(['id', 'name', 'email', 'role', 'libraryId']) &&
-                         request.resource.data.id == userId &&
-                         request.resource.data.libraryId == libraryId);
-      
-      allow update: if (isOwner(userId) && 
-                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'phone', 'avatar', 'preferences'])) ||
-                       (isAdmin(libraryId) && 
-                         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['id']));
-      
-      allow delete: if isLibraryOwner(libraryId) && userId != request.auth.uid;
+      allow get: if isOwner(userId) || isStaff(libraryId);
+      allow list: if isStaff(libraryId);
+      allow create: if isOwner(userId) || isAdmin(libraryId);
+      allow write: if isOwner(userId) || isAdmin(libraryId);
     }
 
-    // Students: Full profiles managed by admins, students can read own profile
     match /libraries/{libraryId}/students/{studentId} {
-      allow get: if isAdmin(libraryId) || isStudentOwner(libraryId, studentId);
-      allow list: if isAdmin(libraryId);
-      
-            // Allow create: Admin only, strictly matching the form data
-      allow create: if isAdmin(libraryId) && 
-                       // Check required fields
-                       request.resource.data.keys().hasAll(['id', 'name', 'email', 'status', 'libraryId', 'createdAt', 'updatedAt']) &&
-                       // Validate consistency
-                       request.resource.data.id == studentId &&
-                       request.resource.data.libraryId == libraryId &&
-                       request.resource.data.createdAt == request.time &&
-                       // Validate content
-                       isValidEmail(request.resource.data.email) &&
-                       isValidStatus(request.resource.data.status, ['active', 'inactive', 'suspended', 'at-risk']) &&
-                       // Validate optional phone if present
-                       (!('phone' in request.resource.data) || isValidPhone(request.resource.data.phone));
-      
-      allow update: if isAdmin(libraryId) && 
-                       !request.resource.data.diff(resource.data).affectedKeys().hasAny(['id', 'userId', 'createdAt']);
-      
-      allow delete: if isLibraryOwner(libraryId);
+      allow get: if isLibraryUser(libraryId) && (isStaff(libraryId) || isOwner(studentId));
+      allow list: if isStaff(libraryId);
+      allow write: if isStaff(libraryId);
     }
     
-    // Seat Bookings: Students can book, admins manage all
     match /libraries/{libraryId}/seatBookings/{bookingId} {
-      allow get: if isLibraryUser(libraryId) && 
-                    (isAdmin(libraryId) || resource.data.studentId == request.auth.uid);
-      allow list: if isAdmin(libraryId);
-      
-      allow create: if isLibraryUser(libraryId) && 
-                       request.resource.data.studentId == request.auth.uid &&
-                       request.resource.data.keys().hasAll(['studentId', 'seatId', 'roomId', 'startTime', 'endTime', 'status', 'createdAt']) &&
-                       isFutureBooking(request.resource.data.startTime) &&
-                       request.resource.data.endTime > request.resource.data.startTime &&
-                       request.resource.data.status == 'pending' &&
-                       request.resource.data.createdAt == request.time;
-      
-      allow update: if isAdmin(libraryId) ||
-                       (resource.data.studentId == request.auth.uid &&
-                        isFutureBooking(resource.data.startTime) &&
-                        request.resource.data.status == 'cancelled' &&
-                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'cancelledAt']));
-      
-      allow delete: if isAdmin(libraryId);
+        allow get: if isLibraryUser(libraryId) && (isStaff(libraryId) || resource.data.studentId == request.auth.uid);
+        allow list: if isStaff(libraryId);
+        allow write: if isStaff(libraryId);
     }
     
-    // Bills: Admins manage, students can read their own
     match /libraries/{libraryId}/bills/{billId} {
-      allow get: if isLibraryUser(libraryId) && 
-                    (isAdmin(libraryId) || resource.data.studentId == request.auth.uid);
-      allow list: if isAdmin(libraryId);
-      
-      allow create: if isAdmin(libraryId) && 
-                       request.resource.data.keys().hasAll(['studentId', 'amount', 'dueDate', 'status', 'createdAt']) &&
-                       request.resource.data.amount > 0 &&
-                       isValidStatus(request.resource.data.status, ['pending', 'paid', 'overdue', 'cancelled', 'Cancelled']) &&
-                       request.resource.data.createdAt == request.time;
-      
-      allow update: if isAdmin(libraryId) &&
-                       !request.resource.data.diff(resource.data).affectedKeys().hasAny(['id', 'studentId', 'createdAt']) &&
-                       request.resource.data.amount > 0;
-      
-      allow delete: if isLibraryOwner(libraryId);
+      allow get: if isLibraryUser(libraryId) && (isStaff(libraryId) || resource.data.studentId == request.auth.uid);
+      allow list: if isStaff(libraryId);
+      allow create, update: if isStaff(libraryId);
+      allow delete: if false; // Bills are permanent records
     }
 
-    // Payments: Admins create, immutable once created
     match /libraries/{libraryId}/payments/{paymentId} {
-      allow get: if isLibraryUser(libraryId) && 
-                    (isAdmin(libraryId) || resource.data.studentId == request.auth.uid);
-      allow list: if isAdmin(libraryId);
-      
-      allow create: if isAdmin(libraryId) && 
-                       request.resource.data.keys().hasAll(['studentId', 'billId', 'amount', 'method', 'status', 'createdAt']) &&
-                       request.resource.data.amount > 0 &&
-                       isValidStatus(request.resource.data.method, ['cash', 'card', 'upi', 'bank_transfer', 'other']) &&
-                       isValidStatus(request.resource.data.status, ['success', 'pending', 'failed']) &&
-                       request.resource.data.createdAt == request.time;
-      
-      allow update, delete: if false;
+      allow get: if isLibraryUser(libraryId) && (isStaff(libraryId) || resource.data.studentId == request.auth.uid);
+      allow list: if isStaff(libraryId);
+      allow create: if isStaff(libraryId);
+      allow update, delete: if false; // Payments are immutable
     }
 
-    // Expenses: Only admins can manage
     match /libraries/{libraryId}/expenses/{expenseId} {
-      allow read: if isAdmin(libraryId);
-      
-      allow create: if isAdmin(libraryId) && 
-                       request.resource.data.keys().hasAll(['category', 'amount', 'description', 'date', 'createdBy', 'createdAt']) &&
-                       request.resource.data.amount > 0 &&
-                       request.resource.data.createdBy == request.auth.uid &&
-                       request.resource.data.createdAt == request.time;
-      
-      allow update: if isAdmin(libraryId) &&
-                       !request.resource.data.diff(resource.data).affectedKeys().hasAny(['id', 'createdBy', 'createdAt']);
-      
-      allow delete: if isLibraryOwner(libraryId);
+      allow read, write: if isAdmin(libraryId);
     }
 
-    // Rooms: Admins manage, library users read
     match /libraries/{libraryId}/rooms/{roomId} {
       allow read: if isLibraryUser(libraryId);
-      
-      allow create: if isAdmin(libraryId) && 
-                       request.resource.data.keys().hasAll(['name', 'capacity', 'status', 'createdAt']) &&
-                       request.resource.data.capacity > 0 &&
-                       isValidStatus(request.resource.data.status, ['active', 'inactive', 'maintenance']) &&
-                       request.resource.data.createdAt == request.time;
-      
-      allow update: if isAdmin(libraryId) &&
-                       !request.resource.data.diff(resource.data).affectedKeys().hasAny(['id', 'createdAt']) &&
-                       request.resource.data.capacity > 0;
-      
-      allow delete: if isLibraryOwner(libraryId);
+      allow write: if isStaff(libraryId);
 
       match /seats/{seatId} {
         allow read: if isLibraryUser(libraryId);
-        
-        allow create: if isAdmin(libraryId) && 
-                         request.resource.data.keys().hasAll(['number', 'status', 'type', 'createdAt']) &&
-                         isValidStatus(request.resource.data.status, ['available', 'occupied', 'reserved', 'maintenance']) &&
-                         request.resource.data.createdAt == request.time;
-        
-        allow update: if isAdmin(libraryId) &&
-                         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['id', 'number', 'createdAt']);
-        
-        allow delete: if isLibraryOwner(libraryId);
+        allow write: if isStaff(libraryId);
       }
     }
 
-    // Announcements: Admins manage, library users read
     match /libraries/{libraryId}/announcements/{announcementId} {
       allow read: if isLibraryUser(libraryId);
-      
-      allow create: if isAdmin(libraryId) && 
-                       request.resource.data.keys().hasAll(['title', 'content', 'priority', 'createdBy', 'createdAt']) &&
-                       isValidStatus(request.resource.data.priority, ['low', 'medium', 'high', 'urgent']) &&
-                       request.resource.data.createdBy == request.auth.uid &&
-                       request.resource.data.createdAt == request.time;
-      
-      allow update: if isAdmin(libraryId) &&
-                       !request.resource.data.diff(resource.data).affectedKeys().hasAny(['id', 'createdBy', 'createdAt']);
-      
-      allow delete: if isAdmin(libraryId);
+      allow write: if isStaff(libraryId);
     }
 
-    // Suggestions: Students create their own, admins manage all
     match /libraries/{libraryId}/suggestions/{suggestionId} {
-      allow get: if isLibraryUser(libraryId) && 
-                    (isAdmin(libraryId) || resource.data.studentId == request.auth.uid);
-      allow list: if isAdmin(libraryId);
-      
-      allow create: if isLibraryUser(libraryId) &&
-                       request.resource.data.studentId == request.auth.uid &&
-                       request.resource.data.keys().hasAll(['studentId', 'title', 'description', 'status', 'createdAt']) &&
-                       request.resource.data.status == 'pending' &&
-                       request.resource.data.title.size() > 0 &&
-                       request.resource.data.title.size() <= 200 &&
-                       request.resource.data.description.size() <= 1000 &&
-                       request.resource.data.createdAt == request.time;
-      
-      allow update: if isAdmin(libraryId) &&
-                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'response', 'respondedBy', 'respondedAt']) &&
-                       isValidStatus(request.resource.data.status, ['pending', 'reviewed', 'implemented', 'rejected']);
-      
-      allow delete: if isAdmin(libraryId);
+      allow get: if isLibraryUser(libraryId) && (isStaff(libraryId) || resource.data.studentId == request.auth.uid);
+      allow list: if isStaff(libraryId);
+      allow create: if isAuthenticated() && request.resource.data.studentId == request.auth.uid;
+      allow update, delete: if isStaff(libraryId);
     }
 
-    // Print Requests: Students create their own, admins manage all
     match /libraries/{libraryId}/printRequests/{printRequestId} {
-      allow get: if isLibraryUser(libraryId) && 
-                    (isAdmin(libraryId) || resource.data.studentId == request.auth.uid);
-      allow list: if isAdmin(libraryId);
-      
-      allow create: if isLibraryUser(libraryId) &&
-                       request.resource.data.studentId == request.auth.uid &&
-                       request.resource.data.keys().hasAll(['studentId', 'fileName', 'pages', 'copies', 'colorMode', 'status', 'createdAt']) &&
-                       request.resource.data.pages > 0 &&
-                       request.resource.data.copies > 0 &&
-                       request.resource.data.copies <= 10 &&
-                       isValidStatus(request.resource.data.colorMode, ['bw', 'color']) &&
-                       request.resource.data.status == 'pending' &&
-                       request.resource.data.createdAt == request.time;
-      
-      allow update: if isAdmin(libraryId) ||
-                       (resource.data.studentId == request.auth.uid &&
-                        resource.data.status == 'pending' &&
-                        request.resource.data.status == 'cancelled' &&
-                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'cancelledAt']));
-      
-      allow delete: if isAdmin(libraryId);
+      allow get: if isLibraryUser(libraryId) && (isStaff(libraryId) || resource.data.studentId == request.auth.uid);
+      allow list: if isStaff(libraryId);
+      allow create: if isAuthenticated() && request.resource.data.studentId == request.auth.uid;
+      allow update, delete: if isStaff(libraryId);
     }
     
-    // Activity Logs: Admins can create and read
     match /libraries/{libraryId}/activityLogs/{logId} {
       allow get, list: if isAdmin(libraryId);
-      
-      // Allow flexible creation of logs by admins
-      allow create: if isAdmin(libraryId) && 
-                       request.resource.data.libraryId == libraryId &&
-                       request.resource.data.keys().hasAll(['libraryId', 'user', 'activityType', 'timestamp']);
-      
-      allow update, delete: if false;
-    
-    // Invites: Admins manage
-    match /libraries/{libraryId}/invites/{inviteId} {
-      allow read: if isAdmin(libraryId);
-      
-      allow create: if isAdmin(libraryId) && 
-                       request.resource.data.keys().hasAll(['code', 'role', 'createdBy', 'createdAt', 'expiresAt', 'used']) &&
-                       isValidRole(request.resource.data.role) &&
-                       request.resource.data.createdBy == request.auth.uid &&
-                       request.resource.data.used == false &&
-                       request.resource.data.expiresAt > request.time &&
-                       request.resource.data.createdAt == request.time;
-      
-      allow update: if isAdmin(libraryId) &&
-                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['used', 'usedBy', 'usedAt', 'expiresAt']);
-      
-      allow delete: if isAdmin(libraryId);
+      allow create: if isStaff(libraryId);
+      allow update, delete: if false; // Logs are immutable
     }
     
-    // Ownership Transfers: Secure transfer process
+    match /libraries/{libraryId}/invites/{inviteId} {
+        allow read, write: if isAdmin(libraryId);
+    }
+    
     match /libraries/{libraryId}/ownershipTransfers/{transferId} {
-      allow read: if isAdmin(libraryId);
-      
-      allow create: if isLibraryOwner(libraryId) && 
-                       request.resource.data.keys().hasAll(['fromUserId', 'toUserId', 'status', 'createdAt', 'expiresAt']) &&
-                       request.resource.data.fromUserId == request.auth.uid &&
-                       request.resource.data.status == 'pending' &&
-                       request.resource.data.toUserId != request.auth.uid &&
-                       request.resource.data.expiresAt > request.time &&
-                       request.resource.data.createdAt == request.time &&
-                       exists(/databases/$(database)/documents/libraries/$(libraryId)/users/$(request.resource.data.toUserId));
-      
-      allow update: if (isLibraryOwner(libraryId) && 
-                         resource.data.status == 'pending' &&
-                         request.resource.data.status == 'cancelled' &&
-                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'cancelledAt'])) ||
-                       (request.auth.uid == resource.data.toUserId && 
-                         resource.data.status == 'pending' &&
-                         request.resource.data.status == 'accepted' &&
-                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'acceptedAt']));
-      
-      allow delete: if false;
+        allow read: if isAdmin(libraryId);
+        allow create: if isLibraryOwner(libraryId);
+        allow update: if (isLibraryOwner(libraryId) && request.resource.data.status == 'cancelled') || 
+                      (request.auth.uid == resource.data.toUserId && request.resource.data.status == 'accepted');
+        allow delete: if false;
     }
 
-    // ==================== COLLECTION GROUP RULES ====================
+    // --- COLLECTION GROUP RULES ---
     
     match /{path=**}/invites/{inviteId} {
       allow get: if isAuthenticated();
-      allow list: if false;
+      allow list: if false; // Prevent broad code discovery
     }
   }
 }

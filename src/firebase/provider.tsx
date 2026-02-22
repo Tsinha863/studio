@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { createContext, useContext, ReactNode, useMemo, useState, useEffect } from 'react';
@@ -7,28 +8,23 @@ import { Firestore, doc, getDoc, setDoc } from 'firebase/firestore';
 import { Auth, User, onAuthStateChanged, signOut } from 'firebase/auth';
 import { FirebaseStorage } from 'firebase/storage';
 import { FirebaseErrorListener } from '@/components/FirebaseErrorListener';
-import type { User as UserProfileType } from '@/lib/types';
+import type { User as UserProfileType, UserRole } from '@/lib/types';
 
-const VALID_ROLES = ["libraryOwner", "student"] as const;
-type UserRole = (typeof VALID_ROLES)[number];
+const VALID_ROLES: UserRole[] = ["admin", "libraryOwner", "libraryStaff", "student"];
 
-// Combined state for the Firebase context
 export interface FirebaseContextState {
   firebaseApp: FirebaseApp | null;
   firestore: Firestore | null;
   auth: Auth | null;
   storage: FirebaseStorage | null;
-  
-  // Multi-tenant and profile state
   user: User | null;
   userProfile: UserProfileType | null;
   libraryId: string | null;
   role: UserRole | null;
-  isLoading: boolean; // True until auth and profile/role/libraryId are resolved
+  isLoading: boolean;
   error: Error | null;
 }
 
-// React Context
 export const FirebaseContext = createContext<FirebaseContextState | undefined>(undefined);
 
 interface FirebaseProviderProps {
@@ -39,10 +35,6 @@ interface FirebaseProviderProps {
   storage: FirebaseStorage;
 }
 
-/**
- * Provides Firebase services and a consolidated, multi-tenant-aware authentication/profile state.
- * It listens for auth changes, resolves the user's library, and then fetches their profile and role.
- */
 export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
   children,
   firebaseApp,
@@ -59,7 +51,7 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
     userProfile: null,
     libraryId: null,
     role: null,
-    isLoading: true, // Start in a loading state
+    isLoading: true,
     error: null,
   });
 
@@ -67,9 +59,6 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      // If a user is authenticated but on a page where they are expected to NOT have a profile yet,
-      // we set the user object but do not proceed with profile/role resolution. This allows
-      // them to complete the signup/join flow without being logged out.
       if (firebaseUser && (pathname === '/join' || pathname === '/join/library')) {
         setAuthState(prev => ({ 
             ...prev, 
@@ -80,71 +69,72 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
             isLoading: false, 
             error: null 
         }));
-        return; // Stop processing for these pages
+        return;
       }
 
       if (firebaseUser) {
         try {
-          // 1. Resolve libraryId from the top-level users collection
           const userMappingRef = doc(firestore, 'users', firebaseUser.uid);
           const userMappingSnap = await getDoc(userMappingRef);
-          let libraryId: string | undefined = userMappingSnap.data()?.libraryId;
-
-          if (!libraryId) {
-            // MIGRATION: Mapping doesn't exist. Check for a legacy profile in 'library1'
-            const legacyProfileRef = doc(firestore, 'libraries', 'library1', 'users', firebaseUser.uid);
-            const legacyProfileSnap = await getDoc(legacyProfileRef);
-            
-            if (legacyProfileSnap.exists()) {
-                // Legacy user found. Create the mapping document for them now.
-                libraryId = 'library1';
-                await setDoc(userMappingRef, { libraryId });
-            }
-          }
-
-          if (!libraryId) {
-            // If still no libraryId after migration check, then it's an invalid user.
-            await signOut(auth);
-            throw new Error(`User account is not associated with a library. UID: ${firebaseUser.uid}.`);
-          }
-
-          // 2. Now that we have the libraryId, get the user's full profile
-          const userProfileRef = doc(firestore, `libraries/${libraryId}/users`, firebaseUser.uid);
-          const userProfileSnap = await getDoc(userProfileRef);
           
-          if (!userProfileSnap.exists()) {
+          if (!userMappingSnap.exists()) {
             await signOut(auth);
-            throw new Error(`User profile not found in library ${libraryId} for uid: ${firebaseUser.uid}.`);
+            throw new Error(`User account is not provisioned. UID: ${firebaseUser.uid}.`);
           }
-          
-          const profile = userProfileSnap.data() as UserProfileType;
-          const role = profile.role as UserRole;
+
+          const mappingData = userMappingSnap.data();
+          const libraryId = mappingData.libraryId;
+          const role = mappingData.role as UserRole;
 
           if (!VALID_ROLES.includes(role)) {
-               throw new Error(`User ${firebaseUser.uid} has an invalid or missing role.`);
+               throw new Error(`User ${firebaseUser.uid} has an invalid role: ${role}`);
           }
 
-          // 3. Profile, role, and libraryId resolved successfully. Update state.
+          let profile: UserProfileType | null = null;
+          if (role === 'admin') {
+              profile = {
+                  id: firebaseUser.uid,
+                  name: firebaseUser.displayName || 'System Admin',
+                  email: firebaseUser.email || '',
+                  role: 'admin',
+                  createdAt: mappingData.createdAt || null,
+                  updatedAt: mappingData.updatedAt || null,
+              } as UserProfileType;
+          } else {
+              if (!libraryId) throw new Error("Library ID missing for library-scoped user.");
+              const userProfileRef = doc(firestore, `libraries/${libraryId}/users`, firebaseUser.uid);
+              const userProfileSnap = await getDoc(userProfileRef);
+              if (!userProfileSnap.exists()) {
+                throw new Error(`Profile not found in library ${libraryId}.`);
+              }
+              profile = userProfileSnap.data() as UserProfileType;
+          }
+
           setAuthState(prev => ({ 
             ...prev, 
             user: firebaseUser, 
             userProfile: profile, 
-            libraryId,
+            libraryId: libraryId || null,
             role, 
             isLoading: false, 
             error: null 
           }));
 
         } catch (e) {
-          // Any failure in this process is a critical error.
-          setAuthState(prev => ({ ...prev, user: firebaseUser, userProfile: null, libraryId: null, role: null, isLoading: false, error: e instanceof Error ? e : new Error('Failed to resolve user profile') }));
+          setAuthState(prev => ({ 
+            ...prev, 
+            user: firebaseUser, 
+            userProfile: null, 
+            libraryId: null, 
+            role: null, 
+            isLoading: false, 
+            error: e instanceof Error ? e : new Error('Auth resolution failed') 
+          }));
         }
       } else {
-        // No user is signed in. Clear all user-related state.
         setAuthState(prev => ({ ...prev, user: null, userProfile: null, libraryId: null, role: null, isLoading: false, error: null }));
       }
     }, (error) => {
-      // An error occurred in the auth listener itself.
       setAuthState(prev => ({ ...prev, user: null, userProfile: null, libraryId: null, role: null, isLoading: false, error }));
     });
 
@@ -161,46 +151,15 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
   );
 };
 
-
-// Hooks to access the context
 export const useFirebase = (): FirebaseContextState => {
   const context = useContext(FirebaseContext);
-  if (context === undefined) {
-    throw new Error('useFirebase must be used within a FirebaseProvider.');
-  }
+  if (context === undefined) throw new Error('useFirebase must be used within a FirebaseProvider.');
   return context;
 };
 
-export const useAuth = (): Auth => {
-  const { auth } = useFirebase();
-  if (!auth) throw new Error("Auth service not available.");
-  return auth;
-};
-
-export const useFirestore = (): Firestore => {
-  const { firestore } = useFirebase();
-  if (!firestore) throw new Error("Firestore service not available.");
-  return firestore;
-};
-
-export const useFirebaseApp = (): FirebaseApp => {
-    const { firebaseApp } = useFirebase();
-    if (!firebaseApp) throw new Error("FirebaseApp not available.");
-    return firebaseApp;
-}
-
-export const useStorage = (): FirebaseStorage => {
-    const { storage } = useFirebase();
-    if (!storage) throw new Error("Firebase Storage not available.");
-    return storage;
-}
-
-/**
- * Hook specifically for accessing the authenticated user's state, including profile and role.
- * This provides a consolidated object for auth-related data.
- * @returns An object with user, userProfile, role, isLoading, and error.
- */
+export const useAuth = () => useFirebase().auth!;
+export const useFirestore = () => useFirebase().firestore!;
 export const useUser = () => {
-    const { user, userProfile, role, isLoading, error } = useFirebase();
-    return { user, userProfile, role, isLoading, error };
+    const { user, userProfile, role, isLoading, error, libraryId } = useFirebase();
+    return { user, userProfile, role, isLoading, error, libraryId };
 }
