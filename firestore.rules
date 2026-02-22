@@ -7,6 +7,10 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
     function isLibraryUser(libraryId) {
       return isAuthenticated() &&
         exists(/databases/$(database)/documents/libraries/$(libraryId)/users/$(request.auth.uid));
@@ -23,10 +27,6 @@ service cloud.firestore {
     function isStaff(libraryId) {
       return isLibraryUser(libraryId) && (getUserData(libraryId).role == "libraryOwner" || getUserData(libraryId).role == "libraryStaff");
     }
-
-    function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
-    }
     
     function isLibraryOwner(libraryId) {
         return isAdmin(libraryId) && get(/databases/$(database)/documents/libraries/$(libraryId)).data.ownerId == request.auth.uid;
@@ -36,9 +36,10 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow get: if isOwner(userId);
-      // Users can create their initial mapping, but cannot escalate their own role to 'admin'
+      // Allow creation of initial mapping. Prevent self-escalation to platform 'admin'.
       allow create: if isOwner(userId) && (!request.resource.data.keys().contains('role') || request.resource.data.role != 'admin');
-      allow list, update, delete: if false;
+      allow update: if isOwner(userId) && (!request.resource.data.keys().contains('role') || request.resource.data.role == resource.data.role);
+      allow list, delete: if false;
     }
 
     // ==================== LIBRARY-SCOPED COLLECTIONS ====================
@@ -46,7 +47,7 @@ service cloud.firestore {
     match /libraries/{libraryId} {
       allow read: if isLibraryUser(libraryId);
       allow update: if isAdmin(libraryId);
-      // Allow authenticated users to create a library if they are the owner
+      // Allow authenticated users to create their first library
       allow create: if isAuthenticated() && request.resource.data.ownerId == request.auth.uid;
       allow delete: if false;
     }
@@ -54,6 +55,7 @@ service cloud.firestore {
     match /libraries/{libraryId}/users/{userId} {
       allow get: if isOwner(userId) || isStaff(libraryId);
       allow list: if isStaff(libraryId);
+      // Allow creation during onboarding if the user matches the auth UID
       allow create: if isOwner(userId) || isAdmin(libraryId);
       allow update: if isOwner(userId) || isAdmin(libraryId);
       allow delete: if isAdmin(libraryId);
@@ -62,7 +64,6 @@ service cloud.firestore {
     match /libraries/{libraryId}/students/{studentId} {
       allow get: if isLibraryUser(libraryId) && (isStaff(libraryId) || isOwner(studentId));
       allow list: if isStaff(libraryId);
-      // Allow students to create their own record during onboarding
       allow create: if isOwner(studentId) || isStaff(libraryId);
       allow update: if isStaff(libraryId) || isOwner(studentId);
       allow delete: if isStaff(libraryId);
@@ -71,21 +72,23 @@ service cloud.firestore {
     match /libraries/{libraryId}/seatBookings/{bookingId} {
         allow get: if isLibraryUser(libraryId) && (isStaff(libraryId) || resource.data.studentId == request.auth.uid);
         allow list: if isStaff(libraryId);
-        allow write: if isStaff(libraryId);
+        allow create: if isStaff(libraryId); // Bookings are currently created by staff/admin
+        allow update: if isStaff(libraryId);
+        allow delete: if false;
     }
     
     match /libraries/{libraryId}/bills/{billId} {
       allow get: if isLibraryUser(libraryId) && (isStaff(libraryId) || resource.data.studentId == request.auth.uid);
       allow list: if isStaff(libraryId);
       allow create, update: if isStaff(libraryId);
-      allow delete: if false; // Bills are permanent records
+      allow delete: if false;
     }
 
     match /libraries/{libraryId}/payments/{paymentId} {
       allow get: if isLibraryUser(libraryId) && (isStaff(libraryId) || resource.data.studentId == request.auth.uid);
       allow list: if isStaff(libraryId);
       allow create: if isStaff(libraryId);
-      allow update, delete: if false; // Payments are immutable
+      allow update, delete: if false;
     }
 
     match /libraries/{libraryId}/expenses/{expenseId} {
@@ -123,12 +126,12 @@ service cloud.firestore {
     
     match /libraries/{libraryId}/activityLogs/{logId} {
       allow get, list: if isAdmin(libraryId);
-      allow create: if isStaff(libraryId);
-      allow update, delete: if false; // Logs are immutable
+      allow create: if isStaff(libraryId) || isAuthenticated(); // Allow system logs during onboarding
+      allow update, delete: if false;
     }
     
     match /libraries/{libraryId}/invites/{inviteId} {
-        allow read: if isAuthenticated(); // Needed for join flow verification
+        allow read: if isAuthenticated();
         allow create, delete: if isAdmin(libraryId);
         // Allow updating only 'used' and 'usedBy' for onboarding
         allow update: if isAdmin(libraryId) || (isAuthenticated() && !resource.data.used && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['used', 'usedBy']));
@@ -146,7 +149,8 @@ service cloud.firestore {
     
     match /{path=**}/invites/{inviteId} {
       allow get: if isAuthenticated();
-      allow list: if false; // Prevent broad code discovery
+      // Required for Student Join flow to lookup code across libraries
+      allow list: if isAuthenticated() && request.query.limit <= 1;
     }
   }
 }

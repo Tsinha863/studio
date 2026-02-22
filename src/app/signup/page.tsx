@@ -78,6 +78,7 @@ function SignupForm() {
       );
       const { user } = userCredential;
 
+      // Update Auth profile and refresh token to ensure Firestore rules see the UID
       await updateProfile(user, { displayName: data.name });
       await user.getIdToken(true);
 
@@ -85,6 +86,7 @@ function SignupForm() {
       const newLibraryRef = doc(collection(firestore, 'libraries'));
       const newLibraryId = newLibraryRef.id;
 
+      // 1. Create Library
       batch.set(newLibraryRef, {
         id: newLibraryId,
         name: data.libraryName,
@@ -94,6 +96,7 @@ function SignupForm() {
         updatedAt: serverTimestamp(),
       });
 
+      // 2. Create Global User Mapping (Rapid Resolution)
       const userMappingRef = doc(firestore, 'users', user.uid);
       batch.set(userMappingRef, { 
         libraryId: newLibraryId,
@@ -101,6 +104,7 @@ function SignupForm() {
         createdAt: serverTimestamp() 
       });
 
+      // 3. Create Library-Scoped User Profile
       const userProfileRef = doc(firestore, `libraries/${newLibraryId}/users`, user.uid);
       batch.set(userProfileRef, {
         id: user.uid,
@@ -110,6 +114,16 @@ function SignupForm() {
         libraryId: newLibraryId,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
+      });
+
+      // 4. Initial Activity Log
+      const logRef = doc(collection(firestore, `libraries/${newLibraryId}/activityLogs`));
+      batch.set(logRef, {
+        libraryId: newLibraryId,
+        user: { id: user.uid, name: data.name },
+        activityType: 'library_created',
+        details: { libraryName: data.libraryName },
+        timestamp: serverTimestamp(),
       });
 
       await batch.commit();
@@ -279,7 +293,7 @@ function SignupForm() {
           </CardContent>
           <CardFooter className="flex flex-col gap-4">
             <Button type="submit" className="w-full" disabled={isSubmitting}>
-              {isSubmitting ? <Spinner className="mr-2" /> : null}
+              {isSubmitting ? <Spinner className="mr-2 h-4 w-4" /> : null}
               {isSubmitting ? 'Creating Library...' : 'Create Library & Account'}
             </Button>
             <div className="text-center text-sm text-muted-foreground">
@@ -315,7 +329,7 @@ export default function SignupPage() {
             src={heroImage.imageUrl}
             alt={heroImage.description}
             fill
-            sizes="100vw"
+            sizes="(max-width: 1024px) 0vw, 50vw"
             className="absolute inset-0 h-full w-full object-cover opacity-20"
             data-ai-hint={heroImage.imageHint}
           />
