@@ -9,7 +9,7 @@ import type { UserRole } from '@/lib/types';
 
 interface AuthGuardProps {
     children: React.ReactNode;
-    requiredRole: UserRole;
+    requiredRole: UserRole | UserRole[];
 }
 
 export function AuthGuard({ children, requiredRole }: AuthGuardProps) {
@@ -28,21 +28,24 @@ export function AuthGuard({ children, requiredRole }: AuthGuardProps) {
         // Global admins can access any management route
         if (role === 'admin') return;
 
-        // Specific role check
-        if (role !== requiredRole) {
-            // Logic for shared pages: Some pages under /admin are accessible by Staff
-            const sharedPaths = ['/admin/students', '/admin/seating', '/admin/print-requests', '/admin/suggestions', '/admin/announcements'];
-            const isShared = sharedPaths.some(p => pathname.startsWith(p));
-            
-            if (role === 'libraryStaff' && isShared) {
+        // Check if role is authorized
+        const allowedRoles = Array.isArray(requiredRole) ? requiredRole : [requiredRole];
+        const isAuthorized = allowedRoles.includes(role as UserRole);
+
+        if (!isAuthorized) {
+            // Hierarchy fallback: libraryOwner can access libraryStaff areas
+            if (role === 'libraryOwner' && allowedRoles.includes('libraryStaff')) {
                 return;
             }
-
+            
             router.replace('/loading');
         }
     }, [isLoading, user, error, role, requiredRole, router, pathname]);
 
-    if (isLoading || (role !== requiredRole && role !== 'admin' && !(role === 'libraryStaff' && pathname.startsWith('/admin/')))) {
+    const allowedRoles = Array.isArray(requiredRole) ? requiredRole : [requiredRole];
+    const isAuthorized = role === 'admin' || (role && (allowedRoles.includes(role) || (role === 'libraryOwner' && allowedRoles.includes('libraryStaff'))));
+
+    if (isLoading || !isAuthorized) {
         return (
             <div className="flex h-screen w-full items-center justify-center bg-background">
                 <div className="flex flex-col items-center gap-4">

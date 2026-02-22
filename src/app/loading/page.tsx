@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -31,10 +32,9 @@ function AuthRedirector() {
                 router.replace('/super-admin/dashboard');
                 break;
             case 'libraryOwner':
-                router.replace('/admin/dashboard');
-                break;
             case 'libraryStaff':
-                router.replace('/staff/dashboard');
+                // Both roles use the unified /admin management portal
+                router.replace('/admin/dashboard');
                 break;
             case 'student':
                 router.replace('/student/dashboard');
@@ -48,7 +48,7 @@ function AuthRedirector() {
     return (
         <div className="flex flex-col items-center gap-4">
             <Spinner className="h-8 w-8 text-primary" />
-            <p className="text-muted-foreground animate-pulse font-medium">Resolving your workspace...</p>
+            <p className="text-muted-foreground animate-pulse font-medium text-sm">Resolving your institutional workspace...</p>
         </div>
     );
 }
