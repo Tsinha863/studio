@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Building2, User } from 'lucide-react';
 import {
   createUserWithEmailAndPassword,
   updateProfile,
@@ -33,6 +33,13 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useFirebase } from '@/firebase';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
@@ -47,6 +54,7 @@ function SignupForm() {
   const form = useForm<SignupFormValues>({
     resolver: zodResolver(signupSchema),
     defaultValues: {
+      role: 'libraryOwner',
       name: '',
       email: '',
       password: '',
@@ -58,7 +66,10 @@ function SignupForm() {
 
   const {
     formState: { isSubmitting },
+    watch,
   } = form;
+
+  const selectedRole = watch('role');
 
   const onSubmit = async (data: SignupFormValues) => {
     if (!auth || !firestore) {
@@ -68,6 +79,12 @@ function SignupForm() {
         description: 'Firebase service is not available. Please try again later.',
       });
       return;
+    }
+
+    if (data.role === 'student') {
+        // Students should use the join flow which requires an invite code.
+        router.push('/join');
+        return;
     }
 
     try {
@@ -178,47 +195,93 @@ function SignupForm() {
               <Logo />
             </Link>
             <CardTitle className="font-headline text-2xl">
-              Create a New Library
+              Create Your Account
             </CardTitle>
             <CardDescription>
-              Enter your details below to create your library and admin account.
+              Select your role and enter your details below.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
             <FormField
               control={form.control}
-              name="libraryName"
+              name="role"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Library Name</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="e.g., Central City Library"
-                      {...field}
-                      disabled={isSubmitting}
-                    />
-                  </FormControl>
+                  <FormLabel>I am a...</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select your role" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="libraryOwner">
+                        <div className="flex items-center">
+                            <Building2 className="mr-2 h-4 w-4 text-primary" />
+                            <span>Library Owner / Admin</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="student">
+                        <div className="flex items-center">
+                            <User className="mr-2 h-4 w-4 text-muted-foreground" />
+                            <span>Student</span>
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="libraryAddress"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Library Address</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="e.g., 123 Main St, Central City"
-                      {...field}
-                      disabled={isSubmitting}
+
+            {selectedRole === 'libraryOwner' ? (
+                <>
+                    <FormField
+                    control={form.control}
+                    name="libraryName"
+                    render={({ field }) => (
+                        <FormItem>
+                        <FormLabel>Library Name</FormLabel>
+                        <FormControl>
+                            <Input
+                            placeholder="e.g., Central City Library"
+                            {...field}
+                            disabled={isSubmitting}
+                            />
+                        </FormControl>
+                        <FormMessage />
+                        </FormItem>
+                    )}
                     />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                    <FormField
+                    control={form.control}
+                    name="libraryAddress"
+                    render={({ field }) => (
+                        <FormItem>
+                        <FormLabel>Library Address</FormLabel>
+                        <FormControl>
+                            <Input
+                            placeholder="e.g., 123 Main St, Central City"
+                            {...field}
+                            disabled={isSubmitting}
+                            />
+                        </FormControl>
+                        <FormMessage />
+                        </FormItem>
+                    )}
+                    />
+                </>
+            ) : (
+                <div className="rounded-md bg-muted p-4 text-sm">
+                    <p className="font-medium text-primary">Student Onboarding</p>
+                    <p className="mt-1 text-muted-foreground">
+                        Students must join using a secure invite code provided by their library.
+                    </p>
+                    <Button variant="link" className="mt-2 h-auto p-0" asChild>
+                        <Link href="/join">Go to Student Join Flow</Link>
+                    </Button>
+                </div>
+            )}
 
             <FormField
               control={form.control}
@@ -294,12 +357,12 @@ function SignupForm() {
           <CardFooter className="flex flex-col gap-4">
             <Button type="submit" className="w-full" disabled={isSubmitting}>
               {isSubmitting ? <Spinner className="mr-2 h-4 w-4" /> : null}
-              {isSubmitting ? 'Creating Library...' : 'Create Library & Account'}
+              {selectedRole === 'libraryOwner' ? 'Create Library & Account' : 'Continue as Student'}
             </Button>
             <div className="text-center text-sm text-muted-foreground">
-              Are you a student?{' '}
-              <Link href="/join" className="text-primary hover:underline">
-                Join with an invite code
+              Already have an account?{' '}
+              <Link href="/login" className="text-primary hover:underline">
+                Sign in
               </Link>
             </div>
           </CardFooter>

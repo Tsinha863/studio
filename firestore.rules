@@ -55,8 +55,9 @@ service cloud.firestore {
     match /libraries/{libraryId}/users/{userId} {
       allow get: if isOwner(userId) || isStaff(libraryId);
       allow list: if isStaff(libraryId);
-      // Allow creation during onboarding if the user matches the auth UID
-      allow create: if isOwner(userId) || isAdmin(libraryId);
+      // Allow creation during onboarding if the user matches the auth UID. 
+      // We check request.auth.uid directly instead of isLibraryUser to allow the first user setup.
+      allow create: if request.auth.uid == userId || isAdmin(libraryId);
       allow update: if isOwner(userId) || isAdmin(libraryId);
       allow delete: if isAdmin(libraryId);
     }
@@ -72,7 +73,7 @@ service cloud.firestore {
     match /libraries/{libraryId}/seatBookings/{bookingId} {
         allow get: if isLibraryUser(libraryId) && (isStaff(libraryId) || resource.data.studentId == request.auth.uid);
         allow list: if isStaff(libraryId);
-        allow create: if isStaff(libraryId); // Bookings are currently created by staff/admin
+        allow create: if isStaff(libraryId); 
         allow update: if isStaff(libraryId);
         allow delete: if false;
     }
@@ -126,14 +127,13 @@ service cloud.firestore {
     
     match /libraries/{libraryId}/activityLogs/{logId} {
       allow get, list: if isAdmin(libraryId);
-      allow create: if isStaff(libraryId) || isAuthenticated(); // Allow system logs during onboarding
+      allow create: if isStaff(libraryId) || isAuthenticated(); 
       allow update, delete: if false;
     }
     
     match /libraries/{libraryId}/invites/{inviteId} {
         allow read: if isAuthenticated();
         allow create, delete: if isAdmin(libraryId);
-        // Allow updating only 'used' and 'usedBy' for onboarding
         allow update: if isAdmin(libraryId) || (isAuthenticated() && !resource.data.used && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['used', 'usedBy']));
     }
     
@@ -149,7 +149,6 @@ service cloud.firestore {
     
     match /{path=**}/invites/{inviteId} {
       allow get: if isAuthenticated();
-      // Required for Student Join flow to lookup code across libraries
       allow list: if isAuthenticated() && request.query.limit <= 1;
     }
   }
