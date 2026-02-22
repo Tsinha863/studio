@@ -74,9 +74,6 @@ function StudentSignupForm() {
         data.password
       );
       await updateProfile(userCredential.user, { displayName: data.name });
-
-      // After successful auth account creation, redirect to the next step
-      // where they will enter their invite code to join a library.
       router.push('/join/library');
 
     } catch (error) {
@@ -87,13 +84,11 @@ function StudentSignupForm() {
         switch (error.code) {
           case 'auth/email-already-in-use':
             title = 'Email in Use';
-            description =
-              'This email address is already associated with an account. Please log in instead.';
+            description = 'This email address is already associated with an account. Please log in instead.';
             break;
           case 'auth/weak-password':
             title = 'Weak Password';
-            description =
-              'The password is not strong enough. Please choose a stronger password.';
+            description = 'The password is not strong enough. Please choose a stronger password.';
             break;
           default:
             description = error.message;
@@ -243,6 +238,7 @@ export default function JoinPage() {
             src={heroImage.imageUrl}
             alt={heroImage.description}
             fill
+            sizes="100vw"
             className="absolute inset-0 h-full w-full object-cover opacity-20"
             data-ai-hint={heroImage.imageHint}
           />

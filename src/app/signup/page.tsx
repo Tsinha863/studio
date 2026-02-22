@@ -71,7 +71,6 @@ function SignupForm() {
     }
 
     try {
-      // 1. Create user in Firebase Auth.
       const userCredential = await createUserWithEmailAndPassword(
         auth,
         data.email,
@@ -79,20 +78,13 @@ function SignupForm() {
       );
       const { user } = userCredential;
 
-      // 2. Update the auth profile's display name for consistency.
       await updateProfile(user, { displayName: data.name });
-
-      // 3. Wait for the ID token to ensure the user is fully authenticated
       await user.getIdToken(true);
 
-      // 4. Atomically create all necessary Firestore documents for the new Library Owner.
       const batch = writeBatch(firestore);
-
-      // Create a new library for the admin
       const newLibraryRef = doc(collection(firestore, 'libraries'));
       const newLibraryId = newLibraryRef.id;
 
-      // a. Library Document
       batch.set(newLibraryRef, {
         id: newLibraryId,
         name: data.libraryName,
@@ -102,15 +94,13 @@ function SignupForm() {
         updatedAt: serverTimestamp(),
       });
 
-      // b. User-to-Library Mapping (for quick login resolution)
       const userMappingRef = doc(firestore, 'users', user.uid);
       batch.set(userMappingRef, { 
         libraryId: newLibraryId,
-        role: 'libraryOwner', // CRITICAL: Mapping must include role
+        role: 'libraryOwner',
         createdAt: serverTimestamp() 
       });
 
-      // c. Admin User Profile (inside the new library)
       const userProfileRef = doc(firestore, `libraries/${newLibraryId}/users`, user.uid);
       batch.set(userProfileRef, {
         id: user.uid,
@@ -122,16 +112,13 @@ function SignupForm() {
         updatedAt: serverTimestamp(),
       });
 
-      // Commit the atomic write.
       await batch.commit();
 
-      // 5. Show success message
       toast({
         title: 'Success!',
         description: 'Your library has been created successfully.',
       });
 
-      // 6. Redirect to loading page, which will resolve role and redirect to dashboard.
       router.push('/loading');
 
     } catch (error) {
@@ -143,19 +130,16 @@ function SignupForm() {
         switch (error.code) {
           case 'auth/email-already-in-use':
             title = 'Email in Use';
-            description =
-              'This email address is already associated with an account.';
+            description = 'This email address is already associated with an account.';
             break;
           case 'auth/weak-password':
             title = 'Weak Password';
-            description =
-              'The password is not strong enough. Please choose a stronger password.';
+            description = 'The password is not strong enough. Please choose a stronger password.';
             break;
           case 'permission-denied':
           case 'firestore/permission-denied':
             title = 'Permission Error';
-            description =
-              'Unable to create library data. Please check your Firestore security rules or contact support.';
+            description = 'Unable to create library data. Please check your Firestore security rules or contact support.';
             break;
           default:
             description = error.message;
@@ -331,6 +315,7 @@ export default function SignupPage() {
             src={heroImage.imageUrl}
             alt={heroImage.description}
             fill
+            sizes="100vw"
             className="absolute inset-0 h-full w-full object-cover opacity-20"
             data-ai-hint={heroImage.imageHint}
           />
