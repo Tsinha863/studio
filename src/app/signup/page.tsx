@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ArrowLeft, Building2, User } from 'lucide-react';
+import { ArrowLeft, Building2, ShieldCheck } from 'lucide-react';
 import {
   createUserWithEmailAndPassword,
   updateProfile,
@@ -81,9 +81,9 @@ function SignupForm() {
       return;
     }
 
-    if (data.role === 'student') {
-        // Students should use the join flow which requires an invite code.
-        router.push('/join');
+    if (data.role === 'libraryStaff') {
+        // Staff should join existing libraries using an invite code.
+        router.push('/join/library');
         return;
     }
 
@@ -195,10 +195,10 @@ function SignupForm() {
               <Logo />
             </Link>
             <CardTitle className="font-headline text-2xl">
-              Create Your Account
+              Institutional Registration
             </CardTitle>
             <CardDescription>
-              Select your role and enter your details below.
+              Create your library account or join as staff.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
@@ -207,7 +207,7 @@ function SignupForm() {
               name="role"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>I am a...</FormLabel>
+                  <FormLabel>I am signing up as...</FormLabel>
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <FormControl>
                       <SelectTrigger>
@@ -218,13 +218,13 @@ function SignupForm() {
                       <SelectItem value="libraryOwner">
                         <div className="flex items-center">
                             <Building2 className="mr-2 h-4 w-4 text-primary" />
-                            <span>Library Owner / Admin</span>
+                            <span>Library Owner / Founder</span>
                         </div>
                       </SelectItem>
-                      <SelectItem value="student">
+                      <SelectItem value="libraryStaff">
                         <div className="flex items-center">
-                            <User className="mr-2 h-4 w-4 text-muted-foreground" />
-                            <span>Student</span>
+                            <ShieldCheck className="mr-2 h-4 w-4 text-accent" />
+                            <span>Library Staff / Manager</span>
                         </div>
                       </SelectItem>
                     </SelectContent>
@@ -273,12 +273,12 @@ function SignupForm() {
                 </>
             ) : (
                 <div className="rounded-md bg-muted p-4 text-sm">
-                    <p className="font-medium text-primary">Student Onboarding</p>
+                    <p className="font-medium text-primary">Staff Onboarding</p>
                     <p className="mt-1 text-muted-foreground">
-                        Students must join using a secure invite code provided by their library.
+                        Staff members must join an existing library using a secure invite code provided by their Owner.
                     </p>
                     <Button variant="link" className="mt-2 h-auto p-0" asChild>
-                        <Link href="/join">Go to Student Join Flow</Link>
+                        <Link href="/join/library">Enter Staff Invite Code</Link>
                     </Button>
                 </div>
             )}
@@ -288,7 +288,7 @@ function SignupForm() {
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Your Full Name</FormLabel>
+                  <FormLabel>Full Name</FormLabel>
                   <FormControl>
                     <Input
                       placeholder="John Doe"
@@ -305,7 +305,7 @@ function SignupForm() {
               name="email"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Your Email (for login)</FormLabel>
+                  <FormLabel>Work Email</FormLabel>
                   <FormControl>
                     <Input
                       placeholder="name@example.com"
@@ -357,7 +357,7 @@ function SignupForm() {
           <CardFooter className="flex flex-col gap-4">
             <Button type="submit" className="w-full" disabled={isSubmitting}>
               {isSubmitting ? <Spinner className="mr-2 h-4 w-4" /> : null}
-              {selectedRole === 'libraryOwner' ? 'Create Library & Account' : 'Continue as Student'}
+              {selectedRole === 'libraryOwner' ? 'Create Library & Account' : 'Continue to Join Flow'}
             </Button>
             <div className="text-center text-sm text-muted-foreground">
               Already have an account?{' '}
@@ -403,17 +403,15 @@ export default function SignupPage() {
           </Link>
           <h1 className="mt-4 font-headline text-4xl font-bold">CampusHub</h1>
           <p className="mt-2 text-lg opacity-80">
-            The all-in-one solution for modern student management.
+            Professional facility management for modern co-working and study spaces.
           </p>
         </div>
         <div className="relative z-10 mt-auto">
           <p className="text-base font-medium">
-            &ldquo;This platform has revolutionized how we manage our student
-            facilities. It's intuitive, powerful, and has saved us countless
-            hours.&rdquo;
+            &ldquo;This platform has revolutionized how we manage our institutional facilities. It's intuitive, powerful, and built for scale.&rdquo;
           </p>
           <footer className="mt-4 text-sm opacity-80">
-            - Jane Doe, Library Administrator
+            - Alex Chen, Chief Operations Officer
           </footer>
         </div>
       </div>

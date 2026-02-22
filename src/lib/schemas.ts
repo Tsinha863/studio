@@ -59,7 +59,7 @@ export type PrintRequestFormValues = z.infer<typeof printRequestFormSchema>;
 
 export const signupSchema = z
   .object({
-    role: z.enum(['libraryOwner', 'student'], {
+    role: z.enum(['libraryOwner', 'libraryStaff'], {
       required_error: "Please select your role.",
     }),
     name: z
