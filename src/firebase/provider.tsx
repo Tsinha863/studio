@@ -1,10 +1,9 @@
-
 'use client';
 
 import React, { createContext, useContext, ReactNode, useMemo, useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { FirebaseApp } from 'firebase/app';
-import { Firestore, doc, getDoc, setDoc } from 'firebase/firestore';
+import { Firestore, doc, getDoc } from 'firebase/firestore';
 import { Auth, User, onAuthStateChanged, signOut } from 'firebase/auth';
 import { FirebaseStorage } from 'firebase/storage';
 import { FirebaseErrorListener } from '@/components/FirebaseErrorListener';
@@ -59,80 +58,94 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser && (pathname === '/join' || pathname === '/join/library')) {
+      // 1. Handle Unauthenticated State
+      if (!firebaseUser) {
         setAuthState(prev => ({ 
-            ...prev, 
-            user: firebaseUser,
-            userProfile: null,
-            libraryId: null,
-            role: null,
-            isLoading: false, 
-            error: null 
+          ...prev, 
+          user: null, 
+          userProfile: null, 
+          libraryId: null, 
+          role: null, 
+          isLoading: false, 
+          error: null 
         }));
         return;
       }
 
-      if (firebaseUser) {
-        try {
-          const userMappingRef = doc(firestore, 'users', firebaseUser.uid);
-          const userMappingSnap = await getDoc(userMappingRef);
-          
-          if (!userMappingSnap.exists()) {
-            await signOut(auth);
-            throw new Error(`User account is not provisioned. UID: ${firebaseUser.uid}.`);
-          }
-
-          const mappingData = userMappingSnap.data();
-          const libraryId = mappingData.libraryId;
-          const role = mappingData.role as UserRole;
-
-          if (!VALID_ROLES.includes(role)) {
-               throw new Error(`User ${firebaseUser.uid} has an invalid role: ${role}`);
-          }
-
-          let profile: UserProfileType | null = null;
-          if (role === 'admin') {
-              profile = {
-                  id: firebaseUser.uid,
-                  name: firebaseUser.displayName || 'System Admin',
-                  email: firebaseUser.email || '',
-                  role: 'admin',
-                  createdAt: mappingData.createdAt || null,
-                  updatedAt: mappingData.updatedAt || null,
-              } as UserProfileType;
+      // 2. Handle Onboarding State (Special Case)
+      // If the user is logged in but hasn't finished the multi-tenant setup,
+      // allow them to stay logged in while on the join/setup pages.
+      const isOnboarding = pathname?.startsWith('/join');
+      
+      try {
+        const userMappingRef = doc(firestore, 'users', firebaseUser.uid);
+        const userMappingSnap = await getDoc(userMappingRef);
+        
+        if (!userMappingSnap.exists()) {
+          if (isOnboarding) {
+            setAuthState(prev => ({ 
+              ...prev, 
+              user: firebaseUser, 
+              userProfile: null, 
+              libraryId: null, 
+              role: null, 
+              isLoading: false, 
+              error: null 
+            }));
+            return;
           } else {
-              if (!libraryId) throw new Error("Library ID missing for library-scoped user.");
-              const userProfileRef = doc(firestore, `libraries/${libraryId}/users`, firebaseUser.uid);
-              const userProfileSnap = await getDoc(userProfileRef);
-              if (!userProfileSnap.exists()) {
-                throw new Error(`Profile not found in library ${libraryId}.`);
-              }
-              profile = userProfileSnap.data() as UserProfileType;
+            // If they aren't on onboarding but have no mapping, they are legacy/orphaned
+            await signOut(auth);
+            throw new Error(`Profile not provisioned. Please sign up or contact support.`);
           }
-
-          setAuthState(prev => ({ 
-            ...prev, 
-            user: firebaseUser, 
-            userProfile: profile, 
-            libraryId: libraryId || null,
-            role, 
-            isLoading: false, 
-            error: null 
-          }));
-
-        } catch (e) {
-          setAuthState(prev => ({ 
-            ...prev, 
-            user: firebaseUser, 
-            userProfile: null, 
-            libraryId: null, 
-            role: null, 
-            isLoading: false, 
-            error: e instanceof Error ? e : new Error('Auth resolution failed') 
-          }));
         }
-      } else {
-        setAuthState(prev => ({ ...prev, user: null, userProfile: null, libraryId: null, role: null, isLoading: false, error: null }));
+
+        const mappingData = userMappingSnap.data();
+        const libraryId = mappingData.libraryId;
+        const role = mappingData.role as UserRole;
+
+        if (role && !VALID_ROLES.includes(role)) {
+             throw new Error(`Invalid role detected for this user.`);
+        }
+
+        let profile: UserProfileType | null = null;
+        if (role === 'admin') {
+            profile = {
+                id: firebaseUser.uid,
+                name: firebaseUser.displayName || 'System Admin',
+                email: firebaseUser.email || '',
+                role: 'admin',
+                createdAt: mappingData.createdAt || null,
+                updatedAt: mappingData.updatedAt || null,
+            } as UserProfileType;
+        } else if (libraryId) {
+            const userProfileRef = doc(firestore, `libraries/${libraryId}/users`, firebaseUser.uid);
+            const userProfileSnap = await getDoc(userProfileRef);
+            if (userProfileSnap.exists()) {
+              profile = userProfileSnap.data() as UserProfileType;
+            }
+        }
+
+        setAuthState(prev => ({ 
+          ...prev, 
+          user: firebaseUser, 
+          userProfile: profile, 
+          libraryId: libraryId || null,
+          role: role || null, 
+          isLoading: false, 
+          error: null 
+        }));
+
+      } catch (e) {
+        setAuthState(prev => ({ 
+          ...prev, 
+          user: firebaseUser, 
+          userProfile: null, 
+          libraryId: null, 
+          role: null, 
+          isLoading: false, 
+          error: e instanceof Error ? e : new Error('Identity resolution failed') 
+        }));
       }
     }, (error) => {
       setAuthState(prev => ({ ...prev, user: null, userProfile: null, libraryId: null, role: null, isLoading: false, error }));

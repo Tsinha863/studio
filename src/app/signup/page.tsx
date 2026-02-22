@@ -85,9 +85,6 @@ function SignupForm() {
       // 3. Wait for the ID token to ensure the user is fully authenticated
       await user.getIdToken(true);
 
-      // Small delay to ensure authentication state is propagated
-      await new Promise(resolve => setTimeout(resolve, 500));
-
       // 4. Atomically create all necessary Firestore documents for the new Library Owner.
       const batch = writeBatch(firestore);
 
@@ -107,7 +104,11 @@ function SignupForm() {
 
       // b. User-to-Library Mapping (for quick login resolution)
       const userMappingRef = doc(firestore, 'users', user.uid);
-      batch.set(userMappingRef, { libraryId: newLibraryId });
+      batch.set(userMappingRef, { 
+        libraryId: newLibraryId,
+        role: 'libraryOwner', // CRITICAL: Mapping must include role
+        createdAt: serverTimestamp() 
+      });
 
       // c. Admin User Profile (inside the new library)
       const userProfileRef = doc(firestore, `libraries/${newLibraryId}/users`, user.uid);
@@ -248,7 +249,7 @@ function SignupForm() {
                     <Input
                       placeholder="name@example.com"
                       {...field}
-                      disabled={isSubmitting}
+                      disabled={isSubboarding}
                     />
                   </FormControl>
                   <FormMessage />

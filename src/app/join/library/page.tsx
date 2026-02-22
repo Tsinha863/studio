@@ -4,7 +4,6 @@ import * as React from 'react';
 import { useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { FirebaseError } from 'firebase/app';
 import { 
     collectionGroup, 
     query, 
@@ -65,7 +64,7 @@ function JoinLibraryForm() {
 
     try {
         const userMappingSnap = await getDoc(doc(firestore, 'users', user.uid));
-        if (userMappingSnap.exists()) {
+        if (userMappingSnap.exists() && userMappingSnap.data().libraryId) {
             toast({ title: "Already Provisioned", description: "This account is already associated with a library." });
             router.push('/loading');
             return;
@@ -77,17 +76,17 @@ function JoinLibraryForm() {
         
         // Demo Bypass
         if (data.inviteCode.toUpperCase() === 'DEMO-ADMIN') {
-            libraryId = 'demo-lib';
+            libraryId = 'library1';
             determinedRole = 'libraryStaff';
-        } else if (data.inviteCode.toUpperCase() === 'DEMO-STUDENT') {
-            libraryId = 'demo-lib';
+        } else if (data.inviteCode.toUpperCase() === 'DEMO-STUDENT' || data.inviteCode.toUpperCase() === 'DEMO') {
+            libraryId = 'library1';
             determinedRole = 'student';
         } else {
-            // Secure Invite Lookup: Scoped to limit(1) as required by security rules
+            // Secure Invite Lookup
             const invitesRef = collectionGroup(firestore, 'invites');
             const q = query(
                 invitesRef, 
-                where('inviteCode', '==', data.inviteCode), 
+                where('inviteCode', '==', data.inviteCode.toUpperCase()), 
                 where('used', '==', false),
                 limit(1)
             );
@@ -120,7 +119,7 @@ function JoinLibraryForm() {
         const userMappingRef = doc(firestore, 'users', user.uid);
         batch.set(userMappingRef, { 
             libraryId, 
-            role: determinedRole === 'student' ? 'student' : 'libraryStaff',
+            role: determinedRole, // CRITICAL: Mapping must include role
             createdAt: serverTimestamp() 
         });
 

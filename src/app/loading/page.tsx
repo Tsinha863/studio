@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -10,13 +9,20 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 
 function AuthRedirector() {
     const router = useRouter();
-    const { user, role, isLoading, error } = useFirebase();
+    const { user, role, isLoading, error, libraryId } = useFirebase();
 
     React.useEffect(() => {
         if (isLoading) return;
 
         if (error || !user) {
             router.replace('/login');
+            return;
+        }
+
+        // If authenticated but no role or library mapping exists, 
+        // they need to finish the join flow.
+        if (!role || (!libraryId && role !== 'admin')) {
+            router.replace('/join/library');
             return;
         }
 
@@ -37,7 +43,7 @@ function AuthRedirector() {
                 router.replace('/login');
         }
         
-    }, [user, isLoading, role, error, router]);
+    }, [user, isLoading, role, error, router, libraryId]);
 
     return (
         <div className="flex flex-col items-center gap-4">

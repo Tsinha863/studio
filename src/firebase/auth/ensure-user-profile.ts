@@ -58,6 +58,8 @@ export async function ensureUserProfile({
     const userMappingRef = doc(firestore, 'users', uid);
     batch.set(userMappingRef, {
         libraryId: libraryId,
+        role: role, // Ensure role is present for rapid resolution
+        createdAt: serverTimestamp(),
     });
     
     await batch.commit();
@@ -106,5 +108,3 @@ export async function ensureStudentProfile({ uid, name, email, libraryId, firest
         await batch.commit();
     }
 }
-
-    
