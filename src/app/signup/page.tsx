@@ -249,7 +249,7 @@ function SignupForm() {
                     <Input
                       placeholder="name@example.com"
                       {...field}
-                      disabled={isSubboarding}
+                      disabled={isSubmitting}
                     />
                   </FormControl>
                   <FormMessage />
