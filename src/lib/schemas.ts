@@ -59,6 +59,9 @@ export type PrintRequestFormValues = z.infer<typeof printRequestFormSchema>;
 
 export const signupSchema = z
   .object({
+    role: z.enum(['libraryOwner', 'libraryStaff'], {
+      required_error: "Please select your role.",
+    }),
     name: z
       .string()
       .min(2, { message: 'Name must be at least 2 characters long.' }),
@@ -67,8 +70,8 @@ export const signupSchema = z
       .string()
       .min(8, { message: 'Password must be at least 8 characters long.' }),
     confirmPassword: z.string(),
-    libraryName: z.string().min(3, 'Library name must be at least 3 characters.'),
-    libraryAddress: z.string().min(10, 'Library address must be at least 10 characters.'),
+    libraryName: z.string().min(3, "Library name is required."),
+    libraryAddress: z.string().min(10, "Library address must be at least 10 characters."),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords don't match",

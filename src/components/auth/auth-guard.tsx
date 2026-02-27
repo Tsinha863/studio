@@ -3,15 +3,13 @@
 
 import * as React from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-
 import { useFirebase } from '@/firebase';
 import { Spinner } from '@/components/spinner';
-
-type Role = 'libraryOwner' | 'student';
+import type { UserRole } from '@/lib/types';
 
 interface AuthGuardProps {
     children: React.ReactNode;
-    requiredRole: Role;
+    requiredRole: UserRole | UserRole[];
 }
 
 export function AuthGuard({ children, requiredRole }: AuthGuardProps) {
@@ -20,32 +18,43 @@ export function AuthGuard({ children, requiredRole }: AuthGuardProps) {
     const { user, role, isLoading, error } = useFirebase();
 
     React.useEffect(() => {
-        // If still loading, do nothing.
-        if (isLoading) {
-            return;
-        }
+        if (isLoading) return;
 
-        // If there's an auth error or no user, redirect to login.
         if (error || !user) {
             router.replace(`/login?redirect=${pathname}`);
             return;
         }
 
-        // If there's a role error or the role doesn't match, redirect to login.
-        // This prevents users from accessing pages they shouldn't.
-        if (role !== requiredRole) {
-            router.replace('/login');
+        // Global admins can access any management route
+        if (role === 'admin') return;
+
+        // Check if role is authorized
+        const allowedRoles = Array.isArray(requiredRole) ? requiredRole : [requiredRole];
+        const isAuthorized = allowedRoles.includes(role as UserRole);
+
+        if (!isAuthorized) {
+            // Hierarchy fallback: libraryOwner can access libraryStaff areas
+            if (role === 'libraryOwner' && allowedRoles.includes('libraryStaff')) {
+                return;
+            }
+            
+            router.replace('/loading');
         }
     }, [isLoading, user, error, role, requiredRole, router, pathname]);
 
-    if (isLoading || role !== requiredRole) {
+    const allowedRoles = Array.isArray(requiredRole) ? requiredRole : [requiredRole];
+    const isAuthorized = role === 'admin' || (role && (allowedRoles.includes(role) || (role === 'libraryOwner' && allowedRoles.includes('libraryStaff'))));
+
+    if (isLoading || !isAuthorized) {
         return (
-            <div className="flex h-screen w-full items-center justify-center">
-                <Spinner className="h-8 w-8" />
+            <div className="flex h-screen w-full items-center justify-center bg-background">
+                <div className="flex flex-col items-center gap-4">
+                    <Spinner className="h-10 w-10 text-primary" />
+                    <p className="text-sm text-muted-foreground font-medium animate-pulse">Authenticating access...</p>
+                </div>
             </div>
         );
     }
 
-    // If all checks pass, render the protected content.
     return <>{children}</>;
 }

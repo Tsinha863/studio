@@ -1,3 +1,4 @@
+
 'use client';
 import * as React from 'react';
 import dynamic from 'next/dynamic';
@@ -51,10 +52,12 @@ const ExpenseBreakdownChart = dynamic(() => import('@/components/admin/dashboard
 
 
 export default function DashboardPage() {
-  const { firestore, libraryId } = useFirebase();
+  const { firestore, libraryId, role } = useFirebase();
   const { toast } = useToast();
   const reportRef = React.useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = React.useState(false);
+
+  const isOwner = role === 'libraryOwner';
 
   // --- Data Fetching ---
   const allStudentsQuery = React.useMemo(() => {
@@ -90,27 +93,28 @@ export default function DashboardPage() {
   }, []);
 
   const paymentsQuery = React.useMemo(() => {
-    if (!firestore || !libraryId) return null;
+    if (!firestore || !libraryId || !isOwner) return null;
     return query(
         collection(firestore, `libraries/${libraryId}/payments`),
         where('paymentDate', '>=', sixMonthsAgoTimestamp)
     );
-  }, [firestore, libraryId, sixMonthsAgoTimestamp]);
+  }, [firestore, libraryId, isOwner, sixMonthsAgoTimestamp]);
   const { data: payments, isLoading: isLoadingPayments } = useCollection<Payment>(paymentsQuery);
 
   const expensesQuery = React.useMemo(() => {
-      if (!firestore || !libraryId) return null;
+      if (!firestore || !libraryId || !isOwner) return null;
       return query(
           collection(firestore, `libraries/${libraryId}/expenses`),
           where('expenseDate', '>=', sixMonthsAgoTimestamp)
       );
-  }, [firestore, libraryId, sixMonthsAgoTimestamp]);
+  }, [firestore, libraryId, isOwner, sixMonthsAgoTimestamp]);
   const { data: expenses, isLoading: isLoadingExpenses } = useCollection<Expense>(expensesQuery);
 
   const isKpiLoading = isLoadingPayments || isLoadingExpenses || isLoadingAllStudents;
 
-  // --- Data Processing for Charts & KPIs ---
+  // --- Data Processing ---
   const incomeExpenseData = React.useMemo(() => {
+    if (!isOwner) return [];
     const months = Array.from({ length: 6 }, (_, i) => {
         const d = new Date();
         d.setMonth(d.getMonth() - i);
@@ -122,9 +126,7 @@ export default function DashboardPage() {
         if (paymentDate) {
             const month = paymentDate.toLocaleString('default', { month: 'short' });
             const monthData = months.find(m => m.month === month);
-            if (monthData) {
-                monthData.income += p.amount;
-            }
+            if (monthData) monthData.income += p.amount;
         }
     });
 
@@ -132,13 +134,11 @@ export default function DashboardPage() {
         const expenseDate = e.expenseDate.toDate();
         const month = expenseDate.toLocaleString('default', { month: 'short' });
         const monthData = months.find(m => m.month === month);
-        if (monthData) {
-            monthData.expenses += e.amount;
-        }
+        if (monthData) monthData.expenses += e.amount;
     });
 
     return months;
-  }, [payments, expenses]);
+  }, [payments, expenses, isOwner]);
 
   const totalRevenue = React.useMemo(() => payments.reduce((acc, p) => acc + p.amount, 0), [payments]);
   const totalExpenses = React.useMemo(() => expenses.reduce((acc, e) => acc + e.amount, 0), [expenses]);
@@ -159,9 +159,7 @@ export default function DashboardPage() {
         const html2canvas = (await import('html2canvas')).default;
         const { jsPDF } = await import('jspdf');
 
-        const canvas = await html2canvas(reportRef.current, {
-            scale: 2,
-        });
+        const canvas = await html2canvas(reportRef.current, { scale: 2 });
         const imgData = canvas.toDataURL('image/png');
         const pdf = new jsPDF({
             orientation: 'landscape',
@@ -187,33 +185,56 @@ export default function DashboardPage() {
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
           <h1 className="text-2xl font-bold tracking-tight font-headline">
-            Admin Dashboard
+            {isOwner ? 'Executive Dashboard' : 'Operations Dashboard'}
           </h1>
           <p className="text-muted-foreground">
-            Here&apos;s a summary of your library&apos;s activity.
+            {isOwner ? 'Financial and operational oversight summary.' : 'Real-time facility management activity.'}
           </p>
         </div>
-        <Button type="button" onClick={handleExportReport} disabled={isExporting}>
-            {isExporting ? <Spinner className="mr-2"/> : <Download className="mr-2" />}
-            {isExporting ? 'Exporting...' : 'Export Report'}
-        </Button>
+        {isOwner && (
+            <Button type="button" onClick={handleExportReport} disabled={isExporting}>
+                {isExporting ? <Spinner className="mr-2"/> : <Download className="mr-2" />}
+                {isExporting ? 'Exporting...' : 'Export Report'}
+            </Button>
+        )}
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <KpiCard
-          title="Total Revenue"
-          value={new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(totalRevenue)}
-          change="last 6 months"
-          icon={<IndianRupee />}
-          isLoading={isKpiLoading}
-        />
-        <KpiCard
-          title="Total Expenses"
-          value={new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(totalExpenses)}
-          change="last 6 months"
-          icon={<CreditCard />}
-          isLoading={isKpiLoading}
-        />
+        {isOwner ? (
+            <>
+                <KpiCard
+                    title="Total Revenue"
+                    value={new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(totalRevenue)}
+                    change="last 6 months"
+                    icon={<IndianRupee />}
+                    isLoading={isKpiLoading}
+                />
+                <KpiCard
+                    title="Total Expenses"
+                    value={new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(totalExpenses)}
+                    change="last 6 months"
+                    icon={<CreditCard />}
+                    isLoading={isKpiLoading}
+                />
+            </>
+        ) : (
+            <>
+                <KpiCard
+                    title="Live Occupancy"
+                    value="72%"
+                    change="estimated seats in use"
+                    icon={<Activity />}
+                    isLoading={false}
+                />
+                <KpiCard
+                    title="Pending Suggestion"
+                    value="4"
+                    change="awaiting review"
+                    icon={<Lightbulb className="h-4 w-4" />}
+                    isLoading={false}
+                />
+            </>
+        )}
         <KpiCard
           title="Active Students"
           value={`${activeStudentCount}`}
@@ -230,37 +251,35 @@ export default function DashboardPage() {
         />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-5">
-        <Card className="lg:col-span-3">
-          <CardHeader>
-            <CardTitle>Income vs. Expenses</CardTitle>
-            <CardDescription>
-              A summary of your income and expenses for the last 6 months.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <IncomeExpenseChart data={incomeExpenseData} />
-          </CardContent>
-        </Card>
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Expense Breakdown</CardTitle>
-            <CardDescription>
-                A breakdown of your expenses by category for the last 6 months.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ExpenseBreakdownChart data={expenses} />
-          </CardContent>
-        </Card>
-      </div>
+      {isOwner && (
+        <div className="grid gap-6 lg:grid-cols-5">
+            <Card className="lg:col-span-3">
+            <CardHeader>
+                <CardTitle>Income vs. Expenses</CardTitle>
+                <CardDescription>A summary of financial trends for the last 6 months.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <IncomeExpenseChart data={incomeExpenseData} />
+            </CardContent>
+            </Card>
+            <Card className="lg:col-span-2">
+            <CardHeader>
+                <CardTitle>Expense Breakdown</CardTitle>
+                <CardDescription>Category distribution for the last 6 months.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <ExpenseBreakdownChart data={expenses} />
+            </CardContent>
+            </Card>
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-5">
         <Card className="lg:col-span-3">
           <CardHeader>
             <CardTitle>Recent Students</CardTitle>
             <CardDescription>
-              Here are the students who joined recently.
+              A list of the latest students to join the library.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -271,7 +290,7 @@ export default function DashboardPage() {
           <CardHeader>
             <CardTitle>Activity Feed</CardTitle>
             <CardDescription>
-              A log of the most recent activities in the system.
+              Latest administrative and facility actions.
             </CardDescription>
           </CardHeader>
           <CardContent>

@@ -49,7 +49,7 @@ export default function WelcomePage() {
             </Button>
             <Button asChild>
               <Link href="/signup">
-                Admin Signup <ArrowRight className="ml-2 h-4 w-4" />
+                Library Owner Signup <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
             </Button>
           </nav>

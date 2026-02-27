@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -5,17 +6,17 @@ import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
   Bell,
-  CreditCard,
   IndianRupee,
   Home,
   LogOut,
   Settings,
-  User,
   Users,
   Megaphone,
   Lightbulb,
   Printer,
   Receipt,
+  ShieldCheck,
+  User,
 } from 'lucide-react';
 import {
   SidebarProvider,
@@ -25,9 +26,8 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
-  SidebarTrigger,
   SidebarInset,
-  useSidebar,
+  SidebarTrigger,
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import {
@@ -38,6 +38,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Badge } from '@/components/ui/badge';
 import { Logo } from '@/components/logo';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import Link from 'next/link';
@@ -47,8 +48,16 @@ import { useFirebase } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
 
 function UserMenu() {
-  const { userProfile, isLoading } = useFirebase();
+  const { userProfile, role, isLoading } = useFirebase();
   const userAvatar = PlaceHolderImages.find((p) => p.id === 'user-avatar');
+
+  const roleLabels: Record<string, string> = {
+    admin: 'Platform Admin',
+    libraryOwner: 'Library Owner',
+    libraryStaff: 'Library Staff',
+    student: 'Student',
+  };
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -66,7 +75,7 @@ function UserMenu() {
           />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-56" align="end" forceMount>
+      <DropdownMenuContent className="w-64" align="end" forceMount>
         <DropdownMenuLabel className="font-normal">
           {isLoading ? (
             <div className="flex flex-col space-y-2">
@@ -75,7 +84,12 @@ function UserMenu() {
             </div>
           ) : (
             <div className="flex flex-col space-y-1">
-              <p className="text-sm font-medium leading-none">{userProfile?.name || ''}</p>
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium leading-none">{userProfile?.name || ''}</p>
+                <Badge variant="outline" className="text-[10px] h-4 uppercase tracking-wider">
+                    {role ? roleLabels[role] : ''}
+                </Badge>
+              </div>
               <p className="text-xs leading-none text-muted-foreground">
                 {userProfile?.email || ''}
               </p>
@@ -96,12 +110,15 @@ function UserMenu() {
 
 function MainSidebar() {
     const pathname = usePathname();
+    const { role } = useFirebase();
+    const isOwner = role === 'libraryOwner';
+
     return (
         <Sidebar>
             <SidebarHeader>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 px-2 py-4">
                     <Logo className="h-7 w-7 text-primary" />
-                    <span className="text-lg font-semibold font-headline whitespace-nowrap group-data-[collapsible=icon]:hidden">
+                    <span className="text-lg font-bold font-headline whitespace-nowrap group-data-[collapsible=icon]:hidden">
                         CampusHub
                     </span>
                 </div>
@@ -116,6 +133,7 @@ function MainSidebar() {
                             </Link>
                         </SidebarMenuButton>
                     </SidebarMenuItem>
+                    
                     <SidebarMenuItem>
                         <SidebarMenuButton asChild tooltip="Students" isActive={pathname === '/admin/students'}>
                             <Link href="/admin/students">
@@ -124,22 +142,29 @@ function MainSidebar() {
                             </Link>
                         </SidebarMenuButton>
                     </SidebarMenuItem>
-                    <SidebarMenuItem>
-                        <SidebarMenuButton asChild tooltip="Billing" isActive={pathname.startsWith('/admin/billing')}>
-                            <Link href="/admin/billing">
-                                <Receipt />
-                                <span>Billing</span>
-                            </Link>
-                        </SidebarMenuButton>
-                    </SidebarMenuItem>
-                    <SidebarMenuItem>
-                        <SidebarMenuButton asChild tooltip="Expenses" isActive={pathname === '/admin/expenses'}>
-                            <Link href="/admin/expenses">
-                                <IndianRupee />
-                                <span>Expenses</span>
-                            </Link>
-                        </SidebarMenuButton>
-                    </SidebarMenuItem>
+
+                    {isOwner && (
+                        <SidebarMenuItem>
+                            <SidebarMenuButton asChild tooltip="Billing" isActive={pathname.startsWith('/admin/billing')}>
+                                <Link href="/admin/billing">
+                                    <Receipt />
+                                    <span>Billing</span>
+                                </Link>
+                            </SidebarMenuButton>
+                        </SidebarMenuItem>
+                    )}
+
+                    {isOwner && (
+                        <SidebarMenuItem>
+                            <SidebarMenuButton asChild tooltip="Expenses" isActive={pathname === '/admin/expenses'}>
+                                <Link href="/admin/expenses">
+                                    <IndianRupee />
+                                    <span>Expenses</span>
+                                </Link>
+                            </SidebarMenuButton>
+                        </SidebarMenuItem>
+                    )}
+
                     <SidebarMenuItem>
                         <SidebarMenuButton asChild tooltip="Seating" isActive={pathname === '/admin/seating'}>
                             <Link href="/admin/seating">
@@ -148,14 +173,16 @@ function MainSidebar() {
                             </Link>
                         </SidebarMenuButton>
                     </SidebarMenuItem>
+
                      <SidebarMenuItem>
                         <SidebarMenuButton asChild tooltip="Print Requests" isActive={pathname === '/admin/print-requests'}>
                             <Link href="/admin/print-requests">
                                 <Printer />
-                                <span>Print Requests</span>
+                                <span>Print Queue</span>
                             </Link>
                         </SidebarMenuButton>
                     </SidebarMenuItem>
+
                     <SidebarMenuItem>
                         <SidebarMenuButton asChild tooltip="Announcements" isActive={pathname === '/admin/announcements'}>
                             <Link href="/admin/announcements">
@@ -164,6 +191,7 @@ function MainSidebar() {
                             </Link>
                         </SidebarMenuButton>
                     </SidebarMenuItem>
+
                     <SidebarMenuItem>
                         <SidebarMenuButton asChild tooltip="Suggestions" isActive={pathname === '/admin/suggestions'}>
                             <Link href="/admin/suggestions">
@@ -172,14 +200,17 @@ function MainSidebar() {
                             </Link>
                         </SidebarMenuButton>
                     </SidebarMenuItem>
-                    <SidebarMenuItem>
-                        <SidebarMenuButton asChild tooltip="Settings" isActive={pathname.startsWith('/admin/settings')}>
-                            <Link href="/admin/settings">
-                                <Settings />
-                                <span>Settings</span>
-                            </Link>
-                        </SidebarMenuButton>
-                    </SidebarMenuItem>
+
+                    {isOwner && (
+                        <SidebarMenuItem>
+                            <SidebarMenuButton asChild tooltip="Settings" isActive={pathname.startsWith('/admin/settings')}>
+                                <Link href="/admin/settings">
+                                    <Settings />
+                                    <span>Settings</span>
+                                </Link>
+                            </SidebarMenuButton>
+                        </SidebarMenuItem>
+                    )}
                 </SidebarMenu>
             </SidebarContent>
         </Sidebar>
@@ -193,7 +224,7 @@ export default function AdminLayout({
 }) {
   const { toast } = useToast();
   return (
-    <AuthGuard requiredRole="libraryOwner">
+    <AuthGuard requiredRole={['libraryOwner', 'libraryStaff']}>
       <SidebarProvider>
           <div className="flex min-h-screen w-full">
               <MainSidebar />
@@ -201,7 +232,7 @@ export default function AdminLayout({
                   <header className="sticky top-0 z-10 flex h-14 items-center gap-4 border-b bg-background px-4 sm:px-6">
                       <SidebarTrigger className="md:hidden" />
                       <div className="flex-1">
-                          {/* Can add breadcrumbs or page title here */}
+                          {/* Breadcrumbs or page title could go here */}
                       </div>
                       <Button
                         variant="ghost"
@@ -210,7 +241,7 @@ export default function AdminLayout({
                         onClick={() => {
                           toast({
                             title: 'Notifications',
-                            description: 'This feature is not yet implemented.',
+                            description: 'No new notifications.',
                           });
                         }}
                       >

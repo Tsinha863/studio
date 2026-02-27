@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -143,8 +142,6 @@ function LoginForm() {
       const userCredential = await signInWithEmailAndPassword(auth, data.email, data.password);
       const user = userCredential.user;
 
-      // After successful login, check if it's a demo user. If so, ensure their
-      // profile exists before redirecting. This makes this form work for demo users.
       if (user.email === DEMO_ADMIN_EMAIL) {
           await provisionDemoUser(user, 'admin');
       } else if (user.email === DEMO_STUDENT_EMAIL) {
@@ -157,7 +154,6 @@ function LoginForm() {
     }
   };
 
-  // Handler for both demo login buttons
   const handleDemoLogin = async (role: 'admin' | 'student') => {
     if (!auth || !firestore) return;
     setIsDemoLoading(role);
@@ -169,23 +165,18 @@ function LoginForm() {
     try {
         let user: User;
         try {
-            // 1. Attempt to sign in.
             const userCredential = await signInWithEmailAndPassword(auth, email, password);
             user = userCredential.user;
         } catch (error) {
-            // 2. If user does not exist, create them.
             if (error instanceof FirebaseError && (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential')) {
                 const userCredential = await createUserWithEmailAndPassword(auth, email, password);
                 user = userCredential.user;
             } else {
-                throw error; // Rethrow other sign-in errors
+                throw error;
             }
         }
         
-        // 3. Ensure the corresponding Firestore documents exist.
         await provisionDemoUser(user, role);
-    
-        // 4. Redirect to the loading page to resolve role and final destination.
         router.push('/loading');
 
     } catch(profileError) {
@@ -314,6 +305,7 @@ export default function LoginPage() {
             src={heroImage.imageUrl}
             alt={heroImage.description}
             fill
+            sizes="100vw"
             className="absolute inset-0 h-full w-full object-cover opacity-20"
             data-ai-hint={heroImage.imageHint}
           />

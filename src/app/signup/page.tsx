@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Building2, ShieldCheck } from 'lucide-react';
 import {
   createUserWithEmailAndPassword,
   updateProfile,
@@ -33,6 +33,13 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useFirebase } from '@/firebase';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
@@ -47,6 +54,7 @@ function SignupForm() {
   const form = useForm<SignupFormValues>({
     resolver: zodResolver(signupSchema),
     defaultValues: {
+      role: 'libraryOwner',
       name: '',
       email: '',
       password: '',
@@ -71,7 +79,6 @@ function SignupForm() {
     }
 
     try {
-      // 1. Create user in Firebase Auth.
       const userCredential = await createUserWithEmailAndPassword(
         auth,
         data.email,
@@ -79,23 +86,15 @@ function SignupForm() {
       );
       const { user } = userCredential;
 
-      // 2. Update the auth profile's display name for consistency.
+      // Update Auth profile and refresh token to ensure Firestore rules see the UID
       await updateProfile(user, { displayName: data.name });
-
-      // 3. Wait for the ID token to ensure the user is fully authenticated
       await user.getIdToken(true);
 
-      // Small delay to ensure authentication state is propagated
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      // 4. Atomically create all necessary Firestore documents for the new Library Owner.
       const batch = writeBatch(firestore);
-
-      // Create a new library for the admin
       const newLibraryRef = doc(collection(firestore, 'libraries'));
       const newLibraryId = newLibraryRef.id;
 
-      // a. Library Document
+      // 1. Create Library
       batch.set(newLibraryRef, {
         id: newLibraryId,
         name: data.libraryName,
@@ -105,56 +104,64 @@ function SignupForm() {
         updatedAt: serverTimestamp(),
       });
 
-      // b. User-to-Library Mapping (for quick login resolution)
+      // 2. Create Global User Mapping (Rapid Resolution)
       const userMappingRef = doc(firestore, 'users', user.uid);
-      batch.set(userMappingRef, { libraryId: newLibraryId });
+      batch.set(userMappingRef, { 
+        libraryId: newLibraryId,
+        role: data.role,
+        createdAt: serverTimestamp() 
+      });
 
-      // c. Admin User Profile (inside the new library)
+      // 3. Create Library-Scoped User Profile
       const userProfileRef = doc(firestore, `libraries/${newLibraryId}/users`, user.uid);
       batch.set(userProfileRef, {
         id: user.uid,
         name: data.name,
         email: data.email,
-        role: 'libraryOwner',
+        role: data.role,
         libraryId: newLibraryId,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
 
-      // Commit the atomic write.
-      await batch.commit();
-
-      // 5. Show success message
-      toast({
-        title: 'Success!',
-        description: 'Your library has been created successfully.',
+      // 4. Initial Activity Log
+      const logRef = doc(collection(firestore, `libraries/${newLibraryId}/activityLogs`));
+      batch.set(logRef, {
+        libraryId: newLibraryId,
+        user: { id: user.uid, name: data.name },
+        activityType: 'library_created',
+        details: { libraryName: data.libraryName, initialRole: data.role },
+        timestamp: serverTimestamp(),
       });
 
-      // 6. Redirect to loading page, which will resolve role and redirect to dashboard.
+      await batch.commit();
+
+      toast({
+        title: 'Success!',
+        description: 'Your institutional workspace has been created.',
+      });
+
       router.push('/loading');
 
     } catch (error) {
       console.error('Signup error:', error);
-      let title = 'Sign-up failed';
+      let title = 'Registration failed';
       let description = 'An unexpected error occurred. Please try again.';
 
       if (error instanceof FirebaseError) {
         switch (error.code) {
           case 'auth/email-already-in-use':
             title = 'Email in Use';
-            description =
-              'This email address is already associated with an account.';
+            description = 'This email address is already associated with an account.';
             break;
           case 'auth/weak-password':
             title = 'Weak Password';
-            description =
-              'The password is not strong enough. Please choose a stronger password.';
+            description = 'The password is not strong enough. Please choose a stronger password.';
             break;
           case 'permission-denied':
           case 'firestore/permission-denied':
             title = 'Permission Error';
-            description =
-              'Unable to create library data. Please check your Firestore security rules or contact support.';
+            description = 'Unable to create library data. Please check your Firestore security rules or contact support.';
             break;
           default:
             description = error.message;
@@ -179,46 +186,78 @@ function SignupForm() {
               <Logo />
             </Link>
             <CardTitle className="font-headline text-2xl">
-              Create a New Library
+              Institutional Registration
             </CardTitle>
             <CardDescription>
-              Enter your details below to create your library and admin account.
+              Create your library workspace.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
             <FormField
               control={form.control}
-              name="libraryName"
+              name="role"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Library Name</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="e.g., Central City Library"
-                      {...field}
-                      disabled={isSubmitting}
-                    />
-                  </FormControl>
+                  <FormLabel>Registering as...</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select your role" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="libraryOwner">
+                        <div className="flex items-center">
+                            <Building2 className="mr-2 h-4 w-4 text-primary" />
+                            <span>Founder / Owner</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="libraryStaff">
+                        <div className="flex items-center">
+                            <ShieldCheck className="mr-2 h-4 w-4 text-accent" />
+                            <span>Manager / Staff</span>
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}
             />
+
             <FormField
-              control={form.control}
-              name="libraryAddress"
-              render={({ field }) => (
+            control={form.control}
+            name="libraryName"
+            render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Library Address</FormLabel>
-                  <FormControl>
+                <FormLabel>Library Name</FormLabel>
+                <FormControl>
                     <Input
-                      placeholder="e.g., 123 Main St, Central City"
-                      {...field}
-                      disabled={isSubmitting}
+                    placeholder="e.g., Central City Library"
+                    {...field}
+                    disabled={isSubmitting}
                     />
-                  </FormControl>
-                  <FormMessage />
+                </FormControl>
+                <FormMessage />
                 </FormItem>
-              )}
+            )}
+            />
+            <FormField
+            control={form.control}
+            name="libraryAddress"
+            render={({ field }) => (
+                <FormItem>
+                <FormLabel>Library Address</FormLabel>
+                <FormControl>
+                    <Input
+                    placeholder="e.g., 123 Main St, Central City"
+                    {...field}
+                    disabled={isSubmitting}
+                    />
+                </FormControl>
+                <FormMessage />
+                </FormItem>
+            )}
             />
 
             <FormField
@@ -226,7 +265,7 @@ function SignupForm() {
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Your Full Name</FormLabel>
+                  <FormLabel>Full Name</FormLabel>
                   <FormControl>
                     <Input
                       placeholder="John Doe"
@@ -243,7 +282,7 @@ function SignupForm() {
               name="email"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Your Email (for login)</FormLabel>
+                  <FormLabel>Work Email</FormLabel>
                   <FormControl>
                     <Input
                       placeholder="name@example.com"
@@ -294,13 +333,13 @@ function SignupForm() {
           </CardContent>
           <CardFooter className="flex flex-col gap-4">
             <Button type="submit" className="w-full" disabled={isSubmitting}>
-              {isSubmitting ? <Spinner className="mr-2" /> : null}
-              {isSubmitting ? 'Creating Library...' : 'Create Library & Account'}
+              {isSubmitting ? <Spinner className="mr-2 h-4 w-4" /> : null}
+              Create Workspace & Account
             </Button>
             <div className="text-center text-sm text-muted-foreground">
-              Are you a student?{' '}
-              <Link href="/join" className="text-primary hover:underline">
-                Join with an invite code
+              Already have an account?{' '}
+              <Link href="/login" className="text-primary hover:underline">
+                Sign in
               </Link>
             </div>
           </CardFooter>
@@ -330,6 +369,7 @@ export default function SignupPage() {
             src={heroImage.imageUrl}
             alt={heroImage.description}
             fill
+            sizes="(max-width: 1024px) 0vw, 50vw"
             className="absolute inset-0 h-full w-full object-cover opacity-20"
             data-ai-hint={heroImage.imageHint}
           />
@@ -340,17 +380,15 @@ export default function SignupPage() {
           </Link>
           <h1 className="mt-4 font-headline text-4xl font-bold">CampusHub</h1>
           <p className="mt-2 text-lg opacity-80">
-            The all-in-one solution for modern student management.
+            Professional facility management for modern co-working and study spaces.
           </p>
         </div>
         <div className="relative z-10 mt-auto">
           <p className="text-base font-medium">
-            &ldquo;This platform has revolutionized how we manage our student
-            facilities. It's intuitive, powerful, and has saved us countless
-            hours.&rdquo;
+            &ldquo;This platform has revolutionized how we manage our institutional facilities. It's intuitive, powerful, and built for scale.&rdquo;
           </p>
           <footer className="mt-4 text-sm opacity-80">
-            - Jane Doe, Library Administrator
+            - Alex Chen, Chief Operations Officer
           </footer>
         </div>
       </div>
