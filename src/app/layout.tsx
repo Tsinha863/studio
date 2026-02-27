@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Inter, PT_Sans, Source_Code_Pro } from 'next/font/google';
+import { Analytics } from '@vercel/analytics/next';
 import { Toaster } from '@/components/ui/toaster';
 import { FirebaseClientProvider } from '@/firebase';
 import './globals.css';
@@ -61,6 +62,7 @@ export default function RootLayout({
       <body className="font-body antialiased">
         <FirebaseClientProvider>{children}</FirebaseClientProvider>
         <Toaster />
+        <Analytics />
       </body>
     </html>
   );
