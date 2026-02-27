@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Inter, PT_Sans, Source_Code_Pro } from 'next/font/google';
 import { Toaster } from '@/components/ui/toaster';
 import { FirebaseClientProvider } from '@/firebase';
+import { Analytics } from '@vercel/analytics/next';
 import './globals.css';
 
 const inter = Inter({
@@ -61,6 +62,7 @@ export default function RootLayout({
       <body className="font-body antialiased">
         <FirebaseClientProvider>{children}</FirebaseClientProvider>
         <Toaster />
+        <Analytics />
       </body>
     </html>
   );
